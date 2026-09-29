@@ -35,8 +35,14 @@ type Route = { page: "home" } | { page: "new" } | { page: "project"; id: string 
 
 function parseHash(): Route {
   const h = window.location.hash.replace(/^#/, "")
-  const m = h.match(/^\/p\/(.+)$/)
-  if (m) return { page: "project", id: decodeURIComponent(m[1]) }
+  const m = h.match(/^\/p\/([^?]+)(?:\?.*)?$/)
+  if (m) {
+    try {
+      return { page: "project", id: decodeURIComponent(m[1]) }
+    } catch {
+      return { page: "home" }
+    }
+  }
   if (h === "/new") return { page: "new" }
   return { page: "home" }
 }
@@ -75,13 +81,17 @@ export function App() {
   const [doc, setDoc] = useState<DocRef | null>(null)
   const [clockBusy, setClockBusy] = useState(false)
   const [implOpen, setImplOpen] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
   const [clockSlot, setClockSlot] = useState<HTMLElement | null>(null)
   const toastId = useRef(0)
 
   const notify = useCallback((kind: ToastKind, text: string) => {
     const id = ++toastId.current
     setToasts((t) => [...t.slice(-3), { id, kind, text }])
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 9000 : kind === "info" ? 7000 : 3500)
+    window.setTimeout(
+      () => setToasts((t) => t.filter((x) => x.id !== id)),
+      kind === "error" ? 9000 : kind === "info" ? 7000 : 3500,
+    )
   }, [])
 
   useEffect(() => {
@@ -94,8 +104,14 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    api.meta().then(setMeta).catch(() => setMeta(null))
-    api.clock().then(setClock).catch(() => setClock(null))
+    api
+      .meta()
+      .then(setMeta)
+      .catch(() => setMeta(null))
+    api
+      .clock()
+      .then(setClock)
+      .catch(() => setClock(null))
   }, [])
 
   const setRole = (r: Role) => {
@@ -135,47 +151,88 @@ export function App() {
   return (
     <AppContext.Provider value={ctx}>
       <div className="app" data-role={role}>
+        <a
+          className="skip-link"
+          href="#main-content"
+          onClick={(e) => {
+            e.preventDefault()
+            document.getElementById("main-content")?.focus()
+          }}
+        >
+          본문으로 이동
+        </a>
         <header className="topbar">
           <div className="topbar-inner">
-            <button type="button" className="brand" onClick={() => navigate("#/")}>
-              <span className="brand-mark" aria-hidden>
-                P
+            <a className="brand" href="#/" aria-label="Ploby 홈">
+              <span className="brand-mark" aria-hidden="true">
+                p
               </span>
-              <span className="brand-name">Ploby</span>
-              <span className="brand-tag">양자 간 프로젝트 에스크로</span>
-            </button>
-            <div className="role-switch" role="radiogroup" aria-label="역할 (지갑 로그인 대신)">
-              {ROLES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="radio"
-                  aria-checked={role === r}
-                  className={`role-btn role-${r} ${role === r ? "role-on" : ""}`}
-                  onClick={() => setRole(r)}
-                  title={`${ROLE_KO[r]} ${nameOf(r)}`}
-                >
-                  <span className="role-word">{ROLE_KO[r]}</span>
-                  <span className="role-name">{nameOf(r)}</span>
-                </button>
-              ))}
+              <span className="brand-name">
+                ploby<span className="brand-period">.</span>
+              </span>
+            </a>
+            <nav className="global-nav" aria-label="주 메뉴">
+              <a href="#/" aria-current={route.page !== "new" ? "page" : undefined}>
+                프로젝트
+              </a>
+            </nav>
+            <div className="account-tools">
+              <button
+                type="button"
+                className="demo-toggle"
+                aria-expanded={demoOpen}
+                aria-controls="demo-tools"
+                onClick={() => setDemoOpen(!demoOpen)}
+              >
+                <span className="demo-dot" />
+                데모<span className="desktop-only"> 도구</span>
+              </button>
+              <div className="account">
+                <span className="avatar" aria-hidden="true">
+                  {nameOf(role).slice(0, 1)}
+                </span>
+                <label className="role-select">
+                  <span className="account-name">{nameOf(role)}</span>
+                  <span className="sr-only">데모 역할 전환</span>
+                  <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                    {ROLES.map((r) => (
+                      <option value={r} key={r}>
+                        {ROLE_KO[r]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
         </header>
 
-        <div className="democlock" role="region" aria-label="데모 시계">
+        <div className="democlock" id="demo-tools" hidden={!demoOpen} role="region" aria-label="데모 시계">
           <div className="democlock-inner">
             <span className="demo-tag">데모 전용</span>
             <span className="democlock-label">데모 시계</span>
             <strong className="democlock-now">{clock ? kst(clock.now) : viewNow ? kst(viewNow) : "—"}</strong>
-            {clock && offsetText(clock.offset) && <span className="democlock-offset">({offsetText(clock.offset)})</span>}
+            {clock && offsetText(clock.offset) && (
+              <span className="democlock-offset">({offsetText(clock.offset)})</span>
+            )}
             <span className="democlock-btns">
               {STEPS.map(([t, s]) => (
-                <button key={t} type="button" className="clock-btn" disabled={clockBusy} onClick={() => moveClock({ advance: s })}>
+                <button
+                  key={t}
+                  type="button"
+                  className="clock-btn"
+                  disabled={clockBusy}
+                  onClick={() => moveClock({ advance: s })}
+                >
                   {t}
                 </button>
               ))}
-              <button type="button" className="clock-btn clock-reset" disabled={clockBusy} onClick={() => moveClock({ reset: true })}>
+              <button
+                type="button"
+                className="clock-btn clock-reset"
+                disabled={clockBusy}
+                onClick={() => moveClock({ reset: true })}
+              >
                 초기화
               </button>
             </span>
@@ -184,17 +241,19 @@ export function App() {
           </div>
         </div>
 
-        <main className="main">
-          {route.page === "home" && <Home refreshKey={tick} />}
+        <main className="main" id="main-content" tabIndex={-1}>
+          {route.page === "home" && <Home key={role} refreshKey={tick} />}
           {route.page === "new" && <NewProject />}
-          {route.page === "project" && <ProjectPage id={route.id} refreshKey={tick} onNow={onNow} />}
+          {route.page === "project" && (
+            <ProjectPage key={`${route.id}-${role}`} id={route.id} refreshKey={tick} onNow={onNow} />
+          )}
         </main>
 
         <footer className="footer">
           <button type="button" className="linkish" onClick={() => setImplOpen(true)}>
-            구현 범위 — 현재 구현 / 목표 설계
+            서비스 안내
           </button>
-          <span className="muted small">데모 결제 토큰(KRW 1원 단위)이며 실제 자금이 아닙니다. AI는 정보를 해석하지만 돈을 움직일 권한은 갖지 않습니다.</span>
+          <span className="muted small">데모 환경 · 실제 자금이 사용되지 않아요</span>
         </footer>
 
         <div className="toasts" aria-live="polite">
@@ -222,7 +281,9 @@ function ImplementationPanel({ meta, onClose }: { meta: Meta | null; onClose: ()
   const impl = meta?.implementation
   return (
     <Modal title="구현 범위" onClose={onClose} wide>
-      <p className="muted small">현재 구현과 목표 설계를 섞지 않습니다. 목록은 서버(/api/meta)가 알려준 그대로입니다.</p>
+      <p className="muted small">
+        현재 구현과 목표 설계를 섞지 않습니다. 목록은 서버(/api/meta)가 알려준 그대로입니다.
+      </p>
       {!impl ? (
         <p className="muted">서버가 구현 범위를 알려주지 않았습니다.</p>
       ) : (

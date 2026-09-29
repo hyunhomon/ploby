@@ -74,7 +74,9 @@ export function targetParams(a: Action, view: ProjectView): ActionParams {
 
 export function deadlinesFor(view: ProjectView, target: TargetRef): Deadline[] {
   if (!target) return []
-  return view.deadlines.filter((d) => d.target && d.target.kind === target.kind && String(d.target.id) === String(target.id))
+  return view.deadlines.filter(
+    (d) => d.target && d.target.kind === target.kind && String(d.target.id) === String(target.id),
+  )
 }
 
 /** A button for an action, rendered only if the server offers it. */
@@ -94,9 +96,21 @@ export function Act({
   const { view, open, busy } = useProject()
   const a = findAction(view, name, target)
   if (!a) return null
-  const cls = variant === "primary" ? "btn btn-primary" : variant === "danger" ? "btn btn-danger" : variant === "ghost" ? "btn btn-ghost" : "btn"
+  const cls =
+    variant === "primary"
+      ? "btn btn-primary"
+      : variant === "danger"
+        ? "btn btn-danger"
+        : variant === "ghost"
+          ? "btn btn-ghost"
+          : "btn"
   return (
-    <button type="button" className={`${cls} ${a.needs_response ? "btn-attn" : ""}`} disabled={busy} onClick={() => open(a, preset)}>
+    <button
+      type="button"
+      className={`${cls} ${a.needs_response ? "btn-attn" : ""}`}
+      disabled={busy}
+      onClick={() => open(a, preset)}
+    >
       {children ?? actionLabel(a)}
     </button>
   )
@@ -135,8 +149,34 @@ export function anchorOf(t: Target | null): string {
 
 export function scrollToAnchor(anchor: string) {
   const el = document.getElementById(anchor)
-  if (!el) return
-  el.scrollIntoView({ behavior: "smooth", block: "start" })
+  if (!el || el.closest("[hidden]")) {
+    const tab =
+      anchor.startsWith("milestone-") || anchor === "sec-milestones"
+        ? "work"
+        : anchor.startsWith("expense-") || anchor === "sec-expenses"
+          ? "expenses"
+          : anchor.startsWith("change_order-") || anchor === "sec-changes"
+            ? "changes"
+            : anchor === "sec-policy"
+              ? "policy"
+              : anchor === "sec-log" || anchor === "sec-deadlines"
+                ? "activity"
+                : "manage"
+    window.location.hash = `${window.location.hash.split("?")[0]}?tab=${tab}&target=${encodeURIComponent(anchor)}`
+    return
+  }
+  // Reveal a collapsed record before moving focus to it.
+  let parent: HTMLElement | null = el
+  while (parent) {
+    if (parent instanceof HTMLDetailsElement) parent.open = true
+    parent = parent.parentElement
+  }
+  el.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    block: "start",
+  })
+  el.tabIndex = -1
+  el.focus({ preventScroll: true })
   el.classList.remove("flash")
   void el.offsetWidth
   el.classList.add("flash")

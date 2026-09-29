@@ -28,3 +28,7 @@ __pycache__/
 var/
 .claude/
 frontend/dist/
+
+# Local browser QA artifacts
+.playwright-mcp/
+output/playwright/

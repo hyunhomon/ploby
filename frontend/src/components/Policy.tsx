@@ -12,9 +12,9 @@ export function PolicyCard({ view }: { view: ProjectView }) {
   const proposals = view.proposals
   return (
     <Card
-      title="정책"
+      title="계약 조건"
       id="sec-policy"
-      sub="클라이언트와 작업자가 같은 정책 해시에 서명해야 효력이 생깁니다. 변경은 새 버전으로만 합니다."
+      sub="양측이 같은 조건에 서명하면 효력이 생겨요."
       aside={active ? <Chip tone="ok">v{active.version} 적용 중</Chip> : <Chip tone="warn">서명 전</Chip>}
     >
       {proposals.map((p, i) => (
@@ -53,18 +53,34 @@ function Delta({ now, base }: { now: number; base: number | undefined }) {
   return <span className={`delta ${d > 0 ? "delta-up" : "delta-down"}`}>{d > 0 ? `+${won(d)}` : `−${won(-d)}`}</span>
 }
 
-function PolicyBlock({ p, base, first, open }: { p: PolicyView; base: PolicyView | null; first: boolean; open: boolean }) {
+function PolicyBlock({
+  p,
+  base,
+  first,
+  open,
+}: {
+  p: PolicyView
+  base: PolicyView | null
+  first: boolean
+  open: boolean
+}) {
   const { view, open: openAction, busy } = useProject()
   const { meta } = useApp()
   const now = view.now
   const proposed = p.status === "PROPOSED"
   const sign =
     proposed &&
-    (findAction(view, "sign_policy", { kind: "policy", id: p.version }) ?? (first ? findAction(view, "sign_policy", null) : undefined))
+    (findAction(view, "sign_policy", { kind: "policy", id: p.version }) ??
+      (first ? findAction(view, "sign_policy", null) : undefined))
   const s = p.summary
   const b = base?.summary
   const cmp = proposed && base ? b : undefined
-  const mySig = view.viewer.role === "client" ? p.signatures.client : view.viewer.role === "contractor" ? p.signatures.contractor : null
+  const mySig =
+    view.viewer.role === "client"
+      ? p.signatures.client
+      : view.viewer.role === "contractor"
+        ? p.signatures.contractor
+        : null
 
   return (
     <article className={`policy ${proposed ? "policy-proposed" : ""}`} data-open={open}>
@@ -237,7 +253,8 @@ function PolicyBlock({ p, base, first, open }: { p: PolicyView; base: PolicyView
                   <Money n={m.amount} className="pm-amt" />
                 </div>
                 <div className="muted small">
-                  착수 기한 {kstDate(m.start_by, now)} · 납기 {kstDate(m.due_at, now)} · 유예 {kstDate(m.grace_until, now)}까지
+                  착수 기한 {kstDate(m.start_by, now)} · 납기 {kstDate(m.due_at, now)} · 유예{" "}
+                  {kstDate(m.grace_until, now)}까지
                 </div>
                 <ul className="pm-units">
                   {m.units.map((u) => (
@@ -262,7 +279,9 @@ function PolicyBlock({ p, base, first, open }: { p: PolicyView; base: PolicyView
 
       <section className="policy-sec">
         <h3>침묵 시 결과 (최종 대체 결과)</h3>
-        <p className="muted small">응답하지 않아도 일이 멈추지 않습니다. 기한이 지나면 아래 결과가 자동으로 적용됩니다. 서명 전에 확인하세요.</p>
+        <p className="muted small">
+          응답하지 않아도 일이 멈추지 않습니다. 기한이 지나면 아래 결과가 자동으로 적용됩니다. 서명 전에 확인하세요.
+        </p>
         <FallbackTable p={p} />
       </section>
 
@@ -271,9 +290,15 @@ function PolicyBlock({ p, base, first, open }: { p: PolicyView; base: PolicyView
           {sign ? (
             <>
               <p className="small">
-                서명하면 v{p.version}의 해시 <CopyHash hash={p.hash} />에 동의합니다. 위의 침묵 시 결과에도 함께 동의하게 됩니다.
+                서명하면 v{p.version}의 해시 <CopyHash hash={p.hash} />에 동의합니다. 위의 침묵 시 결과에도 함께
+                동의하게 됩니다.
               </p>
-              <button type="button" className="btn btn-primary btn-attn" disabled={busy} onClick={() => openAction(sign)}>
+              <button
+                type="button"
+                className="btn btn-primary btn-attn"
+                disabled={busy}
+                onClick={() => openAction(sign)}
+              >
                 {actionLabel(sign)}
               </button>
             </>
@@ -282,12 +307,17 @@ function PolicyBlock({ p, base, first, open }: { p: PolicyView; base: PolicyView
               <strong>서명 완료.</strong> 상대방의 서명을 기다리고 있습니다.
             </p>
           ) : view.viewer.role === "resolver" ? (
-            <p className="muted small">분쟁 해결자는 정책에 서명하지 않습니다. 양측이 서명한 기준과 금액 한도 안에서만 판단합니다.</p>
+            <p className="muted small">
+              분쟁 해결자는 정책에 서명하지 않습니다. 양측이 서명한 기준과 금액 한도 안에서만 판단합니다.
+            </p>
           ) : (
             <p className="muted small">지금은 서명할 수 없습니다.</p>
           )}
           {p.kind === "change_order" && (
-            <Banner tone="info">두 당사자가 서명한 뒤, 클라이언트가 추가 금액을 입금해야 새 마일스톤이 예약됩니다. 기존 약정은 원래 정책 버전을 그대로 따릅니다.</Banner>
+            <Banner tone="info">
+              두 당사자가 서명한 뒤, 클라이언트가 추가 금액을 입금해야 새 마일스톤이 예약됩니다. 기존 약정은 원래 정책
+              버전을 그대로 따릅니다.
+            </Banner>
           )}
         </div>
       )}
@@ -341,7 +371,8 @@ function VersionHistory({ view }: { view: ProjectView }) {
             </div>
             <div className="muted small">
               클라이언트 {v.signatures.client ? kst(v.signatures.client.at, view.now) : "미서명"} · 작업자{" "}
-              {v.signatures.contractor ? kst(v.signatures.contractor.at, view.now) : "미서명"} · 예산 {won(v.summary.project_budget)}
+              {v.signatures.contractor ? kst(v.signatures.contractor.at, view.now) : "미서명"} · 예산{" "}
+              {won(v.summary.project_budget)}
             </div>
           </li>
         ))}

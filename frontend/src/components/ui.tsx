@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { api, errorText } from "../api"
+import { Icon } from "./Icon"
 import { num, parseAmount, shortHash, timeLeft, kst, urgency } from "../format"
 import type { Tone } from "../labels"
 import type { DocRef, Meta, Ms, Role, Sample, SampleKind } from "../types"
@@ -123,7 +124,15 @@ export function KV({ items }: { items: [ReactNode, ReactNode][] }) {
   )
 }
 
-export function CopyHash({ hash, head = 8, tail = 4 }: { hash: string | null | undefined; head?: number; tail?: number }) {
+export function CopyHash({
+  hash,
+  head = 8,
+  tail = 4,
+}: {
+  hash: string | null | undefined
+  head?: number
+  tail?: number
+}) {
   const { notify } = useApp()
   if (!hash) return <span className="muted">—</span>
   const copy = async () => {
@@ -137,9 +146,7 @@ export function CopyHash({ hash, head = 8, tail = 4 }: { hash: string | null | u
   return (
     <button type="button" className="hash" onClick={copy} title={`${hash} (눌러서 복사)`}>
       {shortHash(hash, head, tail)}
-      <span className="hash-icon" aria-hidden>
-        ⧉
-      </span>
+      <Icon name="copy" size={12} />
     </button>
   )
 }
@@ -149,7 +156,7 @@ export function DocLink({ doc }: { doc: DocRef | null | undefined }) {
   if (!doc) return <span className="muted">문서 없음</span>
   return (
     <button type="button" className="doclink" onClick={() => openDoc(doc)} title={doc.id}>
-      <span aria-hidden>📄</span> {doc.name || shortHash(doc.id)}
+      <Icon name="document" size={16} /> {doc.name || shortHash(doc.id)}
     </button>
   )
 }
@@ -234,13 +241,31 @@ export function Segmented<T extends string>({
   label?: string
 }) {
   return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
+    <div
+      className="segmented"
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={(e) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return
+        e.preventDefault()
+        const index = options.findIndex((o) => o.value === value)
+        const next =
+          e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? options.length - 1
+              : (index + (e.key === "ArrowRight" ? 1 : -1) + options.length) % options.length
+        onChange(options[next].value)
+        e.currentTarget.querySelectorAll<HTMLButtonElement>("button")[next]?.focus()
+      }}
+    >
       {options.map((o) => (
         <button
           type="button"
           key={o.value}
           role="radio"
           aria-checked={value === o.value}
+          tabIndex={value === o.value ? 0 : -1}
           className={`seg ${value === o.value ? `seg-on seg-${o.tone ?? "accent"}` : ""}`}
           onClick={() => onChange(o.value)}
         >
@@ -275,18 +300,45 @@ export function Modal({
   useEffect(() => {
     const me = Symbol("modal")
     modalStack.push(me)
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && modalStack[modalStack.length - 1] === me) closeRef.current()
+      if (modalStack[modalStack.length - 1] !== me) return
+      if (e.key === "Escape") {
+        e.preventDefault()
+        closeRef.current()
+      }
+      if (e.key === "Tab") {
+        const focusable = Array.from(
+          ref.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]',
+          ) ?? [],
+        ).filter((el) => el.getClientRects().length > 0)
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (!first) {
+          e.preventDefault()
+          ref.current?.focus()
+          return
+        }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === ref.current)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener("keydown", onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
-    const first = ref.current?.querySelector<HTMLElement>("input, textarea, select, button.btn-primary")
-    first?.focus()
+    // Focus the dialog title area first, so opening a payment dialog never primes a confirmation.
+    ref.current?.focus()
     return () => {
       window.removeEventListener("keydown", onKey)
       modalStack.splice(modalStack.indexOf(me), 1)
       document.body.style.overflow = prev
+      if (previousFocus?.isConnected) previousFocus.focus()
     }
   }, [])
   return (
@@ -296,11 +348,18 @@ export function Modal({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref}>
+      <div
+        className={`modal ${wide ? "modal-wide" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        ref={ref}
+      >
         <header className="modal-head">
           <h2 id={titleId}>{title}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="닫기">
-            ✕
+            <Icon name="close" />
           </button>
         </header>
         <div className="modal-body">{children}</div>
@@ -396,7 +455,10 @@ export function DocPicker({
       <Field label="문서 이름">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 가비아 도메인 견적서" />
       </Field>
-      <Field label="문서 내용 (텍스트)" hint="견적서·영수증·납품 설명을 텍스트로 붙여넣습니다. 첨부하면 내용의 해시가 기록됩니다.">
+      <Field
+        label="문서 내용 (텍스트)"
+        hint="견적서·영수증·납품 설명을 텍스트로 붙여넣습니다. 첨부하면 내용의 해시가 기록됩니다."
+      >
         <textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} className="mono-area" />
       </Field>
       <div className="row-end">
@@ -418,7 +480,7 @@ export function AttachedDocs({ docs, onRemove }: { docs: DocRef[]; onRemove?: (i
           <code className="tiny">{shortHash(d.id, 10, 4)}</code>
           {onRemove && (
             <button type="button" className="icon-btn" onClick={() => onRemove(d.id)} aria-label="첨부 빼기">
-              ✕
+              <Icon name="close" size={16} />
             </button>
           )}
         </li>

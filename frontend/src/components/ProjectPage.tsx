@@ -14,26 +14,61 @@ import { ExpensesSection } from "./Expenses"
 import { LedgerCard } from "./Ledger"
 import { MilestonesSection } from "./Milestones"
 import { PolicyCard } from "./Policy"
-import { ProjectContext, actionLabel, findAction, scrollToAnchor, targetParams, type Preset, type ProjectCtx } from "./projectCtx"
-import { Banner, Chip, CopyHash, useApp } from "./ui"
+import {
+  ProjectContext,
+  actionLabel,
+  findAction,
+  scrollToAnchor,
+  targetParams,
+  type Preset,
+  type ProjectCtx,
+} from "./projectCtx"
+import { Icon } from "./Icon"
+import { Banner, Chip, CopyHash, Modal, Money, useApp } from "./ui"
 
-const NAV: [string, string][] = [
-  ["sec-todo", "할 일"],
-  ["sec-ledger", "자금"],
-  ["sec-policy", "정책"],
-  ["sec-milestones", "마일스톤"],
-  ["sec-expenses", "경비"],
-  ["sec-changes", "변경 주문"],
-  ["sec-controls", "관리"],
-  ["sec-deadlines", "기한"],
-  ["sec-log", "기록"],
-]
+const NAV = [
+  ["overview", "요약"],
+  ["work", "작업"],
+  ["expenses", "경비"],
+  ["policy", "계약"],
+  ["changes", "변경 요청"],
+  ["activity", "기록"],
+  ["manage", "관리"],
+] as const
+function currentTab() {
+  const tab = new URLSearchParams(window.location.hash.split("?")[1]).get("tab")
+  return NAV.some(([key]) => key === tab) ? tab! : "overview"
+}
 
-export function ProjectPage({ id, refreshKey, onNow }: { id: string; refreshKey: number; onNow: (now: number) => void }) {
+export function ProjectPage({
+  id,
+  refreshKey,
+  onNow,
+}: {
+  id: string
+  refreshKey: number
+  onNow: (now: number) => void
+}) {
   const { role, notify, navigate, clockSlot } = useApp()
   const [view, setView] = useState<ProjectView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [tab, setTab] = useState(currentTab)
+  const [locationKey, setLocationKey] = useState(window.location.hash)
+  const [ledgerOpen, setLedgerOpen] = useState(false)
+  useEffect(() => {
+    const onHash = () => {
+      setTab(currentTab())
+      setLocationKey(window.location.hash)
+    }
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+  useEffect(() => {
+    if (!view) return
+    const target = new URLSearchParams(window.location.hash.split("?")[1]).get("target")
+    if (target && document.getElementById(target)) scrollToAnchor(target)
+  }, [locationKey, view])
   const [dialog, setDialog] = useState<{ action: Action; preset?: Preset } | null>(null)
 
   useEffect(() => {
@@ -99,7 +134,6 @@ export function ProjectPage({ id, refreshKey, onNow }: { id: string; refreshKey:
   }
   if (!view || !ctx) return <div className="page loading">불러오는 중…</div>
 
-  const policyProminent = view.status === "DRAFT" || view.proposals.length > 0
   const timeouts = findAction(view, "run_timeouts")
 
   return (
@@ -107,54 +141,85 @@ export function ProjectPage({ id, refreshKey, onNow }: { id: string; refreshKey:
       <div className="page project">
         <ProjectHeader view={view} />
         {error && <Banner tone="bad">{error}</Banner>}
-        <nav className="section-nav" aria-label="섹션">
-          {NAV.map(([anchor, text]) => (
-            <button key={anchor} type="button" className="nav-chip" onClick={() => scrollToAnchor(anchor)}>
+        <nav className="section-nav" aria-label="프로젝트 메뉴">
+          {NAV.map(([key, text]) => (
+            <a
+              key={key}
+              className="nav-chip"
+              href={`#/p/${encodeURIComponent(id)}?tab=${key}`}
+              aria-current={tab === key ? "page" : undefined}
+            >
               {text}
-            </button>
+              {key === "overview" && view.actions.some((a) => a.needs_response) && <span className="nav-dot" />}
+            </a>
           ))}
         </nav>
-        <div className="cols">
-          <div className="col col-main">
-            <div className="slot" style={{ order: 1 }}>
+        <div className="project-content">
+          {tab === "overview" && (
+            <>
+              <section className="balance-card" aria-label="대금 요약">
+                <div className="balance-main">
+                  <span className="balance-label">
+                    <Icon name="shield" size={18} />
+                    지급을 위해 예약된 대금
+                  </span>
+                  <Money n={view.ledger.milestone_reserved + view.ledger.expense_reserved} />
+                  <button className="linkish small" onClick={() => setLedgerOpen(true)}>
+                    자금 내역 <Icon name="arrow" size={14} />
+                  </button>
+                </div>
+                <dl className="balance-details">
+                  <div>
+                    <dt>지급 완료</dt>
+                    <dd>
+                      <Money n={view.ledger.released} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>가용 잔액</dt>
+                    <dd>
+                      <Money n={view.ledger.available} />
+                    </dd>
+                  </div>
+                </dl>
+              </section>
               <TodoCard view={view} />
-            </div>
-            {policyProminent && (
-              <div className="slot" style={{ order: 3 }}>
-                <PolicyCard view={view} />
+              <div className="overview-links">
+                <a href={`#/p/${encodeURIComponent(id)}?tab=work`}>
+                  작업 진행 보기 <Icon name="arrow" size={16} />
+                </a>
+                <a href={`#/p/${encodeURIComponent(id)}?tab=activity`}>
+                  다가오는 기한과 기록 <Icon name="arrow" size={16} />
+                </a>
               </div>
-            )}
-            <div className="slot" style={{ order: 4 }}>
-              <MilestonesSection view={view} />
-            </div>
-            <div className="slot" style={{ order: 5 }}>
-              <ExpensesSection view={view} />
-            </div>
-            <div className="slot" style={{ order: 6 }}>
-              <ChangeOrdersSection view={view} />
-            </div>
-            {!policyProminent && (
-              <div className="slot" style={{ order: 7 }}>
-                <PolicyCard view={view} />
-              </div>
-            )}
+            </>
+          )}
+          {tab === "work" && <MilestonesSection view={view} />}
+          {tab === "expenses" && <ExpensesSection view={view} />}
+          {tab === "policy" && <PolicyCard view={view} />}
+          {/* Keep unsaved change-request edits when switching tabs. */}
+          <div className="project-panel" hidden={tab !== "changes"}>
+            <ChangeOrdersSection view={view} />
           </div>
-          <aside className="col col-side">
-            <div className="slot" style={{ order: 2 }}>
-              <LedgerCard view={view} />
-            </div>
-            <div className="slot" style={{ order: 8 }}>
-              <ControlsCard view={view} />
-            </div>
-            <div className="slot" style={{ order: 9 }}>
+          {tab === "activity" && (
+            <>
               <DeadlinesCard view={view} />
-            </div>
-            <div className="slot" style={{ order: 10 }}>
               <LogCard view={view} />
-            </div>
-          </aside>
+            </>
+          )}
+          {tab === "manage" && (
+            <>
+              <ControlsCard view={view} />
+              <ProjectDetails view={view} />
+            </>
+          )}
         </div>
       </div>
+      {ledgerOpen && (
+        <Modal title="자금 내역" onClose={() => setLedgerOpen(false)}>
+          <LedgerCard view={view} />
+        </Modal>
+      )}
       {dialog && <ActionDialog action={dialog.action} preset={dialog.preset} onClose={() => setDialog(null)} />}
       {clockSlot &&
         timeouts &&
@@ -188,6 +253,17 @@ function ProjectHeader({ view }: { view: ProjectView }) {
         </Chip>
         {view.paused && <Chip tone="warn">새 약정 일시정지</Chip>}
       </div>
+      <p className="project-subtitle">
+        {view.parties.client?.name} <span aria-hidden="true">·</span> {view.parties.contractor?.name}
+      </p>
+    </header>
+  )
+}
+
+function ProjectDetails({ view }: { view: ProjectView }) {
+  return (
+    <section className="card project-details">
+      <h2 className="card-title">프로젝트 정보</h2>
       <p className="muted small status-help">{label(PROJECT_STATUS_HELP, view.status)}</p>
       <div className="parties">
         {(["client", "contractor", "resolver"] as const).map((r) => {
@@ -212,6 +288,6 @@ function ProjectHeader({ view }: { view: ProjectView }) {
           프로젝트 {view.id} · 로그 헤드 {shortHash(view.head, 8, 4)}
         </span>
       </div>
-    </header>
+    </section>
   )
 }

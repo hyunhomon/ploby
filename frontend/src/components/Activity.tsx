@@ -10,44 +10,55 @@ import { Banner, Card, Chip, CopyHash, Empty, When } from "./ui"
 
 export function TodoCard({ view }: { view: ProjectView }) {
   const { open, busy } = useProject()
+  const [expanded, setExpanded] = useState(false)
   const mine = view.actions
     .filter((a) => a.needs_response)
     .sort((a, b) => (a.deadline ?? Number.MAX_SAFE_INTEGER) - (b.deadline ?? Number.MAX_SAFE_INTEGER))
   return (
     <Card
-      title="할 일"
+      title="확인할 일"
       id="sec-todo"
       className="todo-card"
-      sub="내가 응답할 것"
+      sub={mine.length > 0 ? "가까운 기한부터 확인하세요." : undefined}
       aside={mine.length > 0 ? <Chip tone="warn">{mine.length}건</Chip> : <Chip tone="ok">없음</Chip>}
     >
       {mine.length === 0 ? (
-        <Empty>지금 응답할 일이 없습니다. 기한이 있는 일은 오른쪽 ‘다가오는 기한’에서 볼 수 있습니다.</Empty>
+        <Empty>지금은 확인할 일이 없어요. 기한과 진행 내역은 ‘기록’에서 볼 수 있어요.</Empty>
       ) : (
         <ul className="todo">
-          {mine.map((a, i) => (
-            <li key={`${a.action}-${a.target?.kind}-${a.target?.id}-${i}`} className={`todo-item todo-${urgency(a.deadline, view.now)}`}>
+          {(expanded ? mine : mine.slice(0, 3)).map((a, i) => (
+            <li
+              key={`${a.action}-${a.target?.kind}-${a.target?.id}-${i}`}
+              className={`todo-item todo-${urgency(a.deadline, view.now)}`}
+            >
               <div className="todo-main">
                 <strong className="todo-label">{actionLabel(a)}</strong>
                 <button type="button" className="linkish small" onClick={() => scrollToAnchor(anchorOf(a.target))}>
                   {describeTarget(view, a.target)}
                 </button>
               </div>
-              <div className="todo-when">{a.deadline ? <When at={a.deadline} now={view.now} /> : <span className="muted small">기한 없음</span>}</div>
+              <div className="todo-when">
+                {a.deadline ? <When at={a.deadline} now={view.now} /> : <span className="muted small">기한 없음</span>}
+              </div>
               {a.fallback && (
-                <div className="todo-fallback">
-                  <span className="muted">침묵 시: </span>
-                  {a.fallback}
-                </div>
+                <details className="todo-fallback">
+                  <summary>기한 내 응답하지 않으면</summary>
+                  <p>{a.fallback}</p>
+                </details>
               )}
               <div className="todo-actions">
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => open(a)}>
-                  처리하기
+                <button type="button" className="btn btn-soft" disabled={busy} onClick={() => open(a)}>
+                  확인하기
                 </button>
               </div>
             </li>
           ))}
         </ul>
+      )}
+      {mine.length > 3 && (
+        <button type="button" className="show-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+          {expanded ? "접기" : `확인할 일 ${mine.length - 3}개 더 보기`}
+        </button>
       )}
     </Card>
   )
@@ -71,7 +82,9 @@ const CAN: Record<Role, { can: string[]; cannot: string[] }> = {
 export function ControlsCard({ view }: { view: ProjectView }) {
   const role = view.viewer.role
   const rights = CAN[role]
-  const any = ["deposit", "pause", "resume", "begin_close", "cancel_project", "withdraw"].some((n) => findAction(view, n))
+  const any = ["deposit", "pause", "resume", "begin_close", "cancel_project", "withdraw"].some((n) =>
+    findAction(view, n),
+  )
   return (
     <Card title="프로젝트 관리" id="sec-controls">
       {view.paused && (
@@ -92,10 +105,24 @@ export function ControlsCard({ view }: { view: ProjectView }) {
         />
         <Control name="pause" help="새 약정만 멈춥니다. 기존 약정은 계속 진행·지급됩니다." />
         <Control name="resume" help="새 약정을 다시 허용합니다." />
-        <Control name="begin_close" help="새 약정이 불가해지고, 기존 약정은 끝까지 처리됩니다. 예약되지 않은 금액만 환불됩니다." danger />
-        <Control name="withdraw" help={`예약되지 않은 가용 잔액 ${won(view.ledger.available)}만 환불받을 수 있습니다.`} primary />
-        <Control name="cancel_project" help="초안(DRAFT)에서만 가능합니다. 입금된 금액은 환불받을 수 있게 됩니다." danger />
-        {!any && <p className="muted small">지금 {label(ROLE_KO, role)}이(가) 할 수 있는 프로젝트 관리 작업이 없습니다.</p>}
+        <Control
+          name="begin_close"
+          help="새 약정이 불가해지고, 기존 약정은 끝까지 처리됩니다. 예약되지 않은 금액만 환불됩니다."
+          danger
+        />
+        <Control
+          name="withdraw"
+          help={`예약되지 않은 가용 잔액 ${won(view.ledger.available)}만 환불받을 수 있습니다.`}
+          primary
+        />
+        <Control
+          name="cancel_project"
+          help="초안(DRAFT)에서만 가능합니다. 입금된 금액은 환불받을 수 있게 됩니다."
+          danger
+        />
+        {!any && (
+          <p className="muted small">지금 {label(ROLE_KO, role)}이(가) 할 수 있는 프로젝트 관리 작업이 없습니다.</p>
+        )}
       </div>
       <details className="mini-fold">
         <summary>{label(ROLE_KO, role)}의 권한</summary>
@@ -147,7 +174,9 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
             <div className="tl-body">
               <div className="tl-head">
                 <strong>{d.label}</strong>
-                <Chip tone={d.owner === role ? "accent" : "muted"}>{d.owner === role ? "내 차례" : label(ROLE_KO, d.owner)}</Chip>
+                <Chip tone={d.owner === role ? "accent" : "muted"}>
+                  {d.owner === role ? "내 차례" : label(ROLE_KO, d.owner)}
+                </Chip>
               </div>
               <button type="button" className="linkish small" onClick={() => scrollToAnchor(anchorOf(d.target))}>
                 {describeTarget(view, d.target)}

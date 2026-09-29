@@ -1,0 +1,117 @@
+/* Ploby design tokens: primitives → semantic roles → component aliases.
+   Near-neutral colors; restrained state tints only. Layout uses a 4px rhythm. Color never changes when switching roles. */
+:root {
+  --font:
+    "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR",
+    "Malgun Gothic", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --gray-0: #ffffff;
+  --gray-50: #f7f7f7;
+  --gray-100: #f0f0f0;
+  --gray-200: #e7e7e7;
+  --gray-300: #b8b8b8;
+  --gray-500: #6d6d6d;
+  --gray-700: #4b4b4b;
+  --gray-900: #262626;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --text-caption: 12px;
+  --text-small: 13px;
+  --text-body: 15px;
+  --text-title: 20px;
+  --text-heading: 32px;
+  --bg: var(--gray-50);
+  --surface: var(--gray-0);
+  --surface-2: var(--gray-50);
+  --border: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --text: var(--gray-900);
+  --text-2: var(--gray-700);
+  --muted: var(--gray-500);
+  --accent: var(--gray-900);
+  --accent-strong: #111111;
+  --accent-bg: var(--gray-100);
+  --accent-border: #d8d8d8;
+  --on-accent: #ffffff;
+  --ok: #58635b;
+  --ok-bg: #f0f2f0;
+  --ok-border: #d4d8d4;
+  --warn: #696258;
+  --warn-bg: #f3f1ee;
+  --warn-border: #dcd8d2;
+  --bad: #755e5e;
+  --bad-bg: #f5f0f0;
+  --bad-border: #dfd3d3;
+  --info: var(--accent-strong);
+  --info-bg: var(--accent-bg);
+  --info-border: var(--accent-border);
+  --neutral-bg: var(--gray-100);
+  --seg-ms: #555555;
+  --seg-ex: #999999;
+  --seg-paid: #757575;
+  --seg-refund: #b3b3b3;
+  --seg-avail: #dedede;
+  --seg-unfunded-a: #f2f2f2;
+  --seg-unfunded-b: #e1e1e1;
+  --demo-a: var(--surface-2);
+  --demo-border: var(--border);
+  --demo-text: var(--muted);
+  --radius: 20px;
+  --radius-sm: 10px;
+  --radius-control: 12px;
+  --shadow: 0 2px 4px #00000004;
+  --shadow-lg: 0 24px 80px #00000029;
+  --overlay: #00000066;
+  --motion-fast: 140ms;
+  --motion-enter: 200ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --content-width: 1040px;
+  --control-height: 44px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --surface: #1c1c1c;
+    --surface-2: #242424;
+    --border: #333333;
+    --border-strong: #6b6b6b;
+    --text: #f1f1f1;
+    --text-2: #cccccc;
+    --muted: #aaaaaa;
+    --neutral-bg: #2b2b2b;
+    --accent: #e5e5e5;
+    --accent-strong: #ffffff;
+    --accent-bg: #2c2c2c;
+    --accent-border: #454545;
+    --on-accent: #1c1c1c;
+    --ok: #b1bbb3;
+    --ok-bg: #252925;
+    --ok-border: #3e443f;
+    --warn: #bfb8ae;
+    --warn-bg: #2c2925;
+    --warn-border: #4a453e;
+    --bad: #c7b1b1;
+    --bad-bg: #2e2727;
+    --bad-border: #4c4141;
+    --seg-ms: #d1d1d1;
+    --seg-ex: #858585;
+    --seg-paid: #a6a6a6;
+    --seg-refund: #6c6c6c;
+    --seg-avail: #484848;
+    --seg-unfunded-a: #2b2b2b;
+    --seg-unfunded-b: #383838;
+    --shadow: none;
+    --shadow-lg: 0 24px 80px #0008;
+    --overlay: #0009;
+    color-scheme: dark;
+  }
+}
