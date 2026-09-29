@@ -144,7 +144,11 @@ def main():
     ap.add_argument('--data', default=str(ROOT / 'var'))
     a = ap.parse_args()
     store = Store(a.data)
-    server = ThreadingHTTPServer(('127.0.0.1', a.port), handler(store))
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', a.port), handler(store))
+    except OSError as e:
+        raise SystemExit(f'포트 {a.port}을(를) 열 수 없습니다 ({e.strerror}). 이미 실행 중인 서버를 끄거나 '
+                         f'--port 3011 처럼 다른 포트를 쓰세요 (그 경우 frontend/vite.config.ts의 프록시도 맞춰야 함).')
     print(f'Ploby API on http://127.0.0.1:{a.port}/api  data {a.data}  ({len(store.projects)} projects)  '
           f"Kiln {'on' if ai.enabled() else 'off (readings are HOLD)'}", flush=True)
     server.serve_forever()

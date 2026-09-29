@@ -29,7 +29,7 @@
 
 ```shell
 cp .env.example .env            # KILN_API_KEY를 넣으면 실제 판독, 없으면 판독이 HOLD가 됨
-python3 -m escrow.server        # API: http://127.0.0.1:3010/api  (데이터: var/)
+python3 -m escrow.server        # 저장소 루트에서 실행. API: http://127.0.0.1:3010/api  (데이터: var/)
 cd frontend && npm install && npm run dev   # 화면: http://localhost:5173  (/api를 3010으로 프록시)
 ```
 
