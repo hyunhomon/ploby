@@ -75,8 +75,8 @@ The public registry does not store client identity, project name, vendor, invoic
 - A 40 percent allocation to project A and 60 percent to project B is valid.
 - A later allocation that would raise the total above 100 percent is rejected atomically.
 - Expired or contractor-cancelled unused commitments change their allocation from RESERVED to RELEASED.
-- Settlement changes the consumed portion to SETTLED. A settled allocation is immutable.
-- Partial monetary settlement does not automatically reduce allocation basis points; the obligation must close and explicitly release unused allocation.
+- Any positive monetary settlement changes the entire RESERVED allocation to SETTLED. A SETTLED allocation and all of its basis points are immutable, even if the payout was below its monetary cap.
+- A zero-payment rejection, expiry, or pre-spend cancellation changes the entire allocation to RELEASED. Protocol v1 does not split one allocation between SETTLED and RELEASED; a project that wants finer capacity must create a smaller allocation before commitment.
 - A project cannot register the same obligation allocation twice.
 - One invoice may have at most one active allocation per project in the MVP. Multiple categories within the same project must be consolidated into that allocation.
 
@@ -97,6 +97,8 @@ Rounding is down in invoice minor units and settlement-token base units. Any rem
 - Mismatched normalization version or expired attestation: `POLICY_OR_SYSTEM_AMBIGUITY` HOLD.
 - Probable duplicate without the same attested nullifier: risk signal and resolver review, not automatic fraud determination.
 - A resolver may release an unused RESERVED allocation but cannot erase a SETTLED allocation or raise total capacity.
+
+A project with a RESERVED allocation cannot migrate in protocol v1. It must settle, expire, or cancel the associated obligation and move the allocation to SETTLED or RELEASED first. SETTLED entries remain immutable in the shared registry and continue to reference the legacy opaque obligation commitment; they are not copied to a new project escrow.
 
 ## Why a blockchain registry
 

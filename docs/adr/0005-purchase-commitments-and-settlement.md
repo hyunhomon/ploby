@@ -35,6 +35,7 @@ PurchaseCommitment
 - payee
 - settlementAsset
 - maximumSettlementBaseUnits
+- directPaymentBaseUnits, required for DIRECT_VENDOR and equal to maximumSettlementBaseUnits
 - sourceQuoteAmount and sourceCurrency, when applicable
 - fxQuoteReference, when applicable
 - permittedTaxBaseUnits
@@ -67,9 +68,11 @@ REQUESTED -> RESERVED -> SPEND_REPORTED -> EVIDENCE_SUBMITTED -> SETTLED
 
 Before spend, the contractor may cancel the reservation and release its budget. The client cannot cancel it unilaterally. An unused reservation expires at `reservationExpiresAt`. A timely spend report prevents pre-spend expiry, but the contractor must submit evidence within the policy's evidence-submission period. Missing that deadline moves the obligation to `EVIDENCE_DEFECT`; it does not silently cancel the commitment because the spend may already have occurred.
 
+Only the contractor may call `reportSpend`, and only before `reservationExpiresAt`. The contract records `spentAt = block.timestamp`, starts the evidence-submission deadline, and does not let the report change amount, asset, payee, policy, or evidence requirements. A false report can delay release only through the already bounded evidence and resolver periods.
+
 ## Reservation accounting
 
-Creating a commitment atomically requires:
+Creating a purchase commitment atomically requires:
 
 ```text
 maximumSettlementBaseUnits <= available project budget
@@ -78,11 +81,11 @@ maximumSettlementBaseUnits <= available project budget
 and then:
 
 ```text
-reserved += maximumSettlementBaseUnits
-available -= maximumSettlementBaseUnits
+newExpenseReserved = expenseReserved + maximumSettlementBaseUnits
+newAvailable = funded - newExpenseReserved - milestoneReserved - released - refunded - migratedOut
 ```
 
-Settlement moves the paid amount from reserved to released. Closing the obligation releases any unused reservation. No other request can consume reserved funds.
+Settlement decreases `expenseReserved` by the commitment's reserved maximum, increases `expenseReleased` by the paid amount, and makes any unused remainder available again. No other request can consume reserved funds. The full project formula and milestone reservation are defined only in [ADR 0004](0004-project-lifecycle-and-refunds.md).
 
 ## Settlement amount
 
@@ -121,7 +124,27 @@ The maximum settlement amount is the contractor's guaranteed cap, not an estimat
 
 ### Direct vendor payment
 
-The committed payee is the vendor. Settlement transfers directly to that address. A vendor invoice or quote satisfying the policy may be sufficient pre-payment evidence. Post-payment receipt evidence updates the audit record but does not redirect the payment.
+Direct vendor payment is a pre-payment flow, not reimbursement with the vendor substituted as payee:
+
+```text
+REQUESTED -> RESERVED -> DIRECT_PAYMENT_SUBMITTED -> DIRECT_PAID
+                                                     |
+                                                     -> RECEIPT_SUBMITTED -> RECEIPT_VERIFIED -> CLOSED
+                                                     |         |
+                                                     |         -> RECEIPT_DEFECT -> RESOLVER_REVIEW
+                                                     -> RECEIPT_OVERDUE ---------> RESOLVER_REVIEW
+                                                                                         |
+                                                                                         -> CLOSED
+                                                                                         -> DIRECT_PAID_UNRECONCILED
+```
+
+- Before `RESERVED`, the policy engine verifies the vendor invoice or quote, vendor identity, fixed vendor payee, exact authorized amount, and required pre-payment evidence.
+- Before `reservationExpiresAt`, the contractor or client may request direct payment. The contract transfers exactly `directPaymentBaseUnits` to the committed vendor payee, decreases `expenseReserved` by that amount, and increases `expenseReleased` by the same amount; there is no `SPEND_REPORTED` state and no post-payment approval gate. A changed vendor price requires a replacement commitment before payment.
+- Either participant submits the receipt within `evidenceSubmissionPeriodSeconds` using a `SubmissionNotice` bound to the commitment. A receipt attestation that satisfies the pinned requirements closes the audit record without another payment approval.
+- A missing receipt cannot reverse or redirect a completed vendor transfer. At the evidence deadline it becomes `RECEIPT_OVERDUE`, and after the resolver period it becomes the terminal audit state `DIRECT_PAID_UNRECONCILED` unless the receipt is accepted or the resolver records a waiver permitted by the pinned policy's substitute-evidence criteria.
+- A defective or service-ambiguous receipt also enters the same bounded resolver review. While a receipt is overdue, defective, or terminal unreconciled, the project cannot create another `DIRECT_VENDOR` commitment for the same vendor. The project may still close once the resolver deadline establishes the terminal audit flag.
+
+This mode's payee is the vendor. It is used only when the vendor can receive the project's settlement asset at the committed address.
 
 ### Reimbursement
 
@@ -131,13 +154,15 @@ A project selects one default mode. A commitment may use the other mode only whe
 
 ## HOLD classes and deadlines
 
-The policy's `clientReviewPeriodSeconds` starts when a settlement envelope passes basic identity, signature, and schema validation. Missing or insufficient evidence does not prevent the clock from starting; it produces `EVIDENCE_DEFECT`. The client must approve or reject with reason codes before the deadline. Silence invokes the following fallback:
+For reimbursement, the claimant starts the review clock by submitting the signed `SubmissionNotice` defined in [ADR 0001](0001-authority-and-payment-authorization.md). The contract performs only basic on-chain validation: claimant identity and signature, obligation state, nonce, manifest hash, claimed amount not above the cap, and bitmap shape. It then records the chain timestamp and deadline. It does not interpret document contents.
+
+An Evidence Attestation bound to the same manifest reports assurance and validated required slots. It may arrive during review. Missing or insufficient evidence does not prevent the clock from starting; an empty, corrupt, or late required slot produces `EVIDENCE_DEFECT`. The client must approve or object with reason codes before the deadline. Silence invokes the following fallback:
 
 | HOLD class | When used | Client-deadline fallback | Resolver-deadline fallback |
 | --- | --- | --- | --- |
 | `CLIENT_REVIEW` | Client preference or business review with no objective rule failure | Silence: auto-settle. Explicit objection: escalate to resolver | Auto-settle the committed payable amount |
-| `POLICY_OR_SYSTEM_AMBIGUITY` | Parser, policy-engine, or infrastructure result is unavailable or ambiguous after a valid commitment | Escalate to resolver | Auto-settle the committed payable amount |
-| `EVIDENCE_DEFECT` | Required evidence is missing, corrupt, or below the accepted assurance level | Escalate to resolver | Reject with evidence-defect reason; release reservation |
+| `POLICY_OR_SYSTEM_AMBIGUITY` | Parser, policy-engine, attestation service, or infrastructure result is unavailable or ambiguous after a valid commitment, while the notice claims all required slots and an amount against the fixed payee | Escalate to resolver | Pay the claimed amount up to the commitment cap |
+| `EVIDENCE_DEFECT` | Required evidence is missing, corrupt, late, unable to establish amount or payee, or affirmatively verified below the accepted assurance level | Escalate to resolver | Reject with evidence-defect reason; release reservation |
 | `INTEGRITY_RISK` | Post-commitment invalid evidence signature, probable duplicate, or supported fraud signal that requires adjudication | Escalate to resolver | Reject with integrity-risk reason; release reservation |
 | `EXCESS_AMOUNT` | Eligible actual cost exceeds the commitment | Settle committed payable immediately; excess remains unpaid | Excess is rejected unless a bilateral change order is signed |
 
@@ -145,7 +170,9 @@ The policy's `clientReviewPeriodSeconds` starts when a settlement envelope passe
 
 An exact new allocation that would make an attested invoice exceed 100 percent is not a disputable HOLD: the new commitment is BLOCKED before reservation. `INTEGRITY_RISK` applies when a non-capacity integrity issue appears after a commitment already exists or when similarity is probable rather than exact.
 
-`POLICY_OR_SYSTEM_AMBIGUITY` is valid only when the evidence meets the policy's minimum assurance and the asset, payee, and eligible actual amount are determinable. If those facts cannot be established, the class is `EVIDENCE_DEFECT`; system failure cannot manufacture a payable amount.
+The claimant and client do not choose the HOLD class. At a deadline or objection, the contract applies this precedence using signed attestations and on-chain notice fields: deterministic integrity signal, evidence defect or missing required bit, absent final attestation with every required bit claimed, then ordinary client review. Those cases map respectively to `INTEGRITY_RISK`, `EVIDENCE_DEFECT`, `POLICY_OR_SYSTEM_AMBIGUITY`, and `CLIENT_REVIEW`. `EXCESS_AMOUNT` is evaluated independently from attested actual cost and never increases the payable cap.
+
+`POLICY_OR_SYSTEM_AMBIGUITY` is valid when the notice claims every required raw slot on time and supplies a claimed amount against the already fixed payee, but the configured parser, evaluator, or attestation service is unavailable or cannot classify the artifacts. The resolver may inspect those private raw artifacts. If neither a defect attestation nor resolver decision arrives, the signed timeout rule pays `min(claimedAmountBaseUnits, maximumSettlementBaseUnits)`. This claimant-favorable outage fallback is an explicit bilateral policy choice; a client who disputes the artifacts must object before its deadline. `EVIDENCE_DEFECT` is used when a required bit is absent, an available verifier reports a corrupt or substandard artifact, the notice is late, or the amount cannot be represented; system failure cannot authorize more than the claimant signed or the commitment capped.
 
 For a valid prior commitment, client rejection is never terminal by itself. It opens resolver review and preserves the reservation. `EVIDENCE_DEFECT` can return to evaluation when the contractor supplies the missing evidence. The client cannot waive a mandatory evidence or integrity rule; only a policy-compliant re-evaluation or bounded resolver decision can settle it. Retroactive requests are the exception: because no prior promise exists, explicit client rejection or client timeout is terminal.
 

@@ -48,6 +48,8 @@ The client pre-funds a fixed amount against deliverables and acceptance criteria
 
 The contractor requests approval before buying a project expense. Policy approval reserves the maximum reimbursable amount. After purchase, evidence is checked and the eligible amount is settled. If actual cost exceeds the cap, the promised amount is paid first and only the excess requires a change order.
 
+When policy allows direct vendor payment, the commitment instead fixes an exact vendor address and amount and pays it before purchase completion; the later receipt reconciles the audit record without becoming a second payment approval.
+
 An expense incurred without a commitment is a retroactive request. It can be approved, but client silence never turns it into guaranteed payment.
 
 ## Why blockchain is used
@@ -65,17 +67,17 @@ The blockchain does not decide whether a PDF is truthful, whether delivered work
 
 ## MVP scope
 
-The demo targets one website-development project on Base Sepolia using MockUSDC. It demonstrates:
+The core demo targets one website-development project on Base Sepolia using MockUSDC. Its required path demonstrates:
 
 1. Bilateral project policy acceptance.
 2. One pre-funded work milestone.
 3. One pre-purchase expense commitment.
-4. Evidence submission with explicit assurance level.
-5. APPROVE, HOLD, BLOCK, timeout, and resolver outcomes.
+4. Contractor-controlled submission and a client-review timeout.
+5. APPROVE, HOLD, and BLOCK outcomes.
 6. A signed change order for added scope.
-7. One project-asset handover record.
-8. A shared invoice allocation that cannot exceed 100 percent.
-9. Project closing and refund of unreserved funds.
+7. Project closing and refund of unreserved funds.
+
+The accepted architecture also supports evidence assurance and DKIM, project-asset handover, resolver outcomes, and shared-invoice allocation. These are secondary demonstration tracks, not dependencies of the core end-to-end demo. The team may add them after the required path is stable without weakening their ADR decisions.
 
 Protocol v1 uses one client and one contractor identity per project. Organizations may use multisig or smart-account identities. A multi-contractor engagement uses separate project escrows so that funding, obligations, and disputes remain isolated.
 

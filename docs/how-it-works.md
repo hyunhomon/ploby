@@ -29,7 +29,7 @@ sequenceDiagram
 ## 2. Complete a work milestone
 
 1. The milestone amount is fully reserved before the contractor begins.
-2. The contractor submits the agreed deliverables and delivery manifest.
+2. The contractor signs and submits an on-chain submission notice that binds the agreed deliverables and evidence-manifest hash. Its chain timestamp starts the review clock; the backend cannot delay it.
 3. The client reviews only the criteria defined in advance.
 4. Acceptance releases payment immediately.
 5. A reasoned objection goes to the resolver.
@@ -39,7 +39,7 @@ The client cannot add new acceptance criteria after delivery. Partial payment is
 
 Each milestone also has a start-by time, delivery deadline, and grace period. Failure to start releases an unused reservation. Failure to submit by the end of the grace period enters a bounded non-delivery review instead of locking funds indefinitely.
 
-## 3. Reserve and settle an expense
+## 3. Reserve and settle a reimbursed expense
 
 ```mermaid
 flowchart LR
@@ -47,7 +47,7 @@ flowchart LR
     B -->|Fails mandatory rule| C[BLOCK]
     B -->|Ambiguous or risky| D[HOLD]
     B -->|Passes| E[Reserve maximum amount]
-    E --> F[Contractor or vendor purchases]
+    E --> F[Contractor purchases]
     F --> G[Evidence submitted]
     G --> H{Settlement checks}
     H -->|Eligible| I[Pay eligible actual amount]
@@ -56,7 +56,9 @@ flowchart LR
     H -->|Disputed| D
 ```
 
-The reservation protects both sides. The contractor knows the committed amount is funded, and the client knows it cannot exceed the agreed cap or go to another payee.
+The reservation protects both sides. The contractor knows the committed amount is funded, and the client knows it cannot exceed the agreed cap or go to another payee. In reimbursement mode, the contractor's signed submission notice starts review even if the evidence service is delayed.
+
+Direct vendor payment follows a shorter, separate path. A verified quote fixes the vendor, address, and exact amount before reservation; an authorized participant then pays the vendor directly before expiry. The later receipt reconciles the audit record but is not a second approval gate. If the receipt never arrives, the payment becomes permanently marked unreconciled and future direct payments to that vendor pause; the completed transfer is not reversed.
 
 ## 4. Resolve HOLD
 
@@ -65,9 +67,9 @@ Every HOLD identifies its class, deadline, and fallback before either party sign
 | HOLD | What happens if the client is silent? | Final fallback |
 | --- | --- | --- |
 | Business review with no objective failure | Pay the committed eligible amount | Payment |
-| System or policy ambiguity with valid evidence and known amount | Send to resolver | Payment if resolver is also silent |
+| System or policy ambiguity after all required slots and an amount were timely claimed | Send to resolver | Pay the claim up to the commitment cap if resolver is also silent |
 | Missing or insufficient evidence | Send to resolver | Rejection if not cured |
-| Signature, allocation, or supported integrity failure | Send to resolver | Rejection |
+| Evidence-signature, allocation, or supported integrity failure | Send to resolver | Rejection |
 | Amount above the commitment | Pay committed portion; do not pay excess | Bilateral change order required for excess |
 
 A client objection to a valid commitment is not a final rejection. It moves to the resolver. Timeouts can be triggered by anyone, so the platform backend cannot suppress the outcome by going offline.
@@ -103,9 +105,9 @@ For a project asset:
 
 1. Ownership, temporary custodian, required transfer evidence, and holdback are agreed in advance.
 2. The contractor transfers control through the external provider.
-3. The contractor submits the agreed evidence.
+3. The contractor submits a signed handover notice and the agreed evidence; the notice starts the review clock.
 4. Client acceptance or resolver attestation releases only the predefined handover holdback.
-5. Silence follows the agreed timeout rule.
+5. Silence follows the agreed timeout rule. If the contractor submits nothing by the handover deadline, a bounded resolver window begins; after that, the holdback reservation returns to client-available balance and an immutable unresolved-handover flag lets the project close.
 
 External account transfer and blockchain payment are not literally one atomic transaction. The blockchain atomically pays against an accepted transfer attestation.
 
@@ -122,4 +124,4 @@ During CLOSING:
 - the client may withdraw only unreserved funds;
 - the project becomes CLOSED when obligations, disputes, assets, and refunds are complete.
 
-A protocol security freeze is different. It may temporarily stop all transfers during a signer or contract incident, but deadlines are extended and obligations are preserved.
+A protocol security freeze is different. It may temporarily stop all transfers during a signer or contract incident, but deadlines are extended and obligations are preserved. It never resumes automatically into a known vulnerability: at an unextended freeze deadline, and no later than seven frozen days in a rolling 30-day window, the contract either safely resumes or enters one-way `RECOVERY_ONLY`. There, participants can settle under restricted rules, withdraw available funds, and migrate a quiescent project without administrator permission.

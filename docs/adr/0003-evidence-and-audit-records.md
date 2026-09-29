@@ -36,7 +36,7 @@ EvidenceManifest
   - mediaType
   - sizeBytes
   - documentType
-  - assuranceLevel
+  - claimedAssuranceLevel
 - requestTextSha256
 - emailVerification, when applicable
 - vendorCredential, when applicable
@@ -44,7 +44,11 @@ EvidenceManifest
 
 Raw file digests use SHA-256 for interoperability with document tooling. The manifest uses RFC 8785 canonical JSON, and `evidenceManifestHash` is `keccak256(canonicalManifestBytes)`.
 
+The manifest's `submittedAt` is descriptive off-chain metadata. The authoritative submission time is the chain timestamp recorded when the claimant's `SubmissionNotice` is accepted; applicable review and direct-receipt deadline rules are defined in [ADR 0001](0001-authority-and-payment-authorization.md). Evidence supplements create a replacement manifest linked to the prior hash; they never overwrite history or reset an on-chain clock.
+
 Filenames, invoice numbers, vendor names, email addresses, free text, storage URLs, and personal data are never placed on-chain.
+
+The claimant-supplied assurance value is not authoritative. A domain-separated Evidence Attestation signed by the configured Evidence Attestation Service binds the project, obligation, exact manifest hash, validated slot bitmap, verified assurance per slot, defect and integrity reason codes, signer-key version, issue time, expiry, and nonce. It may refine or reject claimed assurance but cannot replace the manifest, claimed amount, payee, or submission time. An attestation received after a terminal timeout is audit-only and cannot reopen the obligation.
 
 ## Evidence assurance levels
 
@@ -83,9 +87,11 @@ DecisionBundle
 - obligationId
 - evidenceManifestHash
 - evidenceAssuranceSummary
-- structuredExpense
+- structuredClaim
 - policyHash and policyVersion
-- purchaseCommitmentHash, when present
+- commitmentHash, when present
+- submissionNoticeHash, when present
+- evidenceAttestationHash, when present
 - ruleResults[]
 - riskSignals[]
 - holdClass, when present

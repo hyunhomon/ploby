@@ -33,5 +33,8 @@ It protects the client from unauthorized spending and unverified delivery. It pr
 - Every payable obligation is identified by an immutable commitment or settlement digest.
 - Project expenses and work milestones are separate obligation types with separate acceptance rules.
 - Every HOLD has a class, deadline, and deterministic fallback. No state may wait indefinitely for client action.
+- The claimant's first valid on-chain submission notice fixes the review clock; evidence services and relayers cannot postpone it, and supplements cannot reset it.
 - Existing commitments survive policy replacement, project pause, and project closing unless both parties cancel them or the defined dispute process rejects them.
 - An uncommitted, post-spend reimbursement request has no automatic-payment guarantee.
+- Protocol v1 migrates only quiescent projects; live obligations are completed under their original verifying contract.
+- A security freeze ends in a recorded safe resume or one-way participant-controlled recovery mode, never silent automatic resume.

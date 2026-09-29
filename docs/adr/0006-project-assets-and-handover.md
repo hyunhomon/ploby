@@ -2,7 +2,7 @@
 
 - Status: Accepted - implementation pending
 - Date: 2026-09-29
-- Owners: Product and backend
+- Owners: Product, backend, and protocol
 
 ## Context
 
@@ -56,19 +56,27 @@ The register is encrypted off-chain. Its canonical hash is included in project a
 
 ```text
 IDENTIFIED -> ACTIVE -> HANDOVER_REQUESTED -> EVIDENCE_SUBMITTED
-                                                |            |
-                                                -> ACCEPTED   -> DISPUTED
-                                                      |             |
-                                                      -> COMPLETE <-+
+                           |                    |            |
+                           |                    -> ACCEPTED   -> DISPUTED
+                           |                          |             |
+                           |                          -> COMPLETE <-+
+                           |
+                           -> NON_HANDOVER -> late resolver acceptance -> COMPLETE
+                                  |
+                                  -> UNRESOLVED_NON_HANDOVER
 ```
 
 1. The accepted policy or change order defines required handover evidence for each asset type.
-2. The contractor transfers control through the external provider and submits the required evidence.
-3. The client has the policy's client review period to accept or reject with a reason code tied to a missing checklist item.
+2. The contractor transfers control through the external provider and submits the signed `SubmissionNotice` from [ADR 0001](0001-authority-and-payment-authorization.md), bound to the handover evidence manifest. Its on-chain timestamp starts the client review clock.
+3. The client has the policy's client review period to accept or object with a reason code tied to a missing checklist item.
 4. Valid client acceptance creates a `HandoverAttestation` and releases the predefined holdback.
-5. Client silence escalates to the project resolver.
+5. Client silence or objection escalates to the project resolver.
 6. The resolver has the policy's resolver period to validate the checklist and evidence.
-7. If the resolver is also silent, the holdback is released by timeout only when every required evidence item was submitted before the deadline, each item meets the policy's minimum assurance, and no item relies only on an E1 screenshot or image. Otherwise it is rejected by timeout and the failed checklist items are recorded.
+7. If the resolver is also silent, the holdback is released by timeout only when every required evidence item was submitted before `handoverDeadline`, each item meets the policy's minimum assurance, and no item relies only on an E1 screenshot or image. Otherwise it is `REJECTED_BY_TIMEOUT`, the holdback reservation is released, and failed checklist items are recorded.
+
+Unlike a capped expense claim, a handover claim does not auto-release solely because the notice bitmap is complete while the attestation service is unavailable. External control transfer cannot be inferred from the claimant's slot assertion. Protocol v1 therefore requires client acceptance, resolver acceptance, or a qualifying handover attestation; resolver silence without one rejects the holdback. This stricter fallback is fixed and cannot be weakened by project policy.
+
+If no `SubmissionNotice` exists at `handoverDeadline`, any account may trigger `NON_HANDOVER` and start the resolver period. The contractor may submit a first notice and late evidence during that period, but the notice does not start or reset client review and only the resolver may accept it. If the resolver deadline passes without qualifying evidence, the contract records `REJECTED_BY_TIMEOUT`, releases the holdback reservation, and moves the asset to terminal `UNRESOLVED_NON_HANDOVER`. That immutable audit flag allows the project to close; it does not transfer the external asset or decide legal ownership outside SmartEscrow.
 
 A rejection cannot demand evidence that was not in the accepted checklist. The resolver cannot redirect the holdback or increase it.
 
@@ -82,7 +90,7 @@ The external asset transfer and blockchain payment are not technically atomic. S
 
 When a provider offers a cryptographically verifiable ownership API or signed credential, the policy may permit automatic attestation. Screenshots alone are E1 evidence and do not qualify for unattended automatic acceptance.
 
-The holdback amount and payee are fixed by the accepted milestone or change order. Normal committed expense reimbursement is settled under ADR 0005 and cannot be delayed because a separate asset handover is incomplete.
+The holdback amount and payee are fixed by the accepted milestone or change order. Normal committed expense reimbursement is settled under [ADR 0005](0005-purchase-commitments-and-settlement.md) and cannot be delayed because a separate asset handover is incomplete.
 
 ## Subscriptions and recurring assets
 
@@ -96,7 +104,7 @@ For every recurring cost, the register identifies:
 
 When a recurring asset is shared across projects, each invoice uses the allocation registry in [ADR 0007](0007-shared-expense-allocation-registry.md). Asset classification alone does not authorize billing the full subscription to more than one project.
 
-Entering CLOSING creates a handover checklist for all ACTIVE project and shared assets. The project cannot become CLOSED until each item is COMPLETE, CANCELLED, explicitly retained by the contractor under policy, or resolved through dispute.
+Entering CLOSING creates a handover checklist for all ACTIVE project and shared assets. The project cannot become CLOSED until each item is COMPLETE, CANCELLED, explicitly retained by the contractor under policy, resolved through dispute, or terminal `UNRESOLVED_NON_HANDOVER`. The last state preserves the failure record without locking the project forever.
 
 ## Consequences
 

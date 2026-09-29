@@ -8,14 +8,14 @@ These terms have one canonical meaning across product copy, UI, APIs, contracts,
 | --- | --- |
 | Project | One bilateral engagement between exactly one client identity and one contractor identity in protocol v1 |
 | Client | The party funding the project and receiving work or project assets |
-| Contractor | The party performing work and requesting expense commitments |
+| Contractor | The party performing milestone work, requesting expense commitments, and submitting delivery, expense, or handover claims |
 | Payee | The exact wallet receiving one settlement; contractor for reimbursement or work, vendor for direct payment |
 | Resolver | The policy-selected neutral role that decides bounded disputes using predefined criteria |
 | LLM parser | Untrusted service that extracts structured meaning from natural language and documents |
 | Policy engine | Deterministic service that applies the pinned project policy |
 | Policy signer | Constrained service key that signs validated commitment and settlement envelopes |
 | Relayer | Convenience service that submits already-authorized transactions and pays gas |
-| Evidence Attestation Service | Trusted MVP service that verifies evidence signals and produces consistent private invoice nullifiers |
+| Evidence Attestation Service | Trusted MVP service that binds a manifest to verified evidence slots, assurance and defect signals, and consistent private invoice nullifiers |
 | Project escrow | One immutable contract that holds and accounts for only one project's settlement asset |
 
 ## Agreements and identifiers
@@ -37,9 +37,11 @@ These terms have one canonical meaning across product copy, UI, APIs, contracts,
 | --- | --- |
 | Purchase commitment | Pre-spend expense authorization with reserved maximum settlement amount |
 | Milestone commitment | Pre-funded service payment tied to deliverables and acceptance criteria |
-| Delivery grace period | Final pre-agreed period after a milestone due time during which a delivery manifest may still be submitted |
+| Delivery grace period | Final pre-agreed period after a milestone due time during which its primary submission notice may still be submitted |
 | Settlement intent | Typed authorization to consume a reservation and pay an exact eligible amount |
+| Submission notice | Claimant-signed on-chain record that fixes an obligation's evidence manifest, claimed amount or units, evidence slots, and review start time without asserting that the evidence is valid |
 | Handover holdback | Predefined milestone unit released after project-asset handover evidence is accepted |
+| DIRECT_PAID_UNRECONCILED | Terminal audit state for a completed vendor payment whose required post-payment receipt was not accepted before the resolver deadline |
 
 ## Decisions
 
@@ -57,8 +59,8 @@ These terms have one canonical meaning across product copy, UI, APIs, contracts,
 | Class | Meaning |
 | --- | --- |
 | CLIENT_REVIEW | Business objection without an objective policy or integrity failure |
-| POLICY_OR_SYSTEM_AMBIGUITY | Evidence and payable facts are valid, but deterministic evaluation is temporarily unavailable or ambiguous |
-| EVIDENCE_DEFECT | Required evidence is missing, corrupt, or below policy assurance |
+| POLICY_OR_SYSTEM_AMBIGUITY | A timely notice claims every required slot and a capped amount, but deterministic evaluation or attestation is unavailable or ambiguous |
+| EVIDENCE_DEFECT | Required evidence is missing, corrupt, late, unable to establish payee or amount, or affirmatively verified below policy assurance |
 | INTEGRITY_RISK | Post-commitment evidence-signature issue, probable duplicate, or supported fraud signal requires resolver review; an exact invoice-allocation excess is BLOCK instead |
 | EXCESS_AMOUNT | Eligible actual cost exceeds the committed maximum |
 
@@ -79,10 +81,11 @@ These terms have one canonical meaning across product copy, UI, APIs, contracts,
 | Term | Meaning |
 | --- | --- |
 | Pause new commitments | Client control that prevents new obligations but does not delay existing settlement |
-| Security freeze | Administrator-multisig incident control that temporarily pauses all transfers, extends deadlines, and cannot cancel obligations |
+| Security freeze | Administrator-multisig incident control that temporarily pauses transfers and extends deadlines, then requires recorded safe resume, valid extension, or automatic effective transition to recovery mode |
+| RECOVERY_ONLY | One-way incident mode that blocks normal operation but preserves participant-controlled restricted settlement, available-fund withdrawal, and quiescent bilateral migration |
 | Closing | Project state that stops new obligations while existing obligations and asset handover finish |
 | Refundable | Funded amount that is neither released nor reserved and may be returned during closing or cancellation |
-| Migration | Bilaterally approved move from one immutable project escrow version to another |
+| Migration | Bilaterally approved move between immutable escrow versions, allowed in v1 only when no active obligation or related reservation, dispute, handover, or allocation remains |
 
 ## Asset treatments
 

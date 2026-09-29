@@ -15,7 +15,7 @@ The product previously used pause, stop, revoke, close, and emergency freeze as 
 Project lifecycle, new-commitment pause, and protocol security freeze are separate concepts.
 
 - Project lifecycle determines whether new obligations may be created and whether the project is winding down.
-- A client pause affects only new purchase commitments.
+- A client pause affects all new purchase and milestone commitments.
 - A bounded security freeze may delay all execution while a compromised signer or contract issue is contained, but it cannot cancel obligations.
 - Closing preserves existing commitments and returns only funds that are neither released nor reserved.
 
@@ -54,17 +54,21 @@ The client cannot use pause to cancel, delay, or change an existing commitment. 
 
 ## Security freeze
 
-`securityFreezeUntil` is a protocol-wide or contract-wide execution guard for signer compromise, contract vulnerability, or chain incident.
+`securityFreezeUntil` is a protocol-wide or contract-wide execution guard for signer compromise, contract vulnerability, or chain incident. `RECOVERY_ONLY` is a one-way terminal operating mode for a contract that cannot safely resume ordinary execution.
 
 - Only the administrator multisig may activate it.
 - One activation lasts at most 72 hours.
-- All activations for one incident have a cumulative maximum of seven days; changing the incident identifier does not reset the cap while the same root cause remains unresolved.
+- Frozen seconds are accumulated per contract over a rolling 30-day window and may not exceed seven days, regardless of incident identifiers.
 - It blocks new commitments and fund transfers, including existing settlements.
 - It does not cancel or modify any obligation.
 - Every affected client-review, resolver-review, commitment, and settlement deadline is extended by the exact freeze duration.
 - Extending beyond 72 hours requires a new multisig action and public incident record.
-- Before the seven-day cumulative cap, the protocol must resume or offer a recovery contract migration that each project's client and contractor approve. The administrator cannot migrate a project unilaterally.
-- At the cumulative cap, the freeze expires automatically for projects that did not approve migration; administrator safety authority does not become an indefinite custody right.
+- At an activation deadline, the multisig must already have recorded either a remediation-backed resume or a valid extension. Otherwise the contract's effective mode becomes `RECOVERY_ONLY`; the next state-changing call materializes that transition and cannot execute ordinary operations first.
+- Before the seven-day rolling cap, the administrator multisig must either record a public remediation-report hash and resume ordinary operation or transition the affected contract to `RECOVERY_ONLY`.
+- The contract never automatically resumes normal transfers merely because time elapsed. At the seven-day rolling cap, its effective mode becomes `RECOVERY_ONLY` if no remediation-backed resume was recorded.
+- In `RECOVERY_ONLY`, new obligations, policy changes, and ordinary service-signed execution remain disabled. Dedicated recovery entrypoints allow the client to withdraw canonical `available`; existing obligations to settle through a new bilateral instruction, a resolver award within the original cap, or the original timeout fallback already authorized by both parties' policy signatures; and a quiescent project to migrate under [ADR 0008](0008-contract-deployment-and-migration.md). None of these recovery actions requires administrator approval.
+- Recovery releases and refunds retain the original payee and client addresses. The administrator, resolver, and relayer cannot redirect them.
+- Review and obligation deadlines remain paused until entry into `RECOVERY_ONLY`, then restart with the exact frozen duration added. They do not resume while the contract is known to be unsafe.
 - Restoring signer service does not resume a client-paused project.
 
 The security freeze is not available for commercial disputes.
@@ -75,7 +79,7 @@ The security freeze is not available for commercial disputes.
 2. Unused reservations remain valid until their pre-spend expiry; the contractor may cancel them earlier.
 3. Commitments against which the contractor spent before expiry remain payable under the pinned policy.
 4. Submitted settlements and disputes continue through their normal deadlines.
-5. The client may withdraw only `funded - released - activeReservations`.
+5. The client may withdraw only canonical `available`.
 6. Expired or cancelled unused reservations return to available balance.
 7. When no active reservation, settlement, or dispute remains and every asset-register item is resolved under [ADR 0006](0006-project-assets-and-handover.md), the remaining balance is refundable and the project becomes CLOSED after withdrawal.
 
@@ -91,15 +95,23 @@ The project tracks:
 funded
 expenseReserved
 milestoneReserved
+expenseReleased
+milestoneReleased
 released
 refunded
-available = funded - expenseReserved - milestoneReserved - released - refunded
+migratedOut
+released = expenseReleased + milestoneReleased
+available = funded - expenseReserved - milestoneReserved - released - refunded - migratedOut
+accountedSettlementBalance = funded - released - refunded - migratedOut
 ```
+
+`migratedOut` is zero for every live project. It is set exactly once to the canonical available balance when a successful migration makes the source escrow read-only; it is never a fee, payment, or refund.
 
 - A project activates only after the policy-defined initial funding amount is deposited.
 - Deposits may not raise cumulative funded principal above the active project budget; increasing that cap requires a bilateral policy version.
 - A purchase or milestone commitment is created only when its full maximum amount can be reserved from `available` and the relevant sub-budget.
-- Top-ups are allowed in DRAFT, ACTIVE, and CLOSING. In CLOSING they may only cure an existing obligation shortfall and cannot authorize new work.
+- Expense capacity is `expenseBudgetBaseUnits - expenseReserved - expenseReleased`; milestone capacity is `milestoneBudgetBaseUnits - milestoneReserved - milestoneReleased`. No release may be counted against both sub-budgets.
+- Top-ups are allowed only in DRAFT and ACTIVE. CLOSING cannot create new obligations, and every valid existing obligation is already fully reserved, so a top-up in CLOSING is rejected.
 - The client cannot withdraw available funds while ACTIVE. Withdrawals begin only in CLOSING or CANCELLED.
 - Escrowed funds earn no yield. The MVP charges no platform fee.
 - Relayer gas is paid outside project escrow and is not deducted from contractor settlement.
@@ -107,9 +119,11 @@ available = funded - expenseReserved - milestoneReserved - released - refunded
 
 ## Refund destination and recovery
 
-Refunds go to the recorded funding address by default. A refund address may change only through a separately signed recovery payload from the client and the configured recovery authority. The policy signer and resolver cannot change it.
+Protocol v1's `deposit` entrypoint accepts deposits and top-ups only from the recorded client identity; another caller reverts. Refunds return only to that same client identity. If the client is an EIP-1271 smart account or multisig, that account both funds the escrow and receives refunds.
 
-The MVP may omit address recovery, in which case the funding address is immutable and the UI must warn the client before funding.
+An ERC-20 holder can bypass the entrypoint and transfer the settlement token directly to the contract, so the protocol does not claim such transfers can be prevented. They do not increment `funded` or `available` and cannot back an obligation. Anyone may call `returnUnaccountedSettlementToken`; it transfers only `tokenBalance - accountedSettlementBalance`, only to the recorded client, and changes no ledger counter. Closing and migration invoke it before their terminal transition. The UI warns that a direct token transfer is not a deposit and gives the sender no protocol refund claim. Other token types are unsupported and have no rescue function.
+
+The client address is immutable within a v1 escrow. Changing client identity requires a bilateral migration under [ADR 0008](0008-contract-deployment-and-migration.md), which is available only after all active obligations are resolved. The policy signer, resolver, administrator, and relayer cannot change the refund destination.
 
 ## Failure guarantees
 
@@ -144,9 +158,9 @@ Rejected because the client could revoke costs after the contractor relied on an
 
 Rejected because reserved funds are already promised to existing obligations.
 
-### Allow an indefinite emergency freeze
+### Allow an indefinite emergency freeze or automatic unsafe resume
 
-Rejected because an administrator-controlled indefinite freeze recreates payment withholding.
+Rejected because an administrator-controlled indefinite freeze recreates payment withholding, while automatic resume after a known vulnerability can lose funds. The bounded freeze therefore ends in either verified resume or participant-controlled `RECOVERY_ONLY` exits.
 
 ### Allow the backend signer to resume client pause
 

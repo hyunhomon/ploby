@@ -28,7 +28,7 @@ Shared cross-project state is limited to the `InvoiceAllocationRegistry` in ADR 
 | `ServiceSignerRegistry` | Publish active policy-signer, resolver, evidence-attestor, and emergency-admin keys by version | No |
 | `InvoiceAllocationRegistry` | Enforce global invoice allocation capacity | No |
 
-`ProjectEscrow` stores the client, contractor, resolver, settlement asset, active policy hash, accepted service-key versions, and accounting state. It has no generic delegate-call, arbitrary-call, owner-withdraw, or token-sweep function.
+`ProjectEscrow` stores the client, contractor, resolver, settlement asset, active policy hash, service-signer registry and minimum accepted epochs, and accounting state. Each accepted service envelope records its exact signer epoch. The escrow has no generic delegate-call, arbitrary-call, owner-withdraw, or destination-selectable token-sweep function.
 
 ## Deployment and addresses
 
@@ -56,21 +56,22 @@ This favors explicit migration over proxy-admin power.
 
 Migration is project-specific and bilateral.
 
-1. A new project escrow is predicted from an accepted target version and migration nonce.
-2. Client and contractor sign an EIP-712 `MigrationIntent` containing old escrow, new escrow, target version, policy hash, settlement asset, balance, active obligations, and expiry.
-3. Every active obligation is either completed before migration or included in the signed migration manifest with identical economic terms.
-4. The old escrow enters `MIGRATING`, blocking new obligations.
-5. The old escrow atomically transfers the migratable balance and emits the manifest hash.
-6. The new escrow verifies the transfer and activates the migrated state.
-7. The old escrow becomes `MIGRATED` and remains read-only.
+1. A new project escrow is predicted from the target implementation version, participant identities, and migration nonce. The parties bilaterally accept a new policy version whose `escrowContract` is that predicted address and whose `previousPolicyHash` is the source policy hash.
+2. Migration is allowed only when the project has no active purchase or milestone obligation, expense or milestone reservation, dispute, unresolved asset handover, or RESERVED invoice allocation.
+3. Client and contractor sign an EIP-712 `MigrationIntent` containing old escrow, new escrow, target implementation version, source and target policy hashes, source and target participant identities, settlement asset, underlying project lifecycle and pause state, canonical available balance, final accounting-checkpoint hash, migration nonce, and expiry. A replacement client identity must also sign. The contractor identity cannot change during v1 migration; replacing the contractor requires closing the old project and creating a new one.
+4. One `migrate` transaction puts the old escrow in a transient `MIGRATING` reentrancy guard, returns any unaccounted settlement-token excess to the source client, transfers the exact canonical available balance, and calls the predicted new escrow with the signed intent and final checkpoint.
+5. The new escrow verifies the transfer and checkpoint; carries forward the source's underlying DRAFT, ACTIVE, or CLOSING lifecycle and pause state plus cumulative `funded`, `expenseReleased`, `milestoneReleased`, and `refunded` totals; sets its own `migratedOut` to zero; and starts with no carried obligations or reservations. A source in `RECOVERY_ONLY` sheds that incident overlay only by entering the fixed target contract. The target project budget must be at least cumulative `funded`, each sub-budget must be at least its carried release total, and all normal policy invariants still apply.
+6. The old escrow records `migratedOut` equal to the transferred canonical available balance, consumes the intent nonce, becomes `MIGRATED`, and remains read-only. Any failed transfer or activation reverts the entire transaction and restores the old state.
 
-The resolver cannot authorize migration. For a project with no contractor and no active obligation, the client may close and redeploy instead of migrating.
+If any active item exists, it must settle, expire, cancel, or resolve under the old escrow before migration. Protocol v1 does not copy live obligations. This avoids invalidating EIP-712 signatures bound to the old verifying contract and avoids moving registry or evidence references while they are in flight.
+
+The resolver cannot authorize migration. For a draft project whose contractor never accepted policy and which has no obligation, the client may cancel and redeploy instead of migrating.
 
 If either participant refuses migration, the old immutable contract continues under its accepted rules. Deprecation alone never forces migration.
 
 ## Emergency recovery
 
-A security freeze under ADR 0004 provides time to publish a fixed version. Recovery still requires bilateral migration approval. The administrator may publish warnings, freeze within its bounded authority, rotate compromised service signers, and disable new deployments. It cannot sweep, redirect, or forcibly migrate project funds.
+A security freeze under [ADR 0004](0004-project-lifecycle-and-refunds.md) provides time to publish a fixed version. Recovery still requires bilateral migration approval and the project must first become quiescent. In `RECOVERY_ONLY`, the participants may settle existing obligations through the restricted recovery paths and then migrate. The administrator may publish warnings, freeze within its bounded authority, rotate compromised service signers, and disable new deployments. It cannot sweep, redirect, approve, or forcibly migrate project funds.
 
 If an immutable contract has an unfixable defect and bilateral migration is unavailable, the parties use the contract's existing close, settlement, and refund paths to the extent they remain safe. The architecture deliberately does not introduce an administrator backdoor for this case.
 

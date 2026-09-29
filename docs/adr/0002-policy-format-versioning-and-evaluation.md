@@ -21,6 +21,8 @@ The LLM may draft a policy or change order. It cannot activate one. A version ac
 ```text
 ProjectPolicy
 - schemaVersion
+- protocolVersion
+- implementationVersion
 - projectId
 - version
 - previousPolicyHash
@@ -29,12 +31,16 @@ ProjectPolicy
 - clientAddress
 - contractorAddress
 - resolverAddress
+- serviceSignerRegistryAddress
+- minimumPolicySignerEpoch
+- minimumEvidenceAttestorEpoch
 - settlementAssetAddress
 - settlementAssetDecimals
 - projectBudgetBaseUnits
 - expenseBudgetBaseUnits
 - milestoneBudgetBaseUnits
-- paymentMode: DIRECT_VENDOR | REIMBURSEMENT
+- defaultPaymentMode: DIRECT_VENDOR | REIMBURSEMENT
+- allowedPaymentModes[]
 - allowedCategories[]
 - categoryBudgets[]
 - allowedPayees[]
@@ -55,7 +61,9 @@ ProjectPolicy
 
 All monetary values are non-negative integer strings in settlement-asset base units. Floating-point values are invalid. Expense and milestone budgets are non-overlapping sub-limits whose sum may not exceed the project budget. The MVP supports one settlement asset per project and performs no implicit foreign-exchange conversion.
 
-Every policy must specify a resolver, client review period, resolver review period, evidence-submission period, and evidence minimum. The demo policy uses a 72-hour client review period, a seven-day resolver period, and a seven-day evidence-submission period after spend is reported. Future policies may set different values only within schema-defined safety bounds: 24 hours to seven days for client review, one to fourteen days for resolver review, and one to thirty days for evidence submission.
+`allowedPaymentModes` is a non-empty set containing only `DIRECT_VENDOR` and `REIMBURSEMENT`, and `defaultPaymentMode` must be one of its members. Each purchase commitment selects exactly one allowed mode.
+
+Every policy must specify a resolver, client review period, resolver review period, evidence-submission period, and evidence minimum. The demo policy uses a 72-hour client review period, a seven-day resolver period, and a seven-day evidence-submission period after reimbursable spend or direct vendor payment is reported. Future policies may set different values only within schema-defined safety bounds: 24 hours to seven days for client review, one to fourteen days for resolver review, and one to thirty days for evidence submission.
 
 ## Acceptance and activation
 
@@ -69,14 +77,14 @@ A policy is active only when:
 4. The settlement asset and escrow contract match the project.
 5. The policy effective time has arrived.
 
-The platform may simulate contractor acceptance in a hackathon demo only when the UI and demo data label it as simulated. It is not equivalent to a bilateral production acceptance.
+Demo and production flows both require distinct client and contractor signatures. The demo uses separate test wallets; it must not simulate or impersonate contractor acceptance. Either participant may use an EIP-1271 smart account or multisig.
 
 ## Versioning and non-retroactivity
 
 - Versions increase monotonically within a project.
 - An accepted version is immutable.
 - An amendment creates a new document, hash, and bilateral acceptance record.
-- A purchase commitment pins the policy hash and version active when it was issued.
+- Every purchase and milestone commitment pins the policy hash and version active when it was issued.
 - Policy replacement, payee removal, project pause, and project closing do not alter an existing commitment.
 - Emergency signer revocation prevents new signatures but does not cancel valid obligations.
 - A request rejected under an older policy may be resubmitted under a new policy only with a new request or obligation ID linked to the old one.
@@ -114,13 +122,9 @@ Risk models may recommend HOLD. They cannot override a deterministic BLOCK or in
 
 ## Budget accounting
 
-The system distinguishes:
+[ADR 0004](0004-project-lifecycle-and-refunds.md) defines the canonical project ledger: `funded`, type-specific reservations and releases, `refunded`, terminal `migratedOut`, and derived `available`. Purchase commitments consume `expenseReserved`; work commitments consume `milestoneReserved`. Both are created atomically from `available` and their applicable sub-budget, so concurrent requests cannot promise the same funds twice.
 
-- `released`: completed settlements.
-- `reserved`: active purchase commitments not fully settled.
-- `available`: funded balance minus released and reserved amounts.
-
-Creating a commitment atomically increases `reserved`. Partial settlement decreases the reservation by the settled amount and releases any unused remainder when the obligation closes. Concurrent requests evaluate against `available`, preventing double commitment of the same funds.
+Partial settlement decreases the relevant reservation by the paid amount. Closing an obligation releases any unused remainder. No ADR or implementation may introduce a second, differently defined `reserved` or `available` balance.
 
 ## Foreign currency
 

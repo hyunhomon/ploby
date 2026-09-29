@@ -41,6 +41,8 @@ MilestoneCommitment
 - resolverReviewPeriodSeconds
 - requiredDeliveryEvidence[]
 - assetHandoverRequirements[]
+- clientTimeoutFallback: RELEASE_VERIFIED_ELIGIBLE_UNITS
+- resolverTimeoutFallback: RELEASE_COMPLETE_CLAIMS_UNLESS_DEFECT_ATTESTED
 - cancellationTerms
 - nonce
 ```
@@ -60,32 +62,37 @@ PLANNED -> FUNDED_AND_RESERVED -> IN_PROGRESS -> DELIVERED
 - `PLANNED` is not permission to start work.
 - `FUNDED_AND_RESERVED` is the client's binding payment commitment and permission to start. If the contractor does not mark the milestone IN_PROGRESS by `startBy`, it becomes EXPIRED_UNUSED and releases the reservation.
 - `IN_PROGRESS` records contractor start before any cancellation deadline.
-- `DELIVERED` starts the client review clock after a schema-valid delivery manifest is submitted.
+- `DELIVERED` starts when the contractor submits the signed `SubmissionNotice` defined in [ADR 0001](0001-authority-and-payment-authorization.md). The contract validates identity, signature, obligation, nonce, manifest hash, claimed-unit bitmap, and amount cap, then fixes the review start from chain time.
 - `ACCEPTED`, `PARTIAL`, and `REJECTED` operate only on predefined deliverable units and their fixed amounts.
 - `PAID` consumes the reservation and transfers the accepted amount.
 
+Payment decreases `milestoneReserved` by the unit's reserved amount and increases `milestoneReleased` by the amount paid. A rejected or unclaimed unit releases its reservation to canonical `available`; it never increments a release counter.
+
 ## Acceptance and timeout
 
-The client may accept units or object with a reason code tied to a predefined acceptance criterion. The client may not add a new criterion after delivery.
+The notice establishes what was claimed and when, not that delivery criteria were met. An Evidence Attestation bound to the same manifest reports validated evidence slots and assurance. The client may accept units or object with a reason code tied to a predefined acceptance criterion. The client may not add a new criterion after delivery.
 
 - Client acceptance releases accepted-unit amounts immediately.
-- Client silence until the review deadline releases every submitted unit whose required evidence is present and has no deterministic integrity failure.
+- Client silence until the review deadline releases every submitted unit whose required evidence slots are confirmed by the Evidence Attestation and have no deterministic integrity failure.
 - Client objection opens resolver review; it is not a terminal rejection.
 - The resolver decides each disputed unit as accepted or rejected using only the predefined criteria and submitted evidence.
-- Resolver silence releases a disputed unit by timeout when all required delivery evidence was submitted; otherwise it rejects that unit by timeout.
+- If the notice claimed every required raw slot on time but the attestation service is unavailable, the unit enters `POLICY_OR_SYSTEM_AMBIGUITY` and the resolver may inspect the raw evidence. Resolver silence applies `RELEASE_COMPLETE_CLAIMS_UNLESS_DEFECT_ATTESTED`: it releases the claimed unit's fixed amount unless a defect or integrity attestation was recorded before the deadline.
+- Outside the system-ambiguity fallback above, resolver silence releases a disputed unit only when all required delivery evidence was submitted and validated; otherwise it rejects that unit by timeout.
 - No resolver decision can increase the milestone amount or change the contractor payee.
 
-Timeout transitions are permissionless and use chain time as defined in ADR 0005.
+The two timeout-fallback enum values above are fixed for protocol v1 and included in the commitment digest for forward-compatible decoding; project policy cannot substitute another fallback.
+
+Timeout transitions are permissionless and use chain time as defined in [ADR 0005](0005-purchase-commitments-and-settlement.md).
 
 ## Delivery deadline
 
 The contractor may submit delivery through `deliveryDueAt + deliveryGracePeriodSeconds`. Protocol v1 applies no automatic late-payment penalty.
 
 - Delivery submitted within that window follows normal review.
-- If no valid delivery manifest exists when the grace period ends, the milestone enters `NON_DELIVERY` resolver review.
-- The contractor may not cure after the grace period without a bilaterally signed schedule change.
-- The resolver decides only whether evidence was submitted before the deadline and whether predefined completed units qualify under `cancellationTerms`.
-- If the resolver deadline also passes with no qualifying delivery evidence, undelivered units are REJECTED_BY_TIMEOUT and their reservations return to available project funds.
+- If no valid primary `SubmissionNotice` exists when the grace period ends, the milestone enters `NON_DELIVERY` resolver review.
+- The contractor may not submit a first notice or add claimed units after the grace period without a bilaterally signed schedule change. Evidence for a timely notice may still be supplemented until the resolver deadline, without changing the claim or either deadline.
+- Because no on-chain notice exists, the resolver cannot deem a late delivery timely. It may award only a predefined `terminationCompensationBaseUnits` permitted by `cancellationTerms` for an `IN_PROGRESS` milestone.
+- If the resolver deadline also passes, all undelivered units are `REJECTED_BY_TIMEOUT`, any allowed termination award is zero, and their reservations return to available project funds.
 
 This prevents an in-progress milestone from reserving funds forever while making the final submission deadline visible before work starts.
 
@@ -111,9 +118,9 @@ Existing milestone commitments remain governed by their pinned policy version.
 
 ## Relationship to expenses and assets
 
-- Work compensation uses milestone reservations; vendor costs and reimbursements use purchase commitments under ADR 0005.
+- Work compensation uses milestone reservations; vendor costs and reimbursements use purchase commitments under [ADR 0005](0005-purchase-commitments-and-settlement.md).
 - A milestone cannot hide reimbursable expenses unless the policy explicitly prices them into the milestone amount.
-- Asset-handover holdback is a deliverable unit governed jointly by this ADR and ADR 0006.
+- Asset-handover holdback is a deliverable unit governed jointly by this ADR and [ADR 0006](0006-project-assets-and-handover.md).
 - An expense dispute cannot delay an unrelated milestone, and a milestone dispute cannot delay an unrelated committed expense.
 
 ## Consequences

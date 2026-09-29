@@ -18,7 +18,7 @@ AI interpretation, deterministic evaluation, transaction authorization, transact
 
 Every fund-changing action commits to an immutable typed payload. The escrow releases only the exact asset, amount, payee, project, and obligation identified by that payload.
 
-The MVP policy signer and resolver are explicitly trusted platform components. This is a disclosed centralization assumption. The service must not be described as trustless or fully non-custodial while those roles can affect settlement.
+The MVP policy signer, resolver, and Evidence Attestation Service are explicitly trusted platform components. This is a disclosed centralization assumption. The service must not be described as trustless or fully non-custodial while those roles can affect settlement.
 
 ## Roles and limits
 
@@ -29,12 +29,13 @@ The MVP policy signer and resolver are explicitly trusted platform components. T
 | LLM parser | Propose structured fields and classifications | Sign, approve, release, or decide a dispute |
 | Policy engine | Apply versioned deterministic rules and generate a decision trace | Override a deterministic rule with model output |
 | Policy signer | Sign schema-valid commitment and settlement envelopes produced by approved policy-engine code | Change payload fields after evaluation or act as administrator |
+| Evidence attestor | Bind a manifest to validated slots, assurance, defect signals, and invoice nullifiers | Move the submission clock, choose a payee, increase a claim, or resolve a commercial dispute |
 | Relayer | Submit signed payloads and pay gas | Change a signed payload or create authority by itself |
 | Resolver | Decide only the disputed amount and reason codes within an existing obligation | Redirect the payee, exceed the disputed cap, edit policy, or take project funds |
 | Administrator | Rotate compromised service signers and activate a bounded security freeze | Spend project funds, cancel obligations, or resolve commercial disputes |
 | Escrow contract | Enforce signatures, exact payloads, state, deadlines, replay protection, reservations, and balance | Interpret natural language or evidence |
 
-The policy signer, resolver, and administrator use separate keys. The administrator is a multisig before any non-demo deployment. Key rotation never changes or revives an existing obligation.
+The policy signer, evidence attestor, resolver, and administrator use separate keys. The administrator is a multisig before any non-demo deployment. The service registry appends monotonically increasing signer epochs and may revoke a compromised epoch for new submissions. Already recorded obligations and attestations remain immutable; an envelope from a revoked epoch that was never accepted on-chain is rejected. Rotation never changes, cancels, or revives an existing obligation.
 
 A resolver decision is final for the on-chain obligation. The MVP has no on-chain appeal. Contractual or legal rights outside SmartEscrow remain unaffected, but an external claim does not rewrite the immutable settlement record.
 
@@ -43,10 +44,10 @@ A resolver decision is final for the on-chain obligation. The MVP has no on-chai
 The system uses three financial payload families:
 
 - `PurchaseCommitment`: reserves budget before the contractor spends.
-- `SettlementIntent`: pays an eligible amount against that commitment.
+- `SettlementIntent`: consumes a purchase or milestone reservation and pays the exact eligible amount.
 - `MilestoneCommitment`: reserves service compensation against defined deliverables under [ADR 0009](0009-work-milestones-and-acceptance.md).
 
-Both payloads are domain-separated by `chainId` and `escrowContract` and bind at least:
+All financial payloads are domain-separated by `chainId` and `escrowContract` and bind at least:
 
 ```text
 - projectId
@@ -72,6 +73,31 @@ obligationId = keccak256(projectId, obligationType, creator, obligationNonce)
 ```
 
 Nonces are monotonic within their scope and consumed exactly once.
+
+## Submission notices and review-clock authority
+
+Expenses, milestone deliveries, and asset handovers use one non-financial `SubmissionNotice` payload:
+
+```text
+SubmissionNotice
+- schemaVersion
+- chainId
+- escrowContract
+- projectId
+- obligationId
+- submissionType: EXPENSE | MILESTONE | ASSET_HANDOVER
+- evidenceManifestHash
+- claimedAmountBaseUnits
+- evidenceSlotBitmap
+- submittedBy
+- nonce
+```
+
+The claimant signs and submits this notice directly to the project escrow. A relayer may relay it, but cannot create or alter it. The contract validates claimant identity, signature, obligation state, nonce, manifest hash, amount cap, and bitmap shape, then records `submittedAt = block.timestamp`. For reimbursement, milestone, and timely handover claims, that timestamp derives the review deadline from the pinned policy. A direct-vendor receipt is instead checked against the reconciliation deadline that began at vendor payment. No policy signer, evidence service, client, or backend may choose or move either clock.
+
+The notice proves what the claimant submitted and when; `evidenceSlotBitmap` is the claimant's assertion of included slots, not contract validation of their contents. A versioned Evidence Attestation may later bind the same `evidenceManifestHash`, report validated evidence slots and assurance levels, and drive the deterministic outcome defined by the obligation-specific ADR. Missing or delayed attestation therefore cannot erase a timely submission.
+
+Protocol v1 accepts exactly one primary notice per purchase commitment, milestone commitment, or asset handover. A milestone notice includes the final claimed deliverable-unit bitmap; omitted units follow the non-delivery path. The claimant may cure or supplement evidence until the resolver deadline with a signed `EvidenceSupplement` that binds the obligation, prior manifest hash, replacement manifest hash, replacement evidence-slot bitmap, and nonce. A supplement cannot add milestone units, increase the claimed amount, replace the payee, or reset `submittedAt` or any deadline.
 
 ## Bilateral authority rules
 

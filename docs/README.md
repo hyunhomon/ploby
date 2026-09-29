@@ -17,4 +17,4 @@ SmartEscrow is a bilateral project escrow. It protects clients from unauthorized
 
 The human-readable documents explain the product but do not replace the ADRs. If an explanatory document and an accepted ADR conflict, the ADR is authoritative and the explanatory document must be corrected.
 
-The current Solidity contracts are an initial Phase 1 implementation. They do not yet implement the complete target architecture described here. Current implementation-specific choices are recorded in the repository root `DECISIONS.md`.
+The current Solidity contracts are a legacy Phase 1 prototype. They do not yet implement the complete target architecture described here and must not be used with real funds. Legacy implementation-specific choices are recorded in the repository root `DECISIONS.md`.
