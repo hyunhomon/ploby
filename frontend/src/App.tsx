@@ -187,11 +187,12 @@ export function App() {
                 className="demo-toggle"
                 aria-expanded={demoOpen}
                 aria-controls="demo-tools"
+                aria-label={t("app.demoTools")}
                 onClick={() => setDemoOpen(!demoOpen)}
               >
                 <span className="demo-dot" />
                 <span className="desktop-only">{t("app.demoTools")}</span>
-                <span className="mobile-only">Demo</span>
+                <span className="mobile-only">{t("app.demoShort")}</span>
               </button>
               <label className="language-select">
                 <span className="sr-only">{t("common.language")}</span>

@@ -2,9 +2,10 @@
 // answers with a DRAFT project whose v1 waits for both signatures and the initial funding.
 
 import { useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { api, errorText } from "../api"
 import { num, parseAmount, shortHash, sum, usd, won } from "../format"
-import { RULES_SOURCE, label } from "../labels"
+import { RULES_SOURCE, caption, label } from "../labels"
 import type { NewMilestone, NewProject as NewProjectT, Periods, RulesCandidate, RulesSource, Vendor } from "../types"
 import { Banner, Card, Chip, Field, Money, MoneyInput, Segmented, useApp } from "./ui"
 
@@ -77,9 +78,10 @@ function toMilestone(m: MsDraft): NewMilestone {
 }
 
 export function NewProject() {
+  const { t } = useTranslation()
   const { role, meta, navigate, notify } = useApp()
   const [step, setStep] = useState(0)
-  const steps = ["기본 정보", "경비 규칙", "작업과 대금", "확인 및 생성"]
+  const steps = [t("wizard.steps.basic"), t("wizard.steps.rules"), t("wizard.steps.work"), t("wizard.steps.confirm")]
   const goStep = (next: number) => {
     setStep(next)
     window.scrollTo(0, 0)
@@ -121,10 +123,11 @@ export function NewProject() {
     for (const v of meta?.vendors ?? []) if (vendors.includes(v.id) && !ids.includes(v.category)) ids.push(v.category)
     return ids.map((id) => ({
       id,
-      name:
+      name: caption(
         meta?.categories?.find((c) => c.id === id)?.name_ko ??
-        meta?.vendors.find((v) => v.category === id)?.category_ko ??
-        id,
+          meta?.vendors.find((v) => v.category === id)?.category_ko ??
+          id,
+      ),
     }))
   }, [meta, vendors])
   const categoryBudgets = Object.fromEntries(
@@ -139,42 +142,42 @@ export function NewProject() {
   const projectBudget = expenseBudget + milestoneBudget
 
   const problems: string[] = []
-  if (!name.trim()) problems.push("프로젝트 이름을 입력하세요")
-  if (!endsAt) problems.push("프로젝트 종료일을 정하세요")
+  if (!name.trim()) problems.push(t("wizard.needName"))
+  if (!endsAt) problems.push(t("wizard.needEnds"))
   const basicProblemCount = problems.length
   if (mode === "form") {
-    if (vendors.length === 0) problems.push("허용 공급자를 하나 이상 고르세요")
-    if (!budget || budget <= 0) problems.push("경비 예산을 입력하세요")
-    if (!maxPer || maxPer <= 0) problems.push("건별 한도를 입력하세요")
-    if (budget && maxPer && maxPer > budget) problems.push("건별 한도가 경비 예산보다 큽니다")
-    if (!until) problems.push("경비 사용 기한을 정하세요")
+    if (vendors.length === 0) problems.push(t("wizard.needVendor"))
+    if (!budget || budget <= 0) problems.push(t("wizard.needBudget"))
+    if (!maxPer || maxPer <= 0) problems.push(t("wizard.needPer"))
+    if (budget && maxPer && maxPer > budget) problems.push(t("wizard.perOver"))
+    if (!until) problems.push(t("wizard.needUntil"))
     for (const c of chosenCategories) {
       const v = catBudgets[c.id]
-      if (v !== null && v !== undefined && budget && v > budget) problems.push(`${c.name} 예산이 경비 예산보다 큽니다`)
+      if (v !== null && v !== undefined && budget && v > budget) problems.push(t("wizard.catOver", { name: c.name }))
     }
   } else {
-    if (!candidate) problems.push("경비 규칙 문장을 AI로 읽어 두 해석을 확인하세요")
-    else if (!chosen) problems.push("두 해석 중 하나를 고르세요")
-    else if (!chosen.ok) problems.push("고른 해석에 오류가 있습니다")
+    if (!candidate) problems.push(t("wizard.needRead"))
+    else if (!chosen) problems.push(t("wizard.needPick"))
+    else if (!chosen.ok) problems.push(t("wizard.pickError"))
   }
   const rulesProblemCount = problems.length
   milestones.forEach((m, i) => {
-    const n = `마일스톤 ${i + 1}`
-    if (!m.title.trim()) problems.push(`${n}: 제목이 비어 있습니다`)
-    if (!m.start_by || !m.due_at) problems.push(`${n}: 착수 기한과 납기를 정하세요`)
-    if (m.start_by && m.due_at && m.start_by > m.due_at) problems.push(`${n}: 착수 기한이 납기보다 늦습니다`)
-    if (m.due_at && endsAt && m.due_at > endsAt) problems.push(`${n}: 납기가 프로젝트 종료일보다 늦습니다`)
-    if (m.units.length === 0) problems.push(`${n}: 납품 단위가 없습니다`)
+    const n = t("wizard.milestone", { n: i + 1 })
+    if (!m.title.trim()) problems.push(t("wizard.emptyTitle", { name: n }))
+    if (!m.start_by || !m.due_at) problems.push(t("wizard.needDates", { name: n }))
+    if (m.start_by && m.due_at && m.start_by > m.due_at) problems.push(t("wizard.dateOrder", { name: n }))
+    if (m.due_at && endsAt && m.due_at > endsAt) problems.push(t("wizard.afterProject", { name: n }))
+    if (m.units.length === 0) problems.push(t("wizard.noUnits", { name: n }))
     m.units.forEach((u, j) => {
-      if (!u.title.trim()) problems.push(`${n} 단위 ${j + 1}: 이름이 비어 있습니다`)
-      if (!u.criteria.trim()) problems.push(`${n} 단위 ${j + 1}: 인수 기준이 없습니다`)
-      if (!u.amount || u.amount <= 0) problems.push(`${n} 단위 ${j + 1}: 금액이 없습니다`)
+      if (!u.title.trim()) problems.push(t("wizard.unitName", { name: n, n: j + 1 }))
+      if (!u.criteria.trim()) problems.push(t("wizard.unitCriteria", { name: n, n: j + 1 }))
+      if (!u.amount || u.amount <= 0) problems.push(t("wizard.unitAmount", { name: n, n: j + 1 }))
     })
   })
   const workProblemCount = problems.length
   const problemStep = (index: number) =>
     index < basicProblemCount ? 0 : index < rulesProblemCount ? 1 : index < workProblemCount ? 2 : 3
-  if (Object.values(periods).some((v) => !(v > 0))) problems.push("기한 설정은 모두 0보다 커야 합니다")
+  if (Object.values(periods).some((v) => !(v > 0))) problems.push(t("wizard.periodsPositive"))
 
   const compile = async () => {
     setCompiling(true)
@@ -218,7 +221,7 @@ export function NewProject() {
     setSubmitting(true)
     try {
       const view = await api.createProject(body)
-      notify("ok", "프로젝트 초안을 만들었습니다. 양측 서명과 초기 입금이 필요합니다.")
+      notify("ok", t("wizard.created"))
       navigate(`#/p/${encodeURIComponent(view.id)}`)
     } catch (e) {
       notify("error", errorText(e))
@@ -237,11 +240,11 @@ export function NewProject() {
   if (role !== "client") {
     return (
       <div className="page">
-        <Banner tone="info" title="새 프로젝트는 클라이언트만 만들 수 있습니다">
-          위의 역할 전환에서 ‘클라이언트’를 고르세요. 작업자는 만들어진 정책을 검토하고 서명합니다.
+        <Banner tone="info" title={t("wizard.clientOnlyTitle")}>
+          {t("wizard.clientOnlyBody")}
         </Banner>
         <button type="button" className="btn" onClick={() => navigate("#/")}>
-          목록으로
+          {t("project.backToList")}
         </button>
       </div>
     )
@@ -250,19 +253,15 @@ export function NewProject() {
   return (
     <div className="page newproject">
       <button type="button" className="linkish small back" onClick={() => navigate("#/")}>
-        ← 프로젝트 목록
+        ← {t("project.projectList")}
       </button>
-      <p className="eyebrow">새 프로젝트 · {step + 1} / 4</p>
+      <p className="eyebrow">{t("wizard.progress", { step: step + 1, total: 4 })}</p>
       <h1 id="step-heading" tabIndex={-1}>
-        {
-          ["어떤 일을 함께하나요?", "경비 기준을 정해주세요", "작업과 대금을 나눠주세요", "마지막으로 확인해주세요"][
-            step
-          ]
-        }
+        {[t("wizard.titles.work"), t("wizard.titles.rules"), t("wizard.titles.pay"), t("wizard.titles.confirm")][step]}
       </h1>
-      <p className="muted">양측이 조건에 서명하고 대금이 입금되면 프로젝트가 시작돼요.</p>
+      <p className="muted">{t("wizard.lead")}</p>
 
-      <nav className="wizard-steps" aria-label="프로젝트 생성 단계">
+      <nav className="wizard-steps" aria-label={t("wizard.stepsLabel")}>
         {steps.map((title, i) => (
           <button type="button" key={title} aria-current={step === i ? "step" : undefined} onClick={() => goStep(i)}>
             <span>{i + 1}</span>
@@ -273,39 +272,37 @@ export function NewProject() {
       <div className={`wizard wizard-step-${step}`}>
         <div className="wizard-main">
           <div hidden={step !== 0}>
-            <Card title="기본 정보">
+            <Card title={t("wizard.basicTitle")}>
               <div className="grid-2">
-                <Field label="프로젝트 이름">
+                <Field label={t("wizard.name")}>
                   <input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
-                <Field label="프로젝트 종료일" hint="이날이 끝날 때까지 (KST)">
+                <Field label={t("wizard.ends")} hint={t("wizard.endsHint")}>
                   <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </Field>
               </div>
             </Card>
           </div>
           <div hidden={step !== 1}>
-            <Card title="경비 규칙" sub="어디에서, 얼마까지 사용할 수 있는지 정해주세요.">
+            <Card title={t("wizard.rulesTitle")} sub={t("wizard.rulesSub")}>
               <Segmented
                 value={mode}
                 onChange={setMode}
-                label="작성 방식"
+                label={t("wizard.mode")}
                 options={[
-                  { value: "form", label: "양식으로" },
-                  { value: "words", label: "문장으로 (AI가 읽기)" },
+                  { value: "form", label: t("wizard.form") },
+                  { value: "words", label: t("wizard.words") },
                 ]}
               />
               {mode === "form" ? (
                 <div className="form-rules">
                   <fieldset className="fieldset">
-                    <legend>허용 공급자</legend>
-                    {groups.length === 0 && (
-                      <p className="muted small">공급자 목록을 불러오지 못했습니다 (/api/meta).</p>
-                    )}
+                    <legend>{t("wizard.vendors")}</legend>
+                    {groups.length === 0 && <p className="muted small">{t("wizard.vendorsMissing")}</p>}
                     <div className="vendor-groups">
                       {groups.map(([cat, list]) => (
                         <div key={cat} className="vendor-group">
-                          <div className="vendor-cat">{cat}</div>
+                          <div className="vendor-cat">{caption(cat)}</div>
                           {list.map((v) => (
                             <label key={v.id} className="check check-inline">
                               <input
@@ -323,30 +320,27 @@ export function NewProject() {
                     </div>
                   </fieldset>
                   <div className="grid-3">
-                    <Field label="경비 예산">
+                    <Field label={t("wizard.budget")}>
                       <MoneyInput value={budget} onChange={setBudget} />
                     </Field>
-                    <Field label="건별 한도" hint="부가세·수수료 포함 한 건">
+                    <Field label={t("wizard.per")} hint={t("wizard.perHint")}>
                       <MoneyInput value={maxPer} onChange={setMaxPer} />
                     </Field>
-                    <Field label="경비 사용 기한">
+                    <Field label={t("wizard.until")}>
                       <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
                     </Field>
                   </div>
                   {chosenCategories.length > 0 && (
                     <details className="mini-fold">
-                      <summary>카테고리별 예산 (선택)</summary>
-                      <p className="muted small">
-                        비워 두면 경비 예산 안에서 카테고리 제한이 없습니다. 정하면 ‘카테고리 예산 잔여’ 규칙이 약정마다
-                        검사됩니다.
-                      </p>
+                      <summary>{t("wizard.catOptional")}</summary>
+                      <p className="muted small">{t("wizard.catHelp")}</p>
                       <div className="grid-3">
                         {chosenCategories.map((c) => (
                           <Field key={c.id} label={c.name}>
                             <MoneyInput
                               value={catBudgets[c.id] ?? null}
                               onChange={(n) => setCatBudgets((s) => ({ ...s, [c.id]: n }))}
-                              placeholder="제한 없음"
+                              placeholder={t("wizard.noCap")}
                             />
                           </Field>
                         ))}
@@ -357,9 +351,9 @@ export function NewProject() {
               ) : (
                 <div className="words-rules">
                   {meta && !meta.ai.enabled && (
-                    <Banner tone="warn">AI가 꺼져 있어 문장 규칙을 읽을 수 없습니다. 양식을 사용하세요.</Banner>
+                    <Banner tone="warn">{t("wizard.aiOff")}</Banner>
                   )}
-                  <Field label="경비 규칙 (평소 말투로)">
+                  <Field label={t("wizard.wordsLabel")}>
                     <textarea
                       rows={4}
                       value={words}
@@ -377,25 +371,25 @@ export function NewProject() {
                       onClick={compile}
                       disabled={compiling || !words.trim()}
                     >
-                      {compiling ? "AI가 두 번 읽는 중…" : "AI로 읽기"}
+                      {compiling ? t("wizard.reading") : t("wizard.read")}
                     </button>
                     <span className="muted small">
-                      모델이 서로 모르게 두 번 읽고, 두 해석을 비교합니다{meta?.ai.model ? ` (${meta.ai.model})` : ""}.
+                      {t("wizard.compare", { model: meta?.ai.model ? ` (${meta.ai.model})` : "" })}
                     </span>
                   </div>
-                  <Banner tone="info">AI가 규칙 초안을 읽었지만, 효력은 두 당사자가 서명한 뒤에만 생깁니다</Banner>
+                  <Banner tone="info">{t("wizard.aiEffect")}</Banner>
                   {candidate && <CandidateView c={candidate} pick={pick} onPick={setPick} />}
                 </div>
               )}
             </Card>
           </div>
           <div hidden={step !== 2}>
-            <Card title="작업과 대금" sub="작업별 금액과 검수 기준을 미리 합의해요.">
+            <Card title={t("wizard.workTitle")} sub={t("wizard.workSub")}>
               <div className="stack">
                 {milestones.map((m, i) => (
                   <div className="ms-edit" key={i}>
                     <div className="ms-edit-head">
-                      <strong>마일스톤 {i + 1}</strong>
+                      <strong>{t("wizard.milestone", { n: i + 1 })}</strong>
                       <Money n={msTotals[i]} />
                       <span className="pr-spacer" />
                       <button
@@ -403,24 +397,24 @@ export function NewProject() {
                         className="btn btn-ghost btn-sm"
                         onClick={() => setMilestones((ms) => ms.filter((_, j) => j !== i))}
                       >
-                        삭제
+                        {t("wizard.remove")}
                       </button>
                     </div>
                     <div className="grid-4">
-                      <Field label="제목">
+                      <Field label={t("wizard.itemTitle")}>
                         <input value={m.title} onChange={(e) => setMs(i, { title: e.target.value })} />
                       </Field>
-                      <Field label="착수 기한">
+                      <Field label={t("wizard.startBy")}>
                         <input
                           type="date"
                           value={m.start_by}
                           onChange={(e) => setMs(i, { start_by: e.target.value })}
                         />
                       </Field>
-                      <Field label="납기">
+                      <Field label={t("wizard.due")}>
                         <input type="date" value={m.due_at} onChange={(e) => setMs(i, { due_at: e.target.value })} />
                       </Field>
-                      <Field label="유예 (일)">
+                      <Field label={t("wizard.grace")}>
                         <input
                           type="number"
                           min={0}
@@ -433,14 +427,14 @@ export function NewProject() {
                       {m.units.map((u, k) => (
                         <div className="unit-edit" key={k}>
                           <div className="grid-2">
-                            <Field label={`납품 단위 ${k + 1}`}>
+                            <Field label={t("wizard.unit", { n: k + 1 })}>
                               <input value={u.title} onChange={(e) => setUnit(i, k, { title: e.target.value })} />
                             </Field>
-                            <Field label="금액">
+                            <Field label={t("wizard.amount")}>
                               <MoneyInput value={u.amount} onChange={(n) => setUnit(i, k, { amount: n })} />
                             </Field>
                           </div>
-                          <Field label="인수 기준" hint="한 줄에 기준 하나">
+                          <Field label={t("wizard.criteria")} hint={t("wizard.criteriaHint")}>
                             <textarea
                               rows={2}
                               value={u.criteria}
@@ -453,7 +447,7 @@ export function NewProject() {
                               className="btn btn-ghost btn-sm"
                               onClick={() => setMs(i, { units: m.units.filter((_, l) => l !== k) })}
                             >
-                              납품 단위 삭제
+                              {t("wizard.removeUnit")}
                             </button>
                           )}
                         </div>
@@ -463,7 +457,7 @@ export function NewProject() {
                         className="btn btn-sm"
                         onClick={() => setMs(i, { units: [...m.units, { title: "", criteria: "", amount: null }] })}
                       >
-                        + 납품 단위 추가
+                        {t("wizard.addUnit")}
                       </button>
                     </div>
                   </div>
@@ -484,41 +478,41 @@ export function NewProject() {
                     ])
                   }
                 >
-                  + 마일스톤 추가
+                  {t("wizard.addMilestone")}
                 </button>
               </div>
             </Card>
           </div>
           <div hidden={step !== 3}>
-            <Card title="기한 설정" sub="기한 내 응답이 없을 때 적용할 조건이에요.">
+            <Card title={t("wizard.periodsTitle")} sub={t("wizard.periodsSub")}>
               <div className="grid-4">
                 <PeriodField
-                  label="클라이언트 검토"
-                  unit="시간"
+                  label={t("wizard.clientReview")}
+                  unit={t("wizard.hours")}
                   value={periods.client_review_hours}
                   onChange={(v) => (setPeriodsTouched(true), setPeriods({ ...periods, client_review_hours: v }))}
-                  hint="침묵 시 제출 단위·영수증 지급"
+                  hint={t("wizard.clientHint")}
                 />
                 <PeriodField
-                  label="분쟁 해결"
-                  unit="일"
+                  label={t("wizard.resolver")}
+                  unit={t("wizard.days")}
                   value={periods.resolver_review_days}
                   onChange={(v) => (setPeriodsTouched(true), setPeriods({ ...periods, resolver_review_days: v }))}
-                  hint="침묵 시 HOLD 유형별 결과"
+                  hint={t("wizard.resolverHint")}
                 />
                 <PeriodField
-                  label="증빙 제출"
-                  unit="일"
+                  label={t("wizard.evidence")}
+                  unit={t("wizard.days")}
                   value={periods.evidence_days}
                   onChange={(v) => (setPeriodsTouched(true), setPeriods({ ...periods, evidence_days: v }))}
-                  hint="구매 보고 뒤 영수증 기한"
+                  hint={t("wizard.evidenceHint")}
                 />
                 <PeriodField
-                  label="경비 예약 유지"
-                  unit="일"
+                  label={t("wizard.hold")}
+                  unit={t("wizard.days")}
                   value={periods.reservation_days}
                   onChange={(v) => (setPeriodsTouched(true), setPeriods({ ...periods, reservation_days: v }))}
-                  hint="구매 보고가 없으면 만료"
+                  hint={t("wizard.holdHint")}
                 />
               </div>
             </Card>
@@ -526,33 +520,33 @@ export function NewProject() {
         </div>
 
         <aside className="wizard-side" hidden={step !== 3}>
-          <Card title="프로젝트 예산" className="sticky-card">
-            <p className="review-project-name">{name || "이름 없는 프로젝트"}</p>
+          <Card title={t("wizard.budgetCard")} className="sticky-card">
+            <p className="review-project-name">{name || t("wizard.unnamed")}</p>
             <dl className="kv totals-kv">
               <div className="kv-row">
-                <dt>경비 예산</dt>
+                <dt>{t("wizard.budget")}</dt>
                 <dd>
                   {mode === "words" && wordsBudget === null ? (
-                    <span className="muted small">규칙 확정 후 계산</span>
+                    <span className="muted small">{t("wizard.pendingRules")}</span>
                   ) : (
                     <Money n={expenseBudget} />
                   )}
                 </dd>
               </div>
               <div className="kv-row">
-                <dt>작업 대금</dt>
+                <dt>{t("wizard.workPay")}</dt>
                 <dd>
                   <Money n={milestoneBudget} />
                 </dd>
               </div>
               <div className="kv-row kv-strong">
-                <dt>총예산 · 초기 입금액</dt>
+                <dt>{t("wizard.totalDeposit")}</dt>
                 <dd>
                   <Money n={projectBudget} />
                 </dd>
               </div>
             </dl>
-            <p className="muted small">입금 후 작업 대금 {won(milestoneBudget)}이 예약돼요.</p>
+            <p className="muted small">{t("wizard.afterDeposit", { amount: won(milestoneBudget) })}</p>
             {problems.length > 0 && (
               <ul className="problems">
                 {problems.map((p, i) => (
@@ -570,19 +564,19 @@ export function NewProject() {
               disabled={problems.length > 0 || submitting}
               onClick={submit}
             >
-              {submitting ? "만드는 중…" : "프로젝트 초안 만들기"}
+              {submitting ? t("wizard.creating") : t("wizard.create")}
             </button>
-            <p className="muted small">만든 뒤에도 서명 전까지는 효력이 없습니다.</p>
+            <p className="muted small">{t("wizard.noEffect")}</p>
           </Card>
         </aside>
       </div>
       <div className="wizard-navigation">
         <button type="button" className="btn" onClick={() => (step > 0 ? goStep(step - 1) : navigate("#/"))}>
-          {step === 0 ? "취소" : "이전"}
+          {step === 0 ? t("wizard.cancel") : t("wizard.previous")}
         </button>
         {step < 3 && (
           <button type="button" className="btn btn-primary" onClick={() => goStep(step + 1)}>
-            다음 단계
+            {t("wizard.next")}
           </button>
         )}
       </div>
@@ -619,15 +613,16 @@ function CandidateView({
   pick: RulesSource | ""
   onPick: (s: RulesSource) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="candidate">
       <div className="row-wrap">
-        {c.agree ? <Chip tone="ok">두 해석 일치</Chip> : <Chip tone="warn">두 해석이 다름 — 직접 고르세요</Chip>}
-        <span className="muted small">후보 {c.candidate}</span>
+        {c.agree ? <Chip tone="ok">{t("wizard.agree")}</Chip> : <Chip tone="warn">{t("wizard.differ")}</Chip>}
+        <span className="muted small">{t("wizard.candidate", { id: c.candidate })}</span>
       </div>
       {c.differences.length > 0 && (
         <div>
-          <span className="muted small">다른 부분</span>
+          <span className="muted small">{t("wizard.diffs")}</span>
           <ul className="problems">
             {c.differences.map((d, i) => (
               <li key={i}>{d}</li>
@@ -637,7 +632,7 @@ function CandidateView({
       )}
       {c.problems.length > 0 && (
         <div>
-          <span className="muted small">문제</span>
+          <span className="muted small">{t("wizard.issues")}</span>
           <ul className="problems">
             {c.problems.map((d, i) => (
               <li key={i}>{d}</li>
@@ -645,7 +640,7 @@ function CandidateView({
           </ul>
         </div>
       )}
-      <div className="readings" role="radiogroup" aria-label="해석 선택">
+      <div className="readings" role="radiogroup" aria-label={t("wizard.pickAria")}>
         {c.options.map((o) => (
           <label
             key={o.source}
@@ -660,7 +655,7 @@ function CandidateView({
                 onChange={() => onPick(o.source)}
               />
               <strong>{label(RULES_SOURCE, o.source)}</strong>
-              {o.ok ? <Chip tone="ok">읽기 성공</Chip> : <Chip tone="bad">오류</Chip>}
+              {o.ok ? <Chip tone="ok">{t("wizard.readOk")}</Chip> : <Chip tone="bad">{t("wizard.readBad")}</Chip>}
               {o.hash && <code className="tiny">{shortHash(o.hash, 8, 4)}</code>}
             </span>
             {o.error && <span className="field-error">{o.error}</span>}
@@ -673,11 +668,11 @@ function CandidateView({
         ))}
       </div>
       <div className="usage">
-        {c.usage.calls !== undefined && <span>호출 {c.usage.calls}회</span>}
-        {c.usage.tokens !== undefined && <span>토큰 {num(c.usage.tokens)}</span>}
-        {c.usage.cost_usd !== undefined && <span>비용 {usd(c.usage.cost_usd)}</span>}
-        {c.usage.seconds !== undefined && <span>{c.usage.seconds.toFixed(1)}초</span>}
-        {c.usage.cached && <Chip tone="muted">캐시</Chip>}
+        {c.usage.calls !== undefined && <span>{t("wizard.calls", { count: c.usage.calls })}</span>}
+        {c.usage.tokens !== undefined && <span>{t("wizard.tokens", { count: num(c.usage.tokens) })}</span>}
+        {c.usage.cost_usd !== undefined && <span>{t("wizard.cost", { amount: usd(c.usage.cost_usd) })}</span>}
+        {c.usage.seconds !== undefined && <span>{t("wizard.seconds", { n: c.usage.seconds.toFixed(1) })}</span>}
+        {c.usage.cached && <Chip tone="muted">{t("wizard.cached")}</Chip>}
       </div>
     </div>
   )

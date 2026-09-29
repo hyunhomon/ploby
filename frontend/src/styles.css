@@ -1670,6 +1670,28 @@ summary:active {
   color: var(--muted);
   font-size: 12px;
 }
+.chain-steps {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.chain-steps li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.chain-done {
+  font-weight: 650;
+}
+.chain-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
 .status-help {
   margin-top: 12px;
 }

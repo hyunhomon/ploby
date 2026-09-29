@@ -4,7 +4,7 @@
 import { createContext, useContext, type ReactNode } from "react"
 import type { ActionParams } from "../api"
 import { tr } from "../i18n"
-import { ACTION_KO, TARGET_KO, label } from "../labels"
+import { ACTION_KO, TARGET_KO, caption, label } from "../labels"
 import type { Action, Deadline, ProjectView, Target, TargetKind } from "../types"
 
 /** Values a dialog can be opened with (e.g. an out-of-scope item for a change-order draft). */
@@ -47,7 +47,8 @@ export function actionsFor(view: ProjectView, target: TargetRef): Action[] {
 }
 
 export function actionLabel(a: Action): string {
-  return ACTION_KO[a.action] ? label(ACTION_KO, a.action) : a.label || a.action
+  if (a.label) return caption(a.label)
+  return ACTION_KO[a.action] ? label(ACTION_KO, a.action) : a.action
 }
 
 /** The params that name an action's target (docs/api.md, "Actions"). */

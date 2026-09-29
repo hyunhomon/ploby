@@ -518,6 +518,37 @@ export interface LogEntry {
   head: string
 }
 
+export interface ChainExpense {
+  status: string | null
+  error: string | null
+  recordTx: string | null
+  approveTx: string | null
+  rejectTx: string | null
+  releaseTx: string | null
+  amount: number | null
+  code: number | null
+}
+
+export interface ChainState {
+  enabled: boolean
+  reason?: string
+  network?: string
+  explorer?: string
+  escrow: string | null
+  usdc: string | null
+  client: string | null
+  payeeWallet?: string | null
+  status?: string
+  error?: string | null
+  mintTx?: string | null
+  approveTx?: string | null
+  createTx?: string | null
+  depositTx?: string | null
+  payee?: string | null
+  lastTx?: string | null
+  expenses?: Record<string, ChainExpense>
+}
+
 export interface ProjectView {
   id: string
   name: string
@@ -538,6 +569,7 @@ export interface ProjectView {
   deadlines: Deadline[]
   log: LogEntry[]
   head: string
+  chain?: ChainState
 }
 
 export interface ActionOk {

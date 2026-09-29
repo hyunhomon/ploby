@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 from . import ai, policy as pol
 from .core import Refused
 from .pcp_bridge import domain
+from .chain import Chain
 from .store import Store
 
 HERE = Path(__file__).resolve().parent
@@ -22,6 +23,7 @@ SAMPLES = HERE / 'samples' / 'index.json'
 IMPLEMENTATION = {  # PROJECT_OVERVIEW: 현재 구현 and 목표 설계 are never mixed
     'current': [
         '결정론적 정책 엔진 (오프체인): APPROVE·HOLD·BLOCK, 예약·정산 회계, 기한과 타임아웃, 변경 주문',
+        'Base Sepolia ExpenseEscrow: 프로젝트가 ACTIVE가 되면 MockUSDC를 예치하고, BLOCK·HOLD를 기록하며, 정산 시 작업자 주소로 release',
         '서명된 해시 체인 로그: 모든 변경이 한 줄, 재생하면 같은 상태 (감사 가능)',
         '양측 정책 서명과 버전 (데모 키 HMAC — 지갑 서명 대체)',
         '구매 전 약정 → 지출 → 증빙 → 정산, 사후 청구, 마일스톤 선예약·검수·타임아웃, 분쟁 해결자',
@@ -89,6 +91,8 @@ def route(store, method, path, query, body):
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'actions' and method == 'POST':
         text, view = store.act(parts[1], body.get('as'), body.get('action'), body)
         return {'ok': True, 'result': text, 'view': view}
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'chain' and method == 'POST':
+        return store.retry_chain(parts[1], role or 'client')
     raise Refused(f'없는 경로: {method} {path}', 'invalid')
 
 
@@ -146,14 +150,19 @@ def main():
     ap.add_argument('--port', type=int, default=3010)
     ap.add_argument('--data', default=str(ROOT / 'var'))
     a = ap.parse_args()
-    store = Store(a.data)
+    chain = Chain(ROOT, a.data)
+    store = Store(a.data, chain=chain)
+    for pid, project in list(store.projects.items()):
+        if project.status in ('ACTIVE', 'CLOSING', 'CLOSED'):
+            chain.schedule(pid)
     try:
         server = ThreadingHTTPServer(('127.0.0.1', a.port), handler(store))
     except OSError as e:
         raise SystemExit(f'포트 {a.port}을(를) 열 수 없습니다 ({e.strerror}). 이미 실행 중인 서버를 끄거나 '
                          f'--port 3011 처럼 다른 포트를 쓰세요 (그 경우 frontend/vite.config.ts의 프록시도 맞춰야 함).')
     print(f'Ploby API on http://127.0.0.1:{a.port}/api  data {a.data}  ({len(store.projects)} projects)  '
-          f"Kiln {'on' if ai.enabled() else 'off (readings are HOLD)'}", flush=True)
+          f"Kiln {'on' if ai.enabled() else 'off (readings are HOLD)'}  "
+          f"chain {'on ' + chain.client if chain.enabled else 'off (' + (chain.reason or 'unset') + ')'}", flush=True)
     server.serve_forever()
 
 

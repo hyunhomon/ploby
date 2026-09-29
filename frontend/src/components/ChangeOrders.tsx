@@ -3,27 +3,27 @@
 // PROJECT_OVERVIEW.md §5.6). An order may add a milestone and/or raise the expense budget.
 
 import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { num, sum, toDateInput, usd, when, won } from "../format"
-import { CO_STATUS, CO_TONE, ROLE_KO, label, toneOf } from "../labels"
+import { CO_STATUS, CO_TONE, ROLE_KO, caption, label, toneOf } from "../labels"
 import type { ChangeOrder, ChangeOrderDraft, ProjectView } from "../types"
 import { Act, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, Empty, Field, Money, MoneyInput } from "./ui"
 
-export const CO_DISCLAIMER = "초안은 법적·금전적 효력이 없습니다. 두 당사자 서명 + 입금 후에만 새 마일스톤이 생깁니다."
-
 export function ChangeOrdersSection({ view }: { view: ProjectView }) {
+  const { t } = useTranslation()
   return (
     <Card
-      title="변경 요청"
+      title={t("changes.title")}
       id="sec-changes"
-      sub="추가 작업이나 예산 변경은 새로운 조건으로 합의하세요."
+      sub={t("changes.sub")}
       aside={
         <Act name="draft_change_order" variant="primary">
-          변경 요청하기
+          {t("changes.request")}
         </Act>
       }
     >
-      {view.change_orders.length === 0 && <Empty>변경 주문이 없습니다.</Empty>}
+      {view.change_orders.length === 0 && <Empty>{t("changes.empty")}</Empty>}
       <div className="stack">
         {[...view.change_orders].reverse().map((c) => (
           <ChangeOrderCard key={c.id} c={c} view={view} />
@@ -34,6 +34,7 @@ export function ChangeOrdersSection({ view }: { view: ProjectView }) {
 }
 
 function ChangeOrderCard({ c, view }: { c: ChangeOrder; view: ProjectView }) {
+  const { t } = useTranslation()
   const target = { kind: "change_order" as const, id: c.id }
   const edit = findAction(view, "edit_change_order", target)
   const d = c.draft
@@ -43,10 +44,10 @@ function ChangeOrderCard({ c, view }: { c: ChangeOrder; view: ProjectView }) {
     <details className={`item record ${c.status === "WITHDRAWN" ? "item-final" : ""}`} id={`change_order-${c.id}`}>
       <summary className="item-head record-summary">
         <div className="item-title">
-          <h3>{d?.title || (d?.covers_excess ? "초과분 변경 주문" : delta > 0 ? "경비 예산 증액" : "변경 주문")}</h3>
+          <h3>{d?.title || (d?.covers_excess ? t("changes.excessOrder") : delta > 0 ? t("changes.budgetIncrease") : t("changes.order"))}</h3>
           <Chip tone={toneOf(CO_TONE, c.status)}>{label(CO_STATUS, c.status)}</Chip>
           <span className="muted small">
-            {label(ROLE_KO, c.by)} 요청 · {c.id}
+            {t("changes.requested", { role: label(ROLE_KO, c.by), id: c.id })}
           </span>
         </div>
         {d && <Money n={d.amount + delta} className="item-amt" />}
@@ -55,46 +56,45 @@ function ChangeOrderCard({ c, view }: { c: ChangeOrder; view: ProjectView }) {
         {d?.covers_excess && (
           <div className="meta-line small">
             <span>
-              <span className="muted">초과분 대상 경비</span>{" "}
+              <span className="muted">{t("changes.covers")}</span>{" "}
               <button type="button" className="linkish" onClick={() => scrollToAnchor(`expense-${d.covers_excess}`)}>
                 {covered
                   ? `${covered.vendor_name ?? covered.vendor ?? ""} ${covered.item ?? ""}`.trim()
                   : d.covers_excess}
               </button>
-              {covered && covered.excess > 0 && <> · 초과분 {won(covered.excess)}</>}
+              {covered && covered.excess > 0 && <> · {t("changes.excessAmount", { amount: won(covered.excess) })}</>}
             </span>
           </div>
         )}
 
         <blockquote className="words">
-          <span className="muted small">요청 원문</span>
+          <span className="muted small">{t("changes.original")}</span>
           <p>{c.text}</p>
         </blockquote>
 
-        {c.status === "DRAFT" && <Banner tone="warn">{CO_DISCLAIMER}</Banner>}
+        {c.status === "DRAFT" && <Banner tone="warn">{t("dialogs.noEffect")}</Banner>}
         {c.status === "PROPOSED" && (
-          <Banner tone="info" title={`정책 v${c.policy_version ?? "?"}로 제안됨 — 양측 서명 대기`}>
-            정책 카드에서 두 당사자가 서명하면 적용됩니다. 그 뒤 클라이언트의 입금으로 새 마일스톤이 예약됩니다.
+          <Banner tone="info" title={t("changes.proposedTitle", { version: c.policy_version ?? "?" })}>
+            {t("changes.proposedBody")}
             <div className="banner-actions">
               <button type="button" className="btn btn-ghost" onClick={() => scrollToAnchor("sec-policy")}>
-                정책 카드로 이동
+                {t("changes.goToPolicy")}
               </button>
             </div>
           </Banner>
         )}
         {c.status === "SIGNED" && (
-          <Banner tone="info" title="서명 완료 · 입금 대기">
-            정책 v{c.policy_version}이 적용되었습니다. 새 마일스톤은 클라이언트의 입금이 가용 잔액으로 금액을 덮을 때
-            예약됩니다. 그 전에는 착수 의무가 없습니다.
+          <Banner tone="info" title={t("changes.signedTitle")}>
+            {t("changes.signedBody", { version: c.policy_version })}
           </Banner>
         )}
-        {c.status === "FUNDED" && <Banner tone="ok">입금되어 새 권한이 활성화되었습니다.</Banner>}
+        {c.status === "FUNDED" && <Banner tone="ok">{t("changes.funded")}</Banner>}
 
         {c.ai && (!c.ai.ok || c.ai.problems.length > 0) && (
-          <Banner tone="warn" title={c.ai.ok ? "AI 초안 참고 사항" : "AI가 초안을 만들지 못했습니다"}>
+          <Banner tone="warn" title={c.ai.ok ? t("changes.aiNotes") : t("changes.aiFailed")}>
             <ul className="problems">
               {c.ai.problems.map((p, i) => (
-                <li key={i}>{p}</li>
+                <li key={i}>{caption(p)}</li>
               ))}
             </ul>
           </Banner>
@@ -108,10 +108,10 @@ function ChangeOrderCard({ c, view }: { c: ChangeOrder; view: ProjectView }) {
 
         {c.ai?.usage && (
           <div className="usage">
-            AI 초안
-            {c.ai.usage.tokens !== undefined && <span>토큰 {num(c.ai.usage.tokens)}</span>}
-            {c.ai.usage.cost_usd !== undefined && <span>비용 {usd(c.ai.usage.cost_usd)}</span>}
-            {c.ai.usage.cached && <Chip tone="muted">캐시</Chip>}
+            {t("changes.aiDraft")}
+            {c.ai.usage.tokens !== undefined && <span>{t("changes.tokens", { count: num(c.ai.usage.tokens) })}</span>}
+            {c.ai.usage.cost_usd !== undefined && <span>{t("changes.cost", { amount: usd(c.ai.usage.cost_usd) })}</span>}
+            {c.ai.usage.cached && <Chip tone="muted">{t("changes.cached")}</Chip>}
           </div>
         )}
 
@@ -125,13 +125,14 @@ function ChangeOrderCard({ c, view }: { c: ChangeOrder; view: ProjectView }) {
 }
 
 function DraftView({ draft, now }: { draft: ChangeOrderDraft; now: number }) {
+  const { t } = useTranslation()
   const delta = draft.expense_budget_delta ?? 0
   return (
     <div className="draft">
       {delta > 0 && (
         <div className="meta-line small">
           <span>
-            <span className="muted">경비 예산 증액</span> <Money n={delta} />
+            <span className="muted">{t("changes.budgetIncrease")}</span> <Money n={delta} />
           </span>
         </div>
       )}
@@ -139,18 +140,18 @@ function DraftView({ draft, now }: { draft: ChangeOrderDraft; now: number }) {
         <>
           <div className="meta-line small">
             <span>
-              <span className="muted">추가 마일스톤</span> <strong>{draft.title}</strong> <Money n={draft.amount} />
+              <span className="muted">{t("changes.addedMilestone")}</span> <strong>{draft.title}</strong> <Money n={draft.amount} />
             </span>
           </div>
           <div className="dates small">
             <span>
-              <span className="muted">착수 기한</span> {when(draft.start_by, now)}
+              <span className="muted">{t("changes.startBy")}</span> {when(draft.start_by, now)}
             </span>
             <span>
-              <span className="muted">납기</span> {when(draft.due_at, now)}
+              <span className="muted">{t("changes.due")}</span> {when(draft.due_at, now)}
             </span>
             <span>
-              <span className="muted">유예</span> {draft.grace_days}일
+              <span className="muted">{t("changes.grace")}</span> {t("changes.graceDays", { count: draft.grace_days })}
             </span>
           </div>
           <ul className="pm-units">
@@ -226,6 +227,7 @@ function fromEdit(s: EditState, coversExcess: string | null): ChangeOrderDraft {
 }
 
 function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) {
+  const { t } = useTranslation()
   const { view, run, busy } = useProject()
   const target = { kind: "change_order" as const, id: c.id }
   const edit = findAction(view, "edit_change_order", target)
@@ -237,18 +239,18 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
   const out = fromEdit(s, draft.covers_excess ?? null)
   const delta = out.expense_budget_delta ?? 0
   const problems: string[] = []
-  if (out.units.length === 0 && delta <= 0) problems.push("새 마일스톤이나 경비 예산 증액 중 하나는 있어야 합니다")
+  if (out.units.length === 0 && delta <= 0) problems.push(t("changes.needOne"))
   if (out.units.length > 0) {
-    if (!out.title) problems.push("마일스톤 제목을 입력하세요")
-    if (!out.start_by || !out.due_at) problems.push("착수 기한과 납기를 정하세요")
+    if (!out.title) problems.push(t("changes.needTitle"))
+    if (!out.start_by || !out.due_at) problems.push(t("changes.needDates"))
   }
   out.units.forEach((u, i) => {
-    if (!u.title) problems.push(`납품 단위 ${i + 1}: 이름이 비어 있습니다`)
-    if (u.criteria.length === 0) problems.push(`납품 단위 ${i + 1}: 인수 기준이 없습니다`)
-    if (!(u.amount > 0)) problems.push(`납품 단위 ${i + 1}: 금액이 없습니다`)
+    if (!u.title) problems.push(t("changes.unitName", { n: i + 1 }))
+    if (u.criteria.length === 0) problems.push(t("changes.unitCriteria", { n: i + 1 }))
+    if (!(u.amount > 0)) problems.push(t("changes.unitAmount", { n: i + 1 }))
   })
-  if (delta < 0) problems.push("경비 예산 증액은 0 이상이어야 합니다")
-  if (out.start_by && out.due_at && out.start_by > out.due_at) problems.push("착수 기한이 납기보다 늦습니다")
+  if (delta < 0) problems.push(t("changes.deltaNonNegative"))
+  if (out.start_by && out.due_at && out.start_by > out.due_at) problems.push(t("changes.dateOrder"))
 
   const setUnit = (i: number, patch: Partial<EditUnit>) =>
     setS((p) => ({ ...p, units: p.units.map((u, j) => (j === i ? { ...u, ...patch } : u)) }))
@@ -257,16 +259,16 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
     <div className="draft-edit">
       <div className="grid-2">
         <Field
-          label="경비 예산 증액"
-          hint={draft.covers_excess ? `경비 ${draft.covers_excess}의 초과분을 덮는 증액입니다.` : "없으면 0"}
+          label={t("changes.budgetIncrease")}
+          hint={draft.covers_excess ? t("changes.coversHint", { id: draft.covers_excess }) : t("changes.zeroIfNone")}
         >
           <MoneyInput value={s.expense_budget_delta} onChange={(n) => setS({ ...s, expense_budget_delta: n })} />
         </Field>
         <span />
-        <Field label="추가 마일스톤 제목" hint="마일스톤을 추가하지 않으면 납품 단위를 모두 지우세요.">
+        <Field label={t("changes.milestoneTitle")} hint={t("changes.milestoneHint")}>
           <input value={s.title} onChange={(e) => setS({ ...s, title: e.target.value })} />
         </Field>
-        <Field label="유예 기간 (일)">
+        <Field label={t("changes.graceLabel")}>
           <input
             type="number"
             min={0}
@@ -274,10 +276,10 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
             onChange={(e) => setS({ ...s, grace_days: Math.max(0, Number(e.target.value) || 0) })}
           />
         </Field>
-        <Field label="착수 기한">
+        <Field label={t("changes.startBy")}>
           <input type="date" value={s.start_by} onChange={(e) => setS({ ...s, start_by: e.target.value })} />
         </Field>
-        <Field label="납기">
+        <Field label={t("changes.due")}>
           <input type="date" value={s.due_at} onChange={(e) => setS({ ...s, due_at: e.target.value })} />
         </Field>
       </div>
@@ -285,14 +287,14 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
         {s.units.map((u, i) => (
           <div className="unit-edit" key={i}>
             <div className="grid-2">
-              <Field label={`납품 단위 ${i + 1}`}>
+              <Field label={t("changes.unit", { n: i + 1 })}>
                 <input value={u.title} onChange={(e) => setUnit(i, { title: e.target.value })} />
               </Field>
-              <Field label="금액">
+              <Field label={t("changes.amount")}>
                 <MoneyInput value={u.amount} onChange={(n) => setUnit(i, { amount: n })} />
               </Field>
             </div>
-            <Field label="인수 기준" hint="한 줄에 기준 하나. 검수 때는 이 기준만 이의 사유로 고를 수 있습니다.">
+            <Field label={t("changes.criteria")} hint={t("changes.criteriaHint")}>
               <textarea rows={2} value={u.criteria} onChange={(e) => setUnit(i, { criteria: e.target.value })} />
             </Field>
             <button
@@ -300,7 +302,7 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
               className="btn btn-ghost btn-sm"
               onClick={() => setS({ ...s, units: s.units.filter((_, j) => j !== i) })}
             >
-              납품 단위 삭제
+              {t("changes.removeUnit")}
             </button>
           </div>
         ))}
@@ -309,15 +311,14 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
           className="btn btn-sm"
           onClick={() => setS({ ...s, units: [...s.units, { title: "", criteria: "", amount: null }] })}
         >
-          + 납품 단위 추가
+          {t("changes.addUnit")}
         </button>
       </div>
-      <Field label="메모">
+      <Field label={t("changes.note")}>
         <textarea rows={2} value={s.note} onChange={(e) => setS({ ...s, note: e.target.value })} />
       </Field>
       <div className="draft-total">
-        마일스톤 <Money n={out.amount} /> + 경비 예산 증액 <Money n={delta} /> = 추가 금액{" "}
-        <Money n={out.amount + delta} />
+        {t("changes.total", { milestone: won(out.amount), delta: won(delta), sum: won(out.amount + delta) })}
       </div>
       {problems.length > 0 && (
         <ul className="problems">
@@ -334,12 +335,12 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
             disabled={busy || !dirty || problems.length > 0}
             onClick={() => run(edit, { draft: out })}
           >
-            초안 저장
+            {t("changes.save")}
           </button>
         )}
         {dirty && (
           <button type="button" className="btn btn-ghost" onClick={() => setS(initial)}>
-            되돌리기
+            {t("changes.revert")}
           </button>
         )}
         {propose && (
@@ -348,12 +349,12 @@ function DraftEditor({ c, draft }: { c: ChangeOrder; draft: ChangeOrderDraft }) 
             className="btn btn-primary"
             disabled={busy || dirty || problems.length > 0}
             onClick={() => open(propose)}
-            title={dirty ? "변경 사항을 먼저 저장하세요" : undefined}
+            title={dirty ? t("changes.saveFirst") : undefined}
           >
-            정식 제안 (새 정책 버전)
+            {t("changes.propose")}
           </button>
         )}
-        {dirty && propose && <span className="muted small">변경 사항을 먼저 저장해야 제안할 수 있습니다.</span>}
+        {dirty && propose && <span className="muted small">{t("changes.saveBeforePropose")}</span>}
       </div>
     </div>
   )

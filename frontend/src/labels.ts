@@ -4,14 +4,123 @@
 // from the server is still visible, never hidden.
 
 import type { Actor, Role } from "./types"
-import i18n from "./i18n"
+import i18n, { language } from "./i18n"
 
 export type Tone = "ok" | "warn" | "bad" | "info" | "muted" | "accent"
 
 export function label(map: Record<string, string>, code: string | null | undefined): string {
   if (code === null || code === undefined || code === "") return "—"
   const source = map[code]
-  return source ? String(i18n.t(source, { ns: "codes", defaultValue: source })) : code
+  return source ? caption(source) : code
+}
+
+/** Translate a Korean phrase the API sent. Amounts, ids, and parentheticals are filled back in. */
+export function caption(text: string | null | undefined): string {
+  if (text === null || text === undefined || text === "") return "—"
+  return translate(text, 0)
+}
+
+function translate(text: string, depth: number): string {
+  if (language() !== "en" || depth > 6) return text
+  const exact = lookup(text)
+  if (exact) return exact
+  const id = text.match(/^([ECM]\d+)\s+([\s\S]+)$/)
+  if (id && !id[2].includes(" — ")) {
+    const rest = lookup(id[2]) ?? lookupParen(id[2])
+    if (rest) return `${id[1]} ${rest}`
+  }
+  const version = text.match(/^정책 v(\d+)\s+(.+)$/)
+  if (version) {
+    const rest = translate(version[2], depth + 1)
+    if (rest !== version[2]) return `Policy v${version[1]} ${rest}`
+  }
+  const onlyAmount = text.match(/^(\d{1,3}(?:,\d{3})*)원$/)
+  if (onlyAmount) return `₩${onlyAmount[1]}`
+  if (text.startsWith("타임아웃: ")) {
+    const rest = text.slice("타임아웃: ".length)
+    const rendered = translate(rest, depth + 1)
+    if (rendered !== rest) return `Timeout: ${rendered}`
+  }
+  if (text.startsWith("마일스톤 예약:")) {
+    const body = text.slice("마일스톤 예약:".length).replace(/\s*\([^)]*\)$/, "").trim()
+    const items = body.split(", ").map((part) => {
+      const item = part.match(/^([ECM]\d+)\s+(\d{1,3}(?:,\d{3})*원)$/)
+      return item ? `${item[1]} ₩${item[2].slice(0, -1)}` : translate(part, depth + 1)
+    })
+    return `Milestones reserved: ${items.join(", ")} (FUNDED_AND_RESERVED, work can start)`
+  }
+  const blocked = text.match(/^(\S+) 요청 BLOCK$/)
+  if (blocked) return `${blocked[1]} request blocked`
+  const violated = text.match(/^(.+) 위반(?: \((.+)\))?$/)
+  if (violated) {
+    const head = translate(violated[1], depth + 1)
+    if (head !== violated[1]) {
+      const note = violated[2] ? translate(violated[2], depth + 1) : ""
+      return note ? `${head} violated (${note})` : `${head} violated`
+    }
+  }
+  const approveAt = text.indexOf(" APPROVE:")
+  if (approveAt >= 0) {
+    const tail = text.slice(approveAt + " APPROVE:".length).trim()
+    const rendered = tail ? translate(tail, depth + 1) : ""
+    return `${text.slice(0, approveAt)} approved${rendered ? `: ${rendered}` : ""}`
+  }
+  const started = text.match(/^작업자가 ([ECM]\d+) (.+) 작업을 시작했습니다 \((.+)\)$/)
+  if (started) return `Contractor started ${started[1]} ${started[2]} (${translate(started[3], depth + 1)})`
+  const remain = text.match(/^(.+) 잔여 (\d{1,3}(?:,\d{3})*원)$/)
+  if (remain) return `${remain[1]} remaining ₩${remain[2].slice(0, -1)}`
+  const anomaly = text.match(/^(.+) 대표값 (\d{1,3}(?:,\d{3})*원)의 (\d+)배 초과$/)
+  if (anomaly) return `${anomaly[1]} is over ${anomaly[3]}× the typical ₩${anomaly[2].slice(0, -1)}`
+  const parts = text.split(" — ")
+  if (parts.length > 1) {
+    const done = parts.map((part) => translate(part, depth + 1))
+    if (done.some((part, i) => part !== parts[i])) return done.join(" — ")
+  }
+  const slotted = slot(text, depth)
+  const hit = lookup(slotted.key)
+  if (hit) return fill(hit, slotted.slots)
+  return lookupParen(text) ?? text
+}
+
+function fill(template: string, slots: string[]): string {
+  return template.replace(/\{(\d+)\}/g, (_, n: string) => slots[Number(n)] ?? "")
+}
+
+/** Pull variable pieces out so one caption covers every amount and id. */
+function slot(text: string, depth: number): { key: string; slots: string[] } {
+  const slots: string[] = []
+  const put = (value: string) => {
+    const i = slots.length
+    slots.push(value)
+    return `{${i}}`
+  }
+  let key = text.replace(/\(([^)]*[가-힣][^)]*)\)/g, (_full, inner: string) => {
+    const rendered = translate(inner, depth + 1)
+    return put(rendered === inner ? `(${inner})` : `(${rendered})`)
+  })
+  key = key.replace(/분쟁 해결자|클라이언트|작업자/g, (name) => put(lookup(name) ?? name))
+  key = key.replace(/\b[ECM]\d+\b/g, (name) => put(name))
+  key = key.replace(/[0-9a-f]{8,}…/g, (name) => put(name))
+  key = key.replace(/\d{1,3}(?:,\d{3})*원/g, (amount) => put(`₩${amount.slice(0, -1)}`))
+  key = key.replace(/\d+개/g, (count) => put(count.slice(0, -1)))
+  key = key.replace(/\d+건/g, (count) => put(count.slice(0, -1)))
+  key = key.replace(/v\d+/g, (name) => put(name))
+  return { key, slots }
+}
+
+function lookup(text: string): string | null {
+  if (!i18n.exists(text, { ns: "codes" })) return null
+  const value = String(i18n.t(text, { ns: "codes" }))
+  return value === text ? null : value
+}
+
+function lookupParen(text: string): string | null {
+  const match = text.match(/^(.+?)\s+\((.+)\)$/)
+  if (!match) return null
+  const left = lookup(match[1].trim())
+  const right = lookup(match[2].trim())
+  if (!left && !right) return null
+  return `${left ?? match[1]} (${right ?? match[2]})`
 }
 
 export function toneOf(map: Record<string, Tone>, code: string | null | undefined): Tone {

@@ -37,14 +37,17 @@ def _write_json(path, value):
 
 
 class Store:
-    def __init__(self, root, reader=None, drafter=None, compiler=None):
+    def __init__(self, root, reader=None, drafter=None, compiler=None, chain=None):
         self.root = Path(root)
         (self.root / 'projects').mkdir(parents=True, exist_ok=True)
         (self.root / 'docs').mkdir(parents=True, exist_ok=True)
         self.reader = reader or ai.reading
         self.drafter = drafter or ai.draft_change
         self.compiler = compiler or ai.compile_policy
+        self.chain = chain
         self.lock = threading.RLock()
+        if chain is not None:
+            chain.bind(self.snapshot)
         self.candidates = {}
         clock = self.root / 'clock.json'
         self.offset = _read_json(clock)['offset'] if clock.exists() else 0
@@ -86,7 +89,24 @@ class Store:
             f.flush()
             os.fsync(f.fileno())
         self.projects[P.id] = Q
+        if self.chain is not None:
+            self.chain.schedule(Q.id)
         return Q, text
+
+    def snapshot(self, pid):
+        """A copy the chain thread can read without holding the store lock."""
+        with self.lock:
+            project = self.projects.get(pid)
+            return copy.deepcopy(project) if project is not None else None
+
+    def retry_chain(self, pid, role):
+        """Send the chain copy again from the last transaction that landed. The log stays as it is."""
+        with self.lock:
+            self.get(pid)
+            if self.chain is None or not self.chain.enabled:
+                raise Refused('체인이 꺼져 있습니다', 'state')
+            self.chain.schedule(pid)
+            return self.present(self.get(pid), role)
 
     @staticmethod
     def line(by, op, params, inputs, at):
@@ -144,10 +164,15 @@ class Store:
             raise Refused('프로젝트가 없습니다', 'invalid')
         return P
 
+    def present(self, project, role):
+        view = project.view(role, self.now())
+        view['chain'] = self.chain.public(project.id) if self.chain is not None else {'enabled': False}
+        return view
+
     def view(self, pid, role):
         with self.lock:
             self.keeper(pid)
-            return self.get(pid).view(role, self.now())
+            return self.present(self.get(pid), role)
 
     def listing(self, role):
         with self.lock:
@@ -201,7 +226,7 @@ class Store:
             except pol.PolicyError as e:
                 raise Refused(str(e), 'invalid') from None
             P, _ = self.commit(Project(pid), self.line('client', 'create', {'doc': doc}, {}, now))
-            return P.view(role, now)
+            return self.present(P, role)
 
     def act(self, pid, role, action, params):
         if role not in pol.ROLES:
@@ -212,7 +237,7 @@ class Store:
             self.keeper(pid)
             P = self.get(pid)
             if action == 'run_timeouts':
-                return '경과한 기한을 모두 처리했습니다', P.view(role, self.now())
+                return '경과한 기한을 모두 처리했습니다', self.present(P, role)
             context = {'name': P.name, 'milestones': [m['title'] for m in P.milestones.values()]}
         inputs = self.prepare(pid, role, action, params, context)  # may call the model: outside the lock
         with self.lock:
@@ -224,7 +249,7 @@ class Store:
             if 'manifest_docs' in inputs:
                 inputs['manifest'] = self.manifest(pid, action, inputs.pop('manifest_docs'), role, now, params.get('note', ''))
             P, text = self.commit(P, self.line(role, action, clean(params), inputs, now))
-            return text, P.view(role, now)
+            return text, self.present(P, role)
 
     def prepare(self, pid, role, action, params, context):
         """The inputs a line carries: what came from outside the rules, fixed before the rules run."""

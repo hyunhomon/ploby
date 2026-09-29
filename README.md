@@ -17,11 +17,11 @@
 | HOLD | 유형별(CLIENT_REVIEW, POLICY_OR_SYSTEM_AMBIGUITY, EVIDENCE_DEFECT, INTEGRITY_RISK, EXCESS_AMOUNT) 클라이언트 기한·분쟁 해결 기한·최종 대체 결과, 누구나 실행하는 타임아웃 | 체인 시간 기준 permissionless 타임아웃 |
 | 생명주기 | DRAFT → ACTIVE → CLOSING → CLOSED / CANCELLED, 새 약정 일시정지, 미예약 잔액 환불 | 보안 동결, RECOVERY_ONLY, 마이그레이션 |
 | 기록 | 모든 변경이 서명된 해시 체인 로그 한 줄, 로그만으로 같은 상태 재생. 원문 증빙은 로그 밖에 저장하고 로그에는 해시·매니페스트 해시만 | 암호화 증빙 저장소, 온체인 해시 앵커 |
-| 집행 | **체인 집행 없음** — 오프체인 엔진이 규칙을 집행 | 프로젝트별 불변 `ProjectEscrow` |
+| 집행 | 오프체인 엔진이 규칙을 집행. `.env`에 배포 주소와 키가 있으면 Base Sepolia `ExpenseEscrow`가 경비 BLOCK·HOLD를 기록하고 정산액을 MockUSDC로 지급. 마일스톤·환불은 오프체인 | 프로젝트별 불변 `ProjectEscrow` |
 | AI | Kiln `qwen3-32b`: 경비 규칙 문장, 견적서·영수증 판독, 변경 주문 초안. 실패하면 HOLD, 절대 자동 승인 없음. 모델의 사고 과정은 저장하지 않음 | — |
 | 화면 | 역할별 공간(클라이언트·작업자·분쟁 해결자), 데모 시계 | 지갑 로그인 |
 
-`src/ExpenseEscrow.sol`은 Base Sepolia용 레거시 프로토타입으로 저장소에 남아 있지만 **현재 앱과 연결되어 있지 않습니다.** 실제 자금에 사용하면 안 됩니다 ([`DECISIONS.md`](DECISIONS.md)).
+`src/ExpenseEscrow.sol`은 Base Sepolia용 레거시 프로토타입입니다. `.env`에 주소와 키가 있으면 앱이 경비 예치·기록·정산을 그 컨트랙트에 보냅니다. 마일스톤 지급, 일시정지, 환불은 장부에 남고 MockUSDC로 움직이지 않습니다. 실제 자금에 사용하면 안 됩니다 ([`DECISIONS.md`](DECISIONS.md)).
 
 ## 실행
 
@@ -56,12 +56,12 @@ python3 -m pcp spend            # Kiln 키 사용액 (팀 공용 예산)
 | `escrow/ai.py` | Kiln 판독(경비 규칙, 문서, 변경 주문 초안) — 판독 결과만 기록 |
 | `frontend/` | React 19 + Vite 7 역할별 화면 |
 | `harness/check.py` | 오프라인 검증 |
-| `src/`, `test/`, `script/` | 레거시 Solidity 프로토타입 (현재 앱과 미연결) |
+| `src/`, `test/`, `script/` | 레거시 Solidity 프로토타입. 경비 정산만 앱과 연결 |
 | `docs/` | 제품·흐름·아키텍처·용어·ADR·Kiln·API 문서 |
 
 ## 한계
 
-- 체인 집행이 없습니다. 규칙과 기한은 오프체인 엔진이 집행하고, 해시 체인 로그로 재생·검증할 수 있습니다.
+- 규칙과 기한은 오프체인 엔진이 집행합니다. 체인은 그 결과 중 경비 예치·BLOCK·HOLD·정산만 복사하고, 실패한 트랜잭션은 로그를 되돌리지 않습니다.
 - 서명은 서버가 보관한 데모 키의 HMAC입니다. 역할 전환은 지갑 로그인이 아닙니다.
 - 증빙은 텍스트 문서(E1)만 받고, 암호화 없이 `var/docs/`에 저장합니다.
 - 분쟁 해결자는 미납 단위를 거절만 할 수 있습니다 (해지 보상은 미구현).

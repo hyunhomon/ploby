@@ -93,6 +93,20 @@ export function ProjectPage({
 
   useEffect(() => setDialog(null), [role])
 
+  useEffect(() => {
+    if (view?.chain?.status !== "confirming") return
+    const timer = window.setInterval(() => {
+      api
+        .project(id, role)
+        .then((v) => {
+          setView(v)
+          onNow(v.now)
+        })
+        .catch(() => {})
+    }, 4000)
+    return () => window.clearInterval(timer)
+  }, [view?.chain?.status, id, role, onNow])
+
   const run = useCallback(
     async (a: Action, params: ActionParams = {}) => {
       if (!view) return false
@@ -142,6 +156,13 @@ export function ProjectPage({
     <ProjectContext.Provider value={ctx}>
       <div className="page project">
         <ProjectHeader view={view} />
+        <ChainBanner
+          view={view}
+          onView={(v) => {
+            setView(v)
+            onNow(v.now)
+          }}
+        />
         {error && <Banner tone="bad">{error}</Banner>}
         <nav className="section-nav" aria-label={t("project.menu")}>
           {NAV.map(([key, text]) => (
@@ -185,6 +206,7 @@ export function ProjectPage({
                   </div>
                 </dl>
               </section>
+              <ChainCard view={view} />
               <TodoCard view={view} />
               <div className="overview-links">
                 <a href={`#/p/${encodeURIComponent(id)}?tab=work`}>
@@ -263,6 +285,135 @@ function ProjectHeader({ view }: { view: ProjectView }) {
   )
 }
 
+function chainBadge(view: ProjectView, t: (key: string) => string): string {
+  if (!view.chain?.enabled) return t("project.chainOff")
+  if (view.chain.status === "confirming" && !view.chain.depositTx) return t("project.chainConfirming")
+  if (view.chain.status === "confirming") return t("project.chainRecording")
+  if (view.chain.status === "error") return t("project.chainErrorTitle")
+  return t("project.chainTarget")
+}
+
+function ChainBanner({ view, onView }: { view: ProjectView; onView: (view: ProjectView) => void }) {
+  const { t } = useTranslation()
+  const { role } = useApp()
+  const [busy, setBusy] = useState(false)
+  const chain = view.chain
+  if (!chain?.enabled) return null
+  const confirming = chain.status === "confirming"
+  const failed = !confirming && (chain.status === "error" || !!chain.error)
+  if (!confirming && !failed) return null
+  const explorer = chain.explorer || "https://sepolia.basescan.org"
+  const tx = chain.lastTx && /^0x[0-9a-fA-F]{64}$/.test(chain.lastTx) ? chain.lastTx : null
+  const retry = async () => {
+    setBusy(true)
+    try {
+      onView(await api.retryChain(view.id, role))
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (confirming) {
+    return (
+      <Banner tone="info" title={chain.depositTx ? t("project.chainRecording") : t("project.chainConfirming")} />
+    )
+  }
+  return (
+    <Banner tone="warn" title={t("project.chainErrorTitle")}>
+      <p>{chain.error}</p>
+      {tx && (
+        <a href={`${explorer}/tx/${tx}`} target="_blank" rel="noreferrer">
+          {t("project.chainLastTx")} {shortHash(tx, 6, 4)}
+        </a>
+      )}
+      <div>
+        <button type="button" className="btn btn-soft btn-sm" disabled={busy} onClick={() => void retry()}>
+          {busy ? t("dialogs.working") : t("project.chainRetry")}
+        </button>
+      </div>
+    </Banner>
+  )
+}
+
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/
+
+function ChainCard({ view }: { view: ProjectView }) {
+  const { t } = useTranslation()
+  const chain = view.chain
+  if (!chain?.enabled) return null
+  const explorer = chain.explorer || "https://sepolia.basescan.org"
+  const steps: { key: string; label: string; hash: string | null; wait: string }[] = [
+    {
+      key: "mint",
+      label: t("project.chainMint"),
+      hash: chain.mintTx && TX_HASH.test(chain.mintTx) ? chain.mintTx : null,
+      wait: t("project.chainNotSent"),
+    },
+    {
+      key: "approve",
+      label: t("project.chainApprove"),
+      hash: chain.approveTx && TX_HASH.test(chain.approveTx) ? chain.approveTx : null,
+      wait: t("project.chainNotSent"),
+    },
+    {
+      key: "create",
+      label: t("project.chainCreate"),
+      hash: chain.createTx && TX_HASH.test(chain.createTx) ? chain.createTx : null,
+      wait: chain.createTx === "already-created" ? t("project.chainAlready") : t("project.chainWhenStart"),
+    },
+    {
+      key: "deposit",
+      label: t("project.chainDepositStep"),
+      hash: chain.depositTx && TX_HASH.test(chain.depositTx) ? chain.depositTx : null,
+      wait: t("project.chainWhenStart"),
+    },
+  ]
+  for (const [id, rec] of Object.entries(chain.expenses ?? {})) {
+    for (const [label, hash] of [
+      [t("project.chainDecision"), rec.recordTx],
+      [t("project.chainHold"), rec.approveTx],
+      [t("project.chainReject"), rec.rejectTx],
+      [t("project.chainRelease"), rec.releaseTx],
+    ] as const) {
+      if (hash && TX_HASH.test(hash)) steps.push({ key: `${id}-${label}`, label: `${id} · ${label}`, hash, wait: "" })
+    }
+  }
+  const accounts = [
+    [t("project.chainContract"), chain.escrow],
+    [t("project.chainUsdc"), chain.usdc],
+    [t("project.chainClient"), chain.client],
+    [t("project.chainPayee"), chain.payee || chain.payeeWallet || null],
+  ] as const
+  return (
+    <section className="card chain-card">
+      <h2 className="card-title">{t("project.chainCard")}</h2>
+      <p className="muted small">{t("project.chainCardSub")}</p>
+      <ol className="chain-steps">
+        {steps.map((step) => (
+          <li key={step.key}>
+            <span className={step.hash ? "chain-done" : undefined}>{step.label}</span>
+            {step.hash ? (
+              <a href={`${explorer}/tx/${step.hash}`} target="_blank" rel="noreferrer">
+                {t("project.chainViewTx")}
+              </a>
+            ) : (
+              <span className="muted small">{step.wait}</span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="chain-accounts">
+        {accounts.map(([label, address]) =>
+          address ? (
+            <a key={label} href={`${explorer}/address/${address}`} target="_blank" rel="noreferrer">
+              {label}
+            </a>
+          ) : null,
+        )}
+      </div>
+    </section>
+  )
+}
+
 function ProjectDetails({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
   return (
@@ -285,8 +436,8 @@ function ProjectDetails({ view }: { view: ProjectView }) {
         })}
       </div>
       <div className="impl-badges">
-        <span className="impl-badge" title={t("project.chainTitle")}>
-          {t("project.chainTarget")}
+        <span className="impl-badge" title={view.chain?.enabled ? t("project.chainTitle") : t("project.chainOffTitle")}>
+          {chainBadge(view, t)}
         </span>
         <span className="muted small">
           {t("project.logHead", { id: view.id, head: shortHash(view.head, 8, 4) })}

@@ -4,7 +4,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ago, kst, shortHash, urgency, won } from "../format"
-import { ROLE_KO, label } from "../labels"
+import { ROLE_KO, caption, label } from "../labels"
 import type { ProjectView, Role } from "../types"
 import { Act, actionLabel, anchorOf, describeTarget, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, Empty, When } from "./ui"
@@ -45,7 +45,7 @@ export function TodoCard({ view }: { view: ProjectView }) {
               {a.fallback && (
                 <details className="todo-fallback">
                   <summary>{t("activity.noResponse")}</summary>
-                  <p>{a.fallback}</p>
+                  <p>{caption(a.fallback)}</p>
                 </details>
               )}
               <div className="todo-actions">
@@ -177,7 +177,7 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
             <span className="tl-dot" aria-hidden />
             <div className="tl-body">
               <div className="tl-head">
-                <strong>{d.label}</strong>
+                <strong>{caption(d.label)}</strong>
                 <Chip tone={d.owner === role ? "accent" : "muted"}>
                   {d.owner === role ? t("activity.myTurn") : label(ROLE_KO, d.owner)}
                 </Chip>
@@ -186,7 +186,7 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
                 {describeTarget(view, d.target)}
               </button>
               <When at={d.at} now={view.now} />
-              {d.fallback && <div className="clock-fallback">{t("activity.silence", { fallback: d.fallback })}</div>}
+              {d.fallback && <div className="clock-fallback">{t("activity.silence", { fallback: caption(d.fallback) })}</div>}
             </div>
           </li>
         ))}
@@ -220,7 +220,7 @@ export function LogCard({ view }: { view: ProjectView }) {
                 {kst(e.at, view.now)} · {ago(e.at, view.now)}
               </span>
             </div>
-            <div className="log-text">{e.text}</div>
+            <div className="log-text">{caption(e.text)}</div>
             <div className="log-foot">
               <code>{e.op}</code>
               <code className="muted" title={e.head}>

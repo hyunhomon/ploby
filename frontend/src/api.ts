@@ -2,6 +2,7 @@
 // src/dev/fixture.ts instead, so the UI can be checked without the server.
 
 import { tr } from "./i18n"
+import { caption } from "./labels"
 import type {
   ActionOk,
   Clock,
@@ -40,6 +41,7 @@ export interface Backend {
   createProject(project: NewProject): Promise<ProjectView>
   project(id: string, as: Role): Promise<ProjectView>
   act(id: string, as: Role, action: string, params: ActionParams): Promise<ActionOk>
+  retryChain(id: string, as: Role): Promise<ProjectView>
 }
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
@@ -90,6 +92,7 @@ const http: Backend = {
   project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
   act: (id, as, action, params) =>
     call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action }),
+  retryChain: (id, as) => call("POST", `/api/projects/${encodeURIComponent(id)}/chain?${q(as)}`, {}),
 }
 
 function fixtureWanted(): boolean {
@@ -124,10 +127,10 @@ export const api: Backend = {
   createProject: (p) => backend.createProject(p),
   project: (id, as) => backend.project(id, as),
   act: (id, as, a, p) => backend.act(id, as, a, p),
+  retryChain: (id, as) => backend.retryChain(id, as),
 }
 
 export function errorText(e: unknown): string {
-  if (e instanceof ApiError) return e.message
-  if (e instanceof Error) return e.message
-  return String(e)
+  const message = e instanceof ApiError || e instanceof Error ? e.message : String(e)
+  return caption(message)
 }
