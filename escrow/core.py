@@ -52,6 +52,7 @@ class Core:
         self.documents = {}  # document id -> the expense that used it (a document backs one request)
         self.log, self.head, self.at, self.seq = [], ZERO, 0, {'E': 0, 'C': 0}
         self.chain = []  # results of the contract calls that mirror this log (op_chain)
+        self.agent_tasks = []  # purchases the contractor delegated to the agent (op_agent_task)
 
     # -- policy
     def version(self, n):

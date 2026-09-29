@@ -60,6 +60,31 @@ class Project(Core, Milestones, Expenses, Changes):
             return '타임아웃: ' + self.milestone_timeout(p['kind'], self.milestones[p['ref']])
         return '타임아웃: ' + self.expense_timeout(p['kind'], self.expenses[p['ref']], line['at'])
 
+    # -- the purchase agent (escrow/agent.py)
+    def op_agent_task(self, line, p, i):
+        """The contractor delegates purchases to the agent: the task, the offers, and the plan the model made (an
+        input, like a reading). It moves no money: each purchase the agent tries is its own request, under the rules."""
+        self.need(line, 'contractor')
+        self.state_is('ACTIVE', 'CLOSING')
+        plan, offers = i.get('plan') or {}, p.get('offers') or []
+        if not plan.get('needs'):
+            raise Refused('에이전트 계획이 없습니다', 'invalid')
+        tid = f"A{len(self.agent_tasks) + 1}"
+        self.agent_tasks.append({'id': tid, 'task': str(p.get('task') or '')[:500], 'offers': offers, 'plan': plan,
+                                 'ai': i.get('ai'), 'at': line['at'], 'line': len(self.log)})
+        name = {o.get('id'): o.get('name') for o in offers}
+        needs = '; '.join(f"{n['need']}: {' → '.join(name.get(x, x[:8]) for x in n['offers']) or '맞는 견적 없음'}"
+                          for n in plan['needs'])
+        return f"작업자가 구매 에이전트({tid})에게 맡겼습니다: “{str(p.get('task') or '')[:60]}” — 계획 {needs}"
+
+    def agent_view(self, t):
+        mine = [e for e in self.expenses.values() if (e.get('via') or {}).get('task') == t['id']]
+        return {**t, 'requests': [{'expense': e['id'], 'need': e['via'].get('need'), 'try': e['via'].get('try'),
+                                   'document': (e['quote'] or {}).get('document'), 'status': e['status'],
+                                   'result': (e['decision'] or {}).get('result'),
+                                   'rule': next((r['rule'] for r in (e['decision'] or {}).get('rules') or []
+                                                 if r['ok'] is False), None)} for e in mine]}
+
     # -- the chain (escrow/chain.py)
     def op_chain(self, line, p, i):
         """A contract call's result, written back by the relayer next to the log line it mirrors: the tx hash, or
@@ -138,6 +163,8 @@ class Project(Core, Milestones, Expenses, Changes):
         if role in pol.SIGNERS and s == 'ACTIVE':
             act('begin_close', '종료 시작 (CLOSING)', {'kind': 'project', 'id': self.id})
             act('draft_change_order', '범위 밖 요청 → 변경 주문 초안', None)
+        if role == 'contractor' and s == 'ACTIVE':
+            act('agent_run', '구매 에이전트에게 맡기기 (정책 안에서만 요청)', None)
         if role == 'contractor' and s == 'ACTIVE' and not self.paused:
             act('request_commitment', '구매 전 약정 요청', None)
             act('retroactive_request', '사후 청구 (사전 약정 없음)', None)
@@ -229,7 +256,8 @@ class Project(Core, Milestones, Expenses, Changes):
                 'ledger': self.ledger(), 'milestones': list(self.milestones.values()),
                 'expenses': [self.expense_view(e) for e in self.expenses.values()],
                 'change_orders': list(self.change_orders.values()), 'actions': self.actions(role),
-                'deadlines': self.deadlines(), 'log': self.log, 'head': self.head}
+                'deadlines': self.deadlines(), 'log': self.log, 'head': self.head,
+                'agent_tasks': [self.agent_view(t) for t in self.agent_tasks]}
 
     def summary(self, role, now):
         todo = [a for a in self.actions(role) if a['needs_response']]

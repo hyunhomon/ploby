@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import ai, chain, policy as pol
+from . import agent, ai, chain, policy as pol
 from .core import Refused, raw
 from .engine import Project
 
@@ -41,13 +41,14 @@ def _write_json(path, value):
 
 
 class Store:
-    def __init__(self, root, reader=None, drafter=None, compiler=None, rail=None):
+    def __init__(self, root, reader=None, drafter=None, compiler=None, rail=None, planner=None):
         self.root = Path(root)
         (self.root / 'projects').mkdir(parents=True, exist_ok=True)
         (self.root / 'docs').mkdir(parents=True, exist_ok=True)
         self.reader = reader or ai.reading
         self.drafter = drafter or ai.draft_change
         self.compiler = compiler or ai.compile_policy
+        self.planner = planner or agent.plan
         self.lock = threading.RLock()
         self.candidates = {}
         clock = self.root / 'clock.json'
@@ -296,6 +297,57 @@ class Store:
                 inputs['manifest'] = self.manifest(pid, action, inputs.pop('manifest_docs'), role, now, params.get('note', ''))
             P, text = self.commit(P, self.line(role, action, clean(params), inputs, now))
             return text, {**P.view(role, now), 'chain': self.chain_status(pid)}
+
+    def agent_run(self, pid, role, task, offer_ids):
+        """The contractor's purchase agent (escrow/agent.py): plan once, then file the plan's first choices as
+        requests; on a BLOCK try the need's next offer, on a HOLD wait, on a stopped project stop."""
+        if role != 'contractor':
+            raise Refused('구매 에이전트는 작업자가 맡깁니다', 'forbidden')
+        task = str(task or '').strip()
+        if not task:
+            raise Refused('에이전트에게 맡길 일을 적어 주세요', 'invalid')
+        ids = list(dict.fromkeys(offer_ids or []))
+        if not ids or len(ids) > agent.MAX_OFFERS:
+            raise Refused(f'견적(공급자 문서)을 1~{agent.MAX_OFFERS}개 고르세요', 'invalid')
+        docs = [self.doc_text(x) for x in ids]
+        with self.lock:
+            self.keeper(pid)
+            P = self.get(pid)
+            P.state_is('ACTIVE', 'CLOSING')
+            context = {'name': P.name, 'contractor': pol.NAMES['contractor']}
+        found, meta = self.planner(task, [{'id': d['id'], 'name': d['name'], 'text': d['text']} for d in docs], context)
+        if not found:
+            raise Refused(f"에이전트가 계획을 세우지 못했습니다 ({'; '.join(meta.get('problems') or [])}) — 직접 요청하세요",
+                          'state')
+        with self.lock:
+            P = self.get(pid)
+            offers = [{'id': d['id'], 'name': d['name']} for d in docs]
+            P, _ = self.commit(P, self.line('contractor', 'agent_task', {'task': task, 'offers': offers},
+                                            {'plan': found, 'ai': meta}, self.now()))
+            tid = P.agent_tasks[-1]['id']
+        tried, stopped = [], None
+        for need in found['needs']:
+            for k, doc_id in enumerate(need['offers'], 1):
+                via = {'task': tid, 'need': need['need'], 'why': need['why'], 'try': k}
+                try:
+                    self.act(pid, 'contractor', 'request_commitment', {'document': doc_id, 'via': via})
+                except Refused as e:
+                    tried.append({'need': need['need'], 'document': doc_id, 'refused': str(e)})
+                    break
+                e = next(e for e in reversed(list(self.get(pid).expenses.values())) if e.get('via') == via)
+                d = e['decision'] or {}
+                rule = d.get('reason') if d.get('result') == 'BLOCK' else None
+                tried.append({'need': need['need'], 'document': doc_id, 'expense': e['id'], 'result': d.get('result'),
+                              'rule': rule, 'status': e['status']})
+                if rule == 'state':
+                    stopped = '프로젝트가 멈춰 있어 에이전트가 중단했습니다'
+                if d.get('result') != 'BLOCK' or stopped:
+                    break
+            if stopped:
+                break
+        with self.lock:
+            view = {**self.get(pid).view(role, self.now()), 'chain': self.chain_status(pid)}
+        return {'task': tid, 'plan': found, 'ai': meta, 'tried': tried, 'stopped': stopped}, view
 
     def prepare(self, pid, role, action, params, context):
         """The inputs a line carries: what came from outside the rules, fixed before the rules run."""

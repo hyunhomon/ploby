@@ -99,6 +99,9 @@ def route(store, method, path, query, body):
         return store.view(parts[1], role or 'client')
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'chain' and method == 'GET':
         return store.onchain_state(parts[1])
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'agent' and method == 'POST':
+        result, view = store.agent_run(parts[1], body.get('as'), body.get('task'), body.get('offers'))
+        return {'ok': True, 'result': result, 'view': view}
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'actions' and method == 'POST':
         text, view = store.act(parts[1], body.get('as'), body.get('action'), body)
         return {'ok': True, 'result': text, 'view': view}

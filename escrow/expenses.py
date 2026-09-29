@@ -191,6 +191,8 @@ class Expenses:
         prop, evidence_ok, cls, why = fields_of(reading, i.get('manual'))
         rules, failed, signals = self.evaluate(prop, evidence_ok, document and document['id'], at, i.get('chain'))
         e = self.new_expense('RETROACTIVE' if retro else 'COMMITMENT', prop, reading, document, i.get('manifest'), at)
+        via = (line.get('params') or {}).get('via')
+        e['via'] = via if isinstance(via, dict) and via.get('task') in {t['id'] for t in self.agent_tasks} else None
         name = domain().name_of(e['vendor']) if e['vendor'] else '알 수 없는 공급자'
         if failed:
             e['status'] = 'BLOCKED'

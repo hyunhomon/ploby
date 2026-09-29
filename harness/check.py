@@ -322,6 +322,64 @@ def categories(tmp):
           w.P.expenses['E1']['status'] == 'RESERVED' and w.P.expenses['E2']['decision']['reason'] == 'category_budget')
 
 
+def purchase_agent(tmp):
+    """The contractor's purchase agent (escrow/agent.py) with a fixed plan: it asks, the rules decide, and its
+    next step follows the decision."""
+    w = World(tmp, 'f')
+    w.activate()
+    ids = {k: w.doc(k) for k in ('q-gabia', 'q-adobe', 'q-aws-injection', 'q-coupang', 'q-vercel')}
+
+    def planner(task, offers, context):
+        needs = [('도메인', ['q-gabia']), ('메인 이미지', ['q-adobe']), ('호스팅', ['q-coupang', 'q-vercel']),
+                 ('서버', ['q-aws-injection', 'q-vercel'])]
+        return {'needs': [{'need': n, 'offers': [ids[k] for k in ks], 'why': '테스트 계획'} for n, ks in needs],
+                'skip': []}, {'ok': True, 'problems': [], 'usage': {}, 'model': 'fixed'}
+    w.st.planner = planner
+    result, _ = w.st.agent_run(w.pid, 'contractor', '오픈 준비 구매', list(ids.values()))
+    got = [(t['need'], t.get('result'), t.get('rule')) for t in result['tried']]
+    check('the agent only asks: each purchase is a request the rules decide (APPROVE, BLOCK with VAT, HOLD)',
+          got[:2] == [('도메인', 'APPROVE', None), ('메인 이미지', 'BLOCK', 'per_purchase')], str(got))
+    check("a BLOCK moves the agent to the plan's next offer; a HOLD makes it wait (it does not try the rest)",
+          got[2:] == [('호스팅', 'BLOCK', 'vendor'), ('호스팅', 'APPROVE', None), ('서버', 'HOLD', None)], str(got))
+    lines = w.st.lines(w.pid)
+    task = next(x for x in lines if x['op'] == 'agent_task')
+    reqs = [x for x in lines if x['op'] == 'request_commitment']
+    check('the log says who delegated what: the plan is an input of the task line, each request names its task',
+          task['by'] == 'contractor' and task['inputs']['plan']['needs'] and
+          all(x['params']['via']['task'] == 'A1' and x['by'] == 'contractor' for x in reqs))
+    w.act('client', 'pause', reason='에이전트 중지')
+    fresh = [w.doc('q-figma'), w.doc('q-vercel-2')]
+    w.st.planner = lambda task, offers, context: ({'needs': [{'need': '디자인 툴', 'offers': [fresh[0]], 'why': ''},
+                                                             {'need': '호스팅', 'offers': [fresh[1]], 'why': ''}],
+                                                   'skip': []}, {'ok': True, 'problems': [], 'usage': {}})
+    result, _ = w.st.agent_run(w.pid, 'contractor', '다시 구매', fresh)
+    check("the client's pause stops the agent: its next request is a recorded BLOCK (state) and it tries nothing else",
+          len(result['tried']) == 1 and result['tried'][0]['rule'] == 'state' and result['stopped'])
+    R = w.st.replay(w.pid)
+    check('a replay rebuilds the agent tasks and their requests', R.head == w.P.head and
+          json.dumps(R.view('client', 0)['agent_tasks'], sort_keys=True) == json.dumps(w.P.view('client', 0)['agent_tasks'], sort_keys=True))
+
+
+def auditor(tmp):
+    """python3 -m escrow.audit, offline, on a finished scenario and on an edited copy of its log."""
+    from escrow import audit
+    w = WORLDS[0]
+    r = audit.audit(str(w.st.path(w.pid)), str(w.st.root), offline=True)
+    check('the auditor rebuilds every payment from the records alone and finds each inside what was signed',
+          r['replay']['ok'] and r['payments'] and all(p['inside'] for p in r['payments'])
+          and r['verdict']['records_consistent'] and any(s['result'] == 'BLOCK' for s in r['stops']))
+    lines = w.st.path(w.pid).read_text(encoding='utf-8').splitlines()
+    n = next(k for k, t in enumerate(lines) if json.loads(t)['op'] == 'deposit')
+    edited = json.loads(lines[n])
+    edited['params']['amount'] += 1
+    copy = Path(tmp) / 'edited' / 'projects' / w.pid / 'log.jsonl'
+    copy.parent.mkdir(parents=True)
+    copy.write_text('\n'.join(lines[:n] + [raw(edited)] + lines[n + 1:]) + '\n', encoding='utf-8')
+    r = audit.audit(str(copy), str(Path(tmp) / 'edited'), offline=True)
+    check('the auditor names the first edited line of a tampered log', not r['replay']['ok'] and
+          r['replay']['refused']['line'] == n)
+
+
 class Escrow:
     """src/PlobyEscrow.sol's rules in Python: every call a scenario's log implies must pass them."""
 
@@ -442,6 +500,8 @@ def main():
     try:
         run(tmp)
         categories(tmp)
+        purchase_agent(tmp)
+        auditor(tmp)
         onchain(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

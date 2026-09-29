@@ -6,6 +6,7 @@ another model or to switch its reasoning, then measure the change with harness/g
     reread   both again, when they disagree or code finds a fault (compiler.py)
     quote    a vendor document -> its fields (escrow/ai.py)
     change   a request outside the signed scope -> a non-binding change-order draft (escrow/ai.py)
+    agent    the contractor's task + vendor offers -> a purchase plan the agent files (escrow/agent.py)
 
 Defaults below; pipeline.json at the repository root overrides them per stage
 ({"reread": {"model": "deepseek-v4.1-flash", "think": false}}), and so does the environment
@@ -22,6 +23,7 @@ DEFAULTS = {
     'reread': {'model': 'qwen3-32b', 'think': True},
     'quote': {'model': 'qwen3-32b', 'think': False},
     'change': {'model': 'qwen3-32b', 'think': False},
+    'agent': {'model': 'qwen3-32b', 'think': False},
 }
 
 
