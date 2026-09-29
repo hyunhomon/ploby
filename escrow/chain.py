@@ -55,6 +55,7 @@ EVENTS = {  # name -> (indexed [(field, type)], data [(field, type)]), in the So
                 [('paid', 'uint256'), ('returned', 'uint256'), ('logHead', 'bytes32')]),
     'Refunded': ([('projectId', 'bytes32'), ('client', 'address')], [('amount', 'uint256'), ('logHead', 'bytes32')]),
 }
+TRANSIENT = {'rpc', 'no_receipt', 'nonce', 'send_failed'}  # never logged: the call stays first in line until it goes
 CALL_EVENT = {'open': 'Opened', 'fund': 'Funded', 'accept': 'PolicyAccepted', 'pause': 'PauseSet',
               'decide': 'Decided', 'settle': 'Settled', 'refund': 'Refunded'}
 
@@ -388,10 +389,20 @@ class Worker(threading.Thread):
                 while not self.queue:
                     self.cv.wait()
                 self.busy = c = self.queue.popleft()
-            result = self.rail.send(c)
-            if result['error'] in ('rpc', 'no_receipt', 'nonce', 'send_failed'):  # transient: once more
-                time.sleep(2)
+            result, wait, sent_tx = self.rail.send(c), 2, None
+            while result['error'] in TRANSIENT:  # the network, not the contract: keep the order, try again later
+                sent_tx = result['tx'] or sent_tx  # sent but unconfirmed: a resend is refused as AlreadyApplied
+                print(f"chain: {c['call']} for line {c['line']} not confirmed ({result['error']}), retrying in {wait}s",
+                      flush=True)
+                if result['error'] == 'send_failed':
+                    self.top_up()
+                time.sleep(wait)
+                wait = min(wait * 2, 60)
                 result = self.rail.send(c)
+            if result['error'] == 'AlreadyApplied' and sent_tx:
+                receipt = self.rail.receipt(sent_tx)
+                if receipt and int(receipt['status'], 16) == 1:
+                    result = {**result, 'tx': sent_tx, 'ok': True, 'error': None, 'block': int(receipt['blockNumber'], 16)}
             try:
                 self.record(c, result)
             except Exception as e:  # never kill the worker: the call stays pending until the next start
