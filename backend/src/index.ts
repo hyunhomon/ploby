@@ -13,7 +13,7 @@ import { MockKilnClient } from "./kiln/mock.js"
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 loadEnv(path.join(root, ".env"))
 
-const port = Number(process.env.PORT ?? 3001)
+const port = Number(process.env.PORT ?? 3010)
 const databasePath = process.env.DATABASE_PATH ?? path.join(root, "backend/data/smartescrow.db")
 mkdirSync(path.dirname(databasePath), { recursive: true })
 

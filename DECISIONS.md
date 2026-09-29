@@ -2,6 +2,10 @@
 
 Implementation assumptions made where the initial spec is silent. Newest first.
 
+## 2026-09-29 — Phase 3 UI
+
+The demo UI is one Vite + React page. It talks to the Phase 2 API through a dev proxy at `/api`. The API listens on port 3010 so it does not collide with other local apps that already use 3001. Project id is kept in `localStorage`. Case buttons only fill the request text; they do not skip the policy engine. Submit stays available after stop so the revocation BLOCK is visible. Transaction links are shown only for 32-byte hashes, because mock chain ids such as `0xrecord1` are not Basescan transactions.
+
 ## 2026-09-29 — Phase 2 backend
 
 1. **Duplicate evidence is a HOLD, not a BLOCK.** Spec section 9 and demo case 4 say "possible duplicate invoice". The other seven checks are hard violations and BLOCK. A failed duplicate check, or an anomaly flag, HOLDs.
