@@ -31,6 +31,7 @@ import {
 } from "../labels"
 import type { DocRef, Expense, ProjectView, Reading, RuleKind, RuleResult } from "../types"
 import { Clock } from "./Milestones"
+import { AgentPanel, ChainLinks } from "./Onchain"
 import { Act, actionLabel, deadlinesFor, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, DocLink, Empty, Money } from "./ui"
 
@@ -38,6 +39,8 @@ export function ExpensesSection({ view }: { view: ProjectView }) {
   const active = view.expenses.filter((e) => !FINAL_EXPENSE.has(e.status))
   const done = view.expenses.filter((e) => FINAL_EXPENSE.has(e.status))
   return (
+    <>
+    <AgentPanel view={view} />
     <Card
       title="경비"
       id="sec-expenses"
@@ -70,6 +73,7 @@ export function ExpensesSection({ view }: { view: ProjectView }) {
         </details>
       )}
     </Card>
+    </>
   )
 }
 
@@ -157,7 +161,9 @@ function ExpenseCard({ e, view }: { e: Expense; view: ProjectView }) {
             </Chip>
           )}
           {e.timeout && <Chip tone={toneOf(TIMEOUT_TONE, e.timeout)}>{label(TIMEOUT, e.timeout)}</Chip>}
+          {e.via && <Chip tone="accent" title={e.via.why}>에이전트 · {e.via.need}</Chip>}
         </div>
+        <ChainLinks results={e.chain} />
 
         <div className="meta-line small">
           {e.category_ko && (

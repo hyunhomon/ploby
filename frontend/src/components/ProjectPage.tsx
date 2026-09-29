@@ -14,6 +14,7 @@ import { ActionDialog } from "./Dialogs"
 import { ExpensesSection } from "./Expenses"
 import { LedgerCard } from "./Ledger"
 import { MilestonesSection } from "./Milestones"
+import { AuditCard, ChainCard } from "./Onchain"
 import { PolicyCard } from "./Policy"
 import {
   ProjectContext,
@@ -34,6 +35,7 @@ const NAV = [
   ["policy", "project.tabs.policy"],
   ["changes", "project.tabs.changes"],
   ["activity", "project.tabs.activity"],
+  ["audit", "project.tabs.audit"],
   ["manage", "project.tabs.manage"],
 ] as const
 function currentTab() {
@@ -93,6 +95,18 @@ export function ProjectPage({
 
   useEffect(() => setDialog(null), [role])
 
+  // Chain results come back a few seconds after an action: refresh until none is pending.
+  useEffect(() => {
+    if (!view?.chain?.pending) return
+    const h = window.setTimeout(() => {
+      api
+        .project(id, role)
+        .then((v) => setView(v))
+        .catch(() => undefined)
+    }, 2500)
+    return () => window.clearTimeout(h)
+  }, [view, id, role])
+
   const run = useCallback(
     async (a: Action, params: ActionParams = {}) => {
       if (!view) return false
@@ -118,7 +132,10 @@ export function ProjectPage({
   )
 
   const ctx = useMemo<ProjectCtx | null>(
-    () => (view ? { view, busy, run, open: (action, preset) => setDialog({ action, preset }) } : null),
+    () =>
+      view
+        ? { view, busy, run, open: (action, preset) => setDialog({ action, preset }), replace: (v) => setView(v) }
+        : null,
     [view, busy, run],
   )
 
@@ -186,6 +203,7 @@ export function ProjectPage({
                 </dl>
               </section>
               <TodoCard view={view} />
+              <ChainCard view={view} />
               <div className="overview-links">
                 <a href={`#/p/${encodeURIComponent(id)}?tab=work`}>
                   {t("project.viewWork")} <Icon name="arrow" size={16} />
@@ -209,6 +227,7 @@ export function ProjectPage({
               <LogCard view={view} />
             </>
           )}
+          {tab === "audit" && <AuditCard view={view} />}
           {tab === "manage" && (
             <>
               <ControlsCard view={view} />
@@ -285,9 +304,15 @@ function ProjectDetails({ view }: { view: ProjectView }) {
         })}
       </div>
       <div className="impl-badges">
-        <span className="impl-badge" title={t("project.chainTitle")}>
-          {t("project.chainTarget")}
-        </span>
+        {view.chain?.enabled ? (
+          <a className="impl-badge" title={t("chain.badgeTitle")} href={view.chain.contract_url} target="_blank" rel="noreferrer">
+            {t("chain.badge")} ↗
+          </a>
+        ) : (
+          <span className="impl-badge" title={t("project.chainTitle")}>
+            {t("project.chainTarget")}
+          </span>
+        )}
         <span className="muted small">
           {t("project.logHead", { id: view.id, head: shortHash(view.head, 8, 4) })}
         </span>

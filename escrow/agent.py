@@ -35,7 +35,8 @@ Plan the purchases the task asks for. Reply with one JSON object only, no other 
 
 Rules:
 - One entry per need the task names, in the task's order.
-- Under a need, list only offers that actually provide it: the better fit or lower total first, the others as alternatives.
+- Under a need, list every offer that provides it: the better fit or lower total first, the others as alternatives.
+- Do not guess what the policy allows (vendors, limits, budgets, dates): the program checks that. If an offer provides a need, list it.
 - If no offer provides a need, keep the need with an empty offers list.
 - Every offer not listed under any need goes in skip."""
 

@@ -8,6 +8,7 @@ import { ROLE_KO, label } from "../labels"
 import type { ProjectView, Role } from "../types"
 import { Act, actionLabel, anchorOf, describeTarget, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, Empty, When } from "./ui"
+import { ChainLinks } from "./Onchain"
 
 export function TodoCard({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
@@ -198,7 +199,8 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
 export function LogCard({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
   const [all, setAll] = useState(false)
-  const entries = [...view.log].reverse()
+  const entries = [...view.log].reverse().filter((e) => e.op !== "chain")
+  const hidden = view.log.length - entries.length
   const shown = all ? entries : entries.slice(0, 12)
   return (
     <Card
@@ -210,6 +212,7 @@ export function LogCard({ view }: { view: ProjectView }) {
         <span className="muted">{t("activity.currentHead")}</span> <CopyHash hash={view.head} head={10} tail={6} />
       </div>
       {entries.length === 0 && <Empty>{t("activity.noLog")}</Empty>}
+      {hidden > 0 && <p className="muted small">{t("chain.hiddenLines", { count: hidden })}</p>}
       <ol className="log">
         {shown.map((e) => (
           <li key={e.i} className={`log-item ${e.by === "keeper" ? "log-keeper" : ""}`}>
@@ -221,6 +224,7 @@ export function LogCard({ view }: { view: ProjectView }) {
               </span>
             </div>
             <div className="log-text">{e.text}</div>
+            <ChainLinks results={e.chain} />
             <div className="log-foot">
               <code>{e.op}</code>
               <code className="muted" title={e.head}>

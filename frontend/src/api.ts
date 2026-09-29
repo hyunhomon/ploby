@@ -4,6 +4,9 @@
 import { tr } from "./i18n"
 import type {
   ActionOk,
+  AgentRun,
+  AuditReport,
+  OnchainState,
   Clock,
   Doc,
   DocRef,
@@ -40,6 +43,9 @@ export interface Backend {
   createProject(project: NewProject): Promise<ProjectView>
   project(id: string, as: Role): Promise<ProjectView>
   act(id: string, as: Role, action: string, params: ActionParams): Promise<ActionOk>
+  onchain(id: string): Promise<OnchainState>
+  agentRun(id: string, as: Role, task: string, offers: string[]): Promise<{ ok: true; result: AgentRun; view: ProjectView }>
+  audit(id: string): Promise<AuditReport>
 }
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
@@ -90,6 +96,9 @@ const http: Backend = {
   project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
   act: (id, as, action, params) =>
     call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action }),
+  onchain: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/chain`),
+  agentRun: (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers }),
+  audit: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/audit`),
 }
 
 function fixtureWanted(): boolean {
@@ -124,6 +133,9 @@ export const api: Backend = {
   createProject: (p) => backend.createProject(p),
   project: (id, as) => backend.project(id, as),
   act: (id, as, a, p) => backend.act(id, as, a, p),
+  onchain: (id) => backend.onchain(id),
+  agentRun: (id, as, task, offers) => backend.agentRun(id, as, task, offers),
+  audit: (id) => backend.audit(id),
 }
 
 export function errorText(e: unknown): string {

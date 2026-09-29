@@ -26,6 +26,7 @@ export const ROLE_KO: Record<string, string> = {
   contractor: "작업자",
   resolver: "분쟁 해결자",
   keeper: "타임아웃 실행 (keeper)",
+  relayer: "체인 릴레이어",
 }
 
 /** Fallback names only: the real ones come from GET /api/meta roles. */

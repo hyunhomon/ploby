@@ -20,6 +20,8 @@ export interface ProjectCtx {
   busy: boolean
   run: (action: Action, params?: ActionParams) => Promise<boolean>
   open: (action: Action, preset?: Preset) => void
+  /** Replace the view with one the server returned outside `run` (the purchase agent). */
+  replace: (view: ProjectView) => void
 }
 
 export const ProjectContext = createContext<ProjectCtx | null>(null)

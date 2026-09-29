@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, chain, policy as pol
+from . import ai, audit, chain, policy as pol
 from .core import Refused
 from .pcp_bridge import domain
 from .store import Store
@@ -22,16 +22,20 @@ SAMPLES = HERE / 'samples' / 'index.json'
 IMPLEMENTATION = {  # PROJECT_OVERVIEW: 현재 구현 and 목표 설계 are never mixed
     'current': [
         '결정론적 정책 엔진 (오프체인): APPROVE·HOLD·BLOCK, 예약·정산 회계, 기한과 타임아웃, 변경 주문',
-        '서명된 해시 체인 로그: 모든 변경이 한 줄, 재생하면 같은 상태 (감사 가능)',
+        'Monad testnet PlobyEscrow: 예치·예약·지급·환불을 온체인에서 집행 (정책의 작업자 지갑에만 지급, 예치금 초과 불가, '
+        '클라이언트 일시정지 중 새 예약 불가), HOLD·BLOCK도 온체인 기록',
+        '서명된 해시 체인 로그: 모든 변경이 한 줄, 재생하면 같은 상태. 체인 호출마다 그 줄의 로그 헤드를 싣고 tx 해시를 로그에 되씀',
+        '작업자의 구매 에이전트 (Kiln): 계획 1회, 요청만 하고 판정은 정책, BLOCK이면 대안·HOLD면 대기·정지면 중단',
+        '감사: python3 -m escrow.audit — 로그·증빙·공개 체인만으로 모든 지급의 근거와 온체인 일치를 재구성',
         '양측 정책 서명과 버전 (데모 키 HMAC — 지갑 서명 대체)',
         '구매 전 약정 → 지출 → 증빙 → 정산, 사후 청구, 마일스톤 선예약·검수·타임아웃, 분쟁 해결자',
-        'Kiln qwen3-32b 판독: 경비 규칙 문장(두 번의 독립 판독), 견적서·영수증, 변경 주문 초안',
+        'Kiln qwen3-32b 판독: 경비 규칙 문장(두 번의 독립 판독), 견적서·영수증, 변경 주문 초안, 구매 계획',
         '텍스트 문서 업로드 = E1 증빙, 원문은 로그 밖 오프체인 저장소 (해시만 로그에)',
         '데모 시계: 기한을 앞당겨 타임아웃 결과를 확인',
     ],
     'target': [
-        '프로젝트별 불변 ProjectEscrow 컨트랙트가 자금·예약·기한·정산을 온체인에서 강제 (현재 체인 집행 없음)',
-        'EIP-712 / EIP-1271 서명, 정책 서명 서비스, 릴레이어·키퍼',
+        '프로젝트별 불변 ProjectEscrow 컨트랙트가 판정 자체까지 온체인에서 강제 (현재: 판정은 오프체인 엔진, 자금 집행은 공용 PlobyEscrow)',
+        'EIP-712 / EIP-1271 서명, 정책 서명 서비스, 릴레이어·키퍼의 권한 분리',
         '암호화 증빙 저장소, Evidence Attestation, E2(DKIM)·E3(공급자 API) 증빙',
         '공급자 직접 지급 (DIRECT_VENDOR), 공유 인보이스 배분 레지스트리',
         '프로젝트 자산 인계와 보류액, 보안 동결·RECOVERY_ONLY·마이그레이션',
@@ -99,6 +103,9 @@ def route(store, method, path, query, body):
         return store.view(parts[1], role or 'client')
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'chain' and method == 'GET':
         return store.onchain_state(parts[1])
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'audit' and method == 'GET':
+        store.get(parts[1])  # a known project: the auditor then reads its log file, not the server's state
+        return audit.audit(parts[1], str(store.root), offline=not chain.deployment())
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'agent' and method == 'POST':
         result, view = store.agent_run(parts[1], body.get('as'), body.get('task'), body.get('offers'))
         return {'ok': True, 'result': result, 'view': view}

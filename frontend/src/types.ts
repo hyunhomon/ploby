@@ -2,7 +2,7 @@
 // milliseconds since 1970 (UTC) on the demo clock; request dates are 'YYYY-MM-DD' (KST).
 
 export type Role = "client" | "contractor" | "resolver"
-export type Actor = Role | "keeper"
+export type Actor = Role | "keeper" | "relayer"
 export type Ms = number
 /** 'YYYY-MM-DD' (KST); `start_by` / `due_at` / `until` / `ends_at` mean the end of that day. */
 export type DateStr = string
@@ -43,12 +43,26 @@ export interface Implementation {
   target: string[]
 }
 
+export interface ChainMeta {
+  enabled: boolean
+  network?: string
+  chain_id?: number
+  escrow?: string
+  escrow_url?: string
+  token?: string
+  token_url?: string
+  client_wallet?: string
+  operator?: string
+  explorer?: string
+}
+
 export interface Meta {
   roles: Party[]
   vendors: Vendor[]
   categories: Category[]
   defaults: Periods
   ai: { enabled: boolean; model: string | null }
+  chain?: ChainMeta
   implementation?: Implementation
 }
 
@@ -331,6 +345,7 @@ export interface Milestone {
   paid: number
   returned: number
   started_at?: Ms | null
+  chain?: ChainResult[]
 }
 
 export type ExpenseStatus =
@@ -448,6 +463,9 @@ export interface Expense {
   decision: Decision | null
   out_of_scope: boolean
   resolution: { by: Actor; accept: boolean; reason: string } | null
+  /** Filed by the contractor's purchase agent (escrow/agent.py). */
+  via?: { task: string; need: string; why: string; try: number } | null
+  chain?: ChainResult[]
 }
 
 export type ChangeOrderStatus = "DRAFT" | "PROPOSED" | "SIGNED" | "FUNDED" | "WITHDRAWN"
@@ -509,6 +527,123 @@ export interface Deadline {
   fallback: string | null
 }
 
+/** One contract call that mirrors a log line on chain (escrow/chain.py), written back by the relayer. */
+export interface ChainResult {
+  line: number
+  n: number
+  call: "open" | "fund" | "accept" | "pause" | "decide" | "settle" | "refund" | string
+  args: Record<string, unknown>
+  tx: string | null
+  url: string | null
+  ok: boolean
+  error: string | null
+  block: number | null
+}
+
+export interface ChainStatus {
+  enabled: boolean
+  network?: string
+  chain_id?: number
+  contract?: string
+  contract_url?: string
+  token?: string
+  pending?: number
+  sent?: number
+  refused?: number
+}
+
+export interface OnchainBalances {
+  funded: number
+  reserved: number
+  paid: number
+  refunded: number
+  available: number
+}
+
+/** GET /api/projects/:id/chain — the contract's view next to the engine ledger. */
+export interface OnchainState {
+  chain: ChainStatus
+  onchain?: (OnchainBalances & { client: string; contractor: string; policy_hash: string; budget: number; paused: boolean; log_head: string }) | null
+  engine?: Omit<OnchainBalances, "available"> & { available: number }
+  match?: boolean
+}
+
+/** A purchase the agent tried: the request it filed and the rules' answer. */
+export interface AgentTry {
+  need: string
+  document: string
+  expense?: string
+  result?: DecisionResult
+  rule?: string | null
+  status?: string
+  refused?: string
+}
+
+export interface AgentPlan {
+  needs: { need: string; offers: string[]; why: string }[]
+  skip: { offer: string; why: string }[]
+}
+
+export interface AgentRun {
+  task: string
+  plan: AgentPlan
+  ai: { ok: boolean; problems: string[]; usage?: Usage | null; model?: string | null }
+  tried: AgentTry[]
+  stopped: string | null
+}
+
+export interface AgentTask {
+  id: string
+  task: string
+  offers: DocRef[]
+  plan: AgentPlan
+  ai: { ok: boolean; problems: string[]; usage?: Usage | null; model?: string | null } | null
+  at: Ms
+  line: number
+  requests: { expense: string; need: string; try: number; document: DocRef | null; status: string; result: DecisionResult | null; rule: string | null }[]
+}
+
+/** python3 -m escrow.audit (GET /api/projects/:id/audit): loose on purpose, rendered as found. */
+export interface AuditReport {
+  project: string
+  name: string
+  lines: number
+  head: string
+  replay: { ok: boolean; refused: { line: number; op: string; by: string; error: string } | null; status: string; ledger: Ledger }
+  policies: { version: number; hash: string; status: string; signed: Record<string, number | null> }[]
+  payments?: {
+    ref: string
+    paid?: number
+    amount?: number
+    payee: string
+    policy: { version: number; hash: string }
+    inside: boolean
+    request?: {
+      line: number
+      op: string
+      by: string
+      via: { task: string; need: string } | null
+      document: DocRef | null
+      evidence: { found: boolean; hash_ok?: boolean; total_in_text?: boolean | null }
+      reading: { vendor: string; category: string; amount: number; fee: number; total: number }
+    }
+    decision?: { result: DecisionResult; reason: string; rules: { rule: string; label: string; ok: boolean | null; detail: string }[] }
+    client_approval?: { line: number; reason: string }[]
+    payments: { line: number; op: string; by: string; amount: number; how: string; unit?: string }[]
+  }[]
+  refunds?: { line: number; amount: number }[]
+  stops?: { ref: string; result: DecisionResult; status: string; rule: string; label: string; line: number; via: { need: string } | null; amount: number | null }[]
+  chain?: {
+    error?: string
+    contract?: string
+    contract_url?: string
+    calls?: { line: number; n: number; call: string; tx: string; ok: boolean; url: string }[]
+    balances_match?: boolean | null
+    problems?: string[]
+  }
+  verdict?: { records_consistent: boolean; payments: number; inside: number; stops: number }
+}
+
 export interface LogEntry {
   i: number
   at: Ms
@@ -516,6 +651,7 @@ export interface LogEntry {
   op: string
   text: string
   head: string
+  chain?: ChainResult[]
 }
 
 export interface ProjectView {
@@ -538,6 +674,8 @@ export interface ProjectView {
   deadlines: Deadline[]
   log: LogEntry[]
   head: string
+  chain?: ChainStatus
+  agent_tasks?: AgentTask[]
 }
 
 export interface ActionOk {
