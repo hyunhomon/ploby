@@ -1,0 +1,219 @@
+{
+ "policy_hash": "0x1e22dcde164d4e165d8c6aee24607d7761e452f1f12aacc0001689de76310ed3",
+ "signatures": {
+  "client": "0x3957947ab01ea3da33059f82c1a9e10f164340a403a786179590f95d694fc2a6",
+  "contractor": "0xbbe5c801e8094031f4d6dbd0337b3a479b08052f807dc17fa0db7d11fda1b33b"
+ },
+ "doc": {
+  "version": 1,
+  "project": "카페 홈페이지 리뉴얼 (정책 변경)",
+  "parties": {
+   "client": "0xD51bb0f75beBCb03EE5B40f1f0a04a5BA060F845",
+   "contractor": "0x36f57e3b1c58256afdbe0a4ee80a2e3b073a3e60",
+   "resolver": "0xc2a306eabf3deafcec02c3194c506acf1239ac64"
+  },
+  "milestones": [
+   {
+    "id": "M1",
+    "title": "디자인 시안",
+    "amount": 1500000,
+    "deliverables": [
+     "메인·서브 페이지 시안 (Figma)"
+    ],
+    "criteria": [
+     "시안 2종 제출",
+     "의뢰인 피드백 1회 반영"
+    ],
+    "review_days": 3,
+    "silence": "pay"
+   },
+   {
+    "id": "M2",
+    "title": "반응형 퍼블리싱",
+    "amount": 2500000,
+    "deliverables": [
+     "반응형 웹사이트 배포"
+    ],
+    "criteria": [
+     "모바일·PC 레이아웃",
+     "도메인 연결"
+    ],
+    "review_days": 3,
+    "silence": "pay"
+   }
+  ],
+  "expense": {
+   "words": "홈페이지 리뉴얼 경비는 AWS나 Vercel 호스팅, 가비아 도메인, Adobe Stock에서만 결제. 총 30만원, 부가세 포함 한 건에 20만원 이하, 10월 31일까지.",
+   "mandate": {
+    "version": 2,
+    "tz": 540,
+    "source": {
+     "budget": "30만",
+     "merchant_ok": "m == \"aws\" || m == \"vercel\" || m == \"gabia\" || m == \"adobe-stock\"",
+     "category_ok": "1",
+     "window_ok": "at <= day_end(2026, 10, 31)",
+     "order_ok": "total <= 20만",
+     "count_limit": "1000"
+    },
+    "trees": {
+     "budget": [
+      "num",
+      300000.0
+     ],
+     "merchant_ok": [
+      "||",
+      [
+       "||",
+       [
+        "||",
+        [
+         "==",
+         [
+          "var",
+          "m"
+         ],
+         [
+          "text",
+          "aws"
+         ]
+        ],
+        [
+         "==",
+         [
+          "var",
+          "m"
+         ],
+         [
+          "text",
+          "vercel"
+         ]
+        ]
+       ],
+       [
+        "==",
+        [
+         "var",
+         "m"
+        ],
+        [
+         "text",
+         "gabia"
+        ]
+       ]
+      ],
+      [
+       "==",
+       [
+        "var",
+        "m"
+       ],
+       [
+        "text",
+        "adobe-stock"
+       ]
+      ]
+     ],
+     "category_ok": [
+      "num",
+      1.0
+     ],
+     "window_ok": [
+      "<=",
+      [
+       "var",
+       "at"
+      ],
+      [
+       "call",
+       "day_end",
+       [
+        "num",
+        2026.0
+       ],
+       [
+        "num",
+        10.0
+       ],
+       [
+        "num",
+        31.0
+       ]
+      ]
+     ],
+     "order_ok": [
+      "<=",
+      [
+       "var",
+       "total"
+      ],
+      [
+       "num",
+       200000.0
+      ]
+     ],
+     "count_limit": [
+      "num",
+      1000.0
+     ]
+    },
+    "issued": 1790816400000
+   },
+   "mandate_hash": "515b556473e9d13164b4d02ae023817fc7cec0c374a773bce02847f696bff759",
+   "readback": [
+    "총 한도: 30만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+    "거래처: AWS, Vercel, 가비아, Adobe Stock만",
+    "기간: 지금부터 2026-10-31(토) 23:59까지",
+    "한 번에: 20만 원까지 (부가세·수수료 포함)",
+    "횟수: 제한 없음"
+   ]
+  },
+  "previous": null
+ },
+ "reading": {
+  "agree": true,
+  "same": true,
+  "chosen": "writer",
+  "chosen_by": "agreement",
+  "differences": [],
+  "problems": [],
+  "readings": [
+   {
+    "source": "writer",
+    "ok": true,
+    "hash": "515b556473e9d13164b4d02ae023817fc7cec0c374a773bce02847f696bff759",
+    "readback": [
+     "총 한도: 30만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+     "거래처: AWS, Vercel, 가비아, Adobe Stock만",
+     "기간: 지금부터 2026-10-31(토) 23:59까지",
+     "한 번에: 20만 원까지 (부가세·수수료 포함)",
+     "횟수: 제한 없음"
+    ],
+    "problems": [],
+    "error": null
+   },
+   {
+    "source": "reader",
+    "ok": true,
+    "hash": "515b556473e9d13164b4d02ae023817fc7cec0c374a773bce02847f696bff759",
+    "readback": [
+     "총 한도: 30만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+     "거래처: AWS, Vercel, 가비아, Adobe Stock만",
+     "기간: 지금부터 2026-10-31(토) 23:59까지",
+     "한 번에: 20만 원까지 (부가세·수수료 포함)",
+     "횟수: 제한 없음"
+    ],
+    "problems": [],
+    "error": null
+   }
+  ],
+  "hashes": {
+   "writer": "515b556473e9d13164b4d02ae023817fc7cec0c374a773bce02847f696bff759",
+   "reader": "515b556473e9d13164b4d02ae023817fc7cec0c374a773bce02847f696bff759"
+  },
+  "generation_ids": [
+   "efea5b03-74e4-4caf-a284-95844ccc6360",
+   "883ac33a-fd25-4611-9e20-9e7bd6851f6f"
+  ],
+  "model": "qwen3-32b"
+ }
+}

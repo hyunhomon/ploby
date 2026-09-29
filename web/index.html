@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SmartEscrow 실행 기록</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--fg:#1c1c1a;--mut:#6b6b66;--line:#e2e2dc;--ok:#1d7a3e;--okb:#e3f4e8;--hold:#8a5a00;--holdb:#fdf1d6;--bad:#b3261e;--badb:#fbe4e2;--info:#3d5a80;--infob:#e6edf6;--acc:#2f5bd3;
+--c1:#2f5bd3;--c2:#e0a100;--c3:#1d7a3e;--c4:#8a8a84}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1e1e1c;--fg:#ecece8;--mut:#a0a09a;--line:#34342f;--ok:#6fd08f;--okb:#17301f;--hold:#f0c060;--holdb:#3a2e12;--bad:#ff8a80;--badb:#3d1a18;--info:#9cb8e0;--infob:#1c2636;--acc:#8fb0ff;--c1:#8fb0ff;--c2:#f0c060;--c3:#6fd08f;--c4:#6b6b66}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px;min-width:0}
+.mut{color:var(--mut)}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.grid>*{min-width:0}@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.b{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--infob);color:var(--info)}
+.APPROVE,.PAID,.SIGNED,.FUNDED{background:var(--okb);color:var(--ok)}.HOLD{background:var(--holdb);color:var(--hold)}.BLOCK,.STOP{background:var(--badb);color:var(--bad)}
+.chip{font-size:11px;padding:1px 7px;border:1px solid var(--line);border-radius:6px;color:var(--mut)}
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line);margin:8px 0}
+.bar i{display:block}.leg{display:flex;flex-wrap:wrap;gap:12px;font-size:12px}.leg b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.step{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:34px 1fr;gap:8px;cursor:default}
+.step.sel{background:var(--infob);border-radius:8px}.step.pay{cursor:pointer}
+.n{font-weight:700;color:var(--mut);text-align:right}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}.kv dt{color:var(--mut)}.kv dd{margin:0;min-width:0}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mut);font-weight:500}
+.tw{overflow-x:auto}a{color:var(--acc)}
+ul{margin:4px 0;padding-left:18px}
+input[type=file]{font-size:12px;max-width:100%}
+.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<main>
+<div class="card" id="hdr"><h1>SmartEscrow 실행 기록</h1><p class="mut">불러오는 중…</p></div>
+<div class="grid"><div class="card" id="pol"></div><div class="card" id="bal"></div></div>
+<div class="grid"><div class="card" id="tl"></div><div><div class="card" id="rcp"></div><div class="card" id="aud"></div></div></div>
+<div class="card" id="use"></div>
+<div class="card" id="crit"></div>
+<div class="card row"><label class="mut">다른 실행 JSON 열기 <input type="file" id="pick" accept=".json,application/json"></label><span id="src" class="mut"></span></div>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const won=v=>v==null?"":Number(v).toLocaleString("ko-KR")+"원";
+const sh=h=>h?esc(h.slice(0,10))+"…":"";
+const ACT={client:"의뢰인",contractor:"작업자",ai:"작업자 AI",agent:"에이전트 키",anyone:"누구나",auditor:"감사인"};
+// who signed the step's chain tx: the run JSON's chain_signer; older runs (no field) by the call the step sends
+// (recordDecision and release go out with the escrow's agent key, create/deposit/hold/stop with the client's)
+const SIGNER={expense:"agent",release:"agent",milestone_accept:"agent",milestone_timeout:"agent",deposit:"client",approve_hold:"client",reject_hold:"client",stop:"client"};
+const signer=s=>s.chain_signer||(s.tx||s.tx_error?SIGNER[s.action]||null:null);
+const who=s=>s.outcome==="PAID"&&signer(s)==="agent"?"agent":s.actor;
+const OUT={APPROVE:"승인",HOLD:"보류",BLOCK:"차단",PAID:"지급",SIGNED:"서명",FUNDED:"예치",REFUND:"환불",STOP:"중지",INFO:"정보"};
+const MODE={live:"실시간",cached:"캐시 재실행",sim:"시뮬레이션"};
+let R=null,sel=null;
+function txLink(tx){if(!tx)return"";const ex=R.chain&&R.chain.explorer;const t=sh(tx);return ex?`<a href="${esc(ex.replace(/\/$/,""))}/tx/${esc(tx)}" target="_blank" rel="noopener">${t}</a>`:`<span class="mono">${t}</span>`}
+function addrLink(a){if(!a)return"";const ex=R.chain&&R.chain.explorer;return ex?`<a href="${esc(ex.replace(/\/$/,""))}/address/${esc(a)}" target="_blank" rel="noopener" class="mono">${esc(a)}</a>`:`<span class="mono">${esc(a)}</span>`}
+function hdr(){const c=R.chain;
+ $("hdr").innerHTML=`<h1>${esc(R.title)}</h1><p>${esc(R.declared_function)}</p>
+ <div class="row"><span class="b">${esc(MODE[R.mode]||R.mode)}</span>
+ ${c?`<span class="chip">체인: ${esc(c.name)}${c.chain_id?" #"+esc(c.chain_id):""}</span><span class="chip">에스크로 ${addrLink(c.escrow)}</span><span class="chip">토큰 ${addrLink(c.token)}</span>`:`<span class="chip">체인 없음</span>`}
+ <span class="mut">생성 ${esc(R.generated_at)}</span></div>`}
+function pol(){const p=R.policy;
+ $("pol").innerHTML=`<h2>경비 정책 <span class="b ${p.agree?"APPROVE":"BLOCK"}">${p.agree?"두 판독 일치":"판독 불일치"}</span></h2>
+ <p>“${esc(p.words)}”</p>${p.agree?"":`<p class="mut">판독 불일치 → ${esc(p.chosen)} 채택 · 선택: ${esc(p.chosen_by)}</p>`}<div class="mut">읽어드리기</div><ul>${(p.readback||[]).map(l=>`<li>${esc(l)}</li>`).join("")}</ul>
+ <dl class="kv"><dt>버전</dt><dd>${esc(p.version)}</dd><dt>정책 해시</dt><dd class="mono">${esc(p.hash)}</dd><dt>규칙 해시</dt><dd class="mono">${esc(p.mandate_hash)}</dd>
+ <dt>의뢰인 서명</dt><dd class="mono">${esc(p.signatures&&p.signatures.client)}</dd><dt>작업자 서명</dt><dd class="mono">${esc(p.signatures&&p.signatures.contractor)}</dd>
+ ${(p.milestones||[]).map(m=>`<dt>${esc(m.id)}</dt><dd>${esc(m.title)} · ${won(m.amount)}</dd>`).join("")}</dl>`}
+const SEG=[["paid","지급","--c3"],["reserved","예약","--c2"],["refunded","환불","--c4"],["available","잔액","--c1"]];
+function bal(){const st=R.steps||[];const b=(sel!=null&&st.find(s=>s.n===sel)||st[st.length-1]||{}).balances||{};const d=b.deposited||1;
+ $("bal").innerHTML=`<h2>잔액 ${sel!=null?`<span class="mut">(단계 ${esc(sel)} 시점)</span>`:""}</h2><div>예치 <b>${won(b.deposited||0)}</b></div>
+ <div class="bar">${SEG.map(([k,,c])=>`<i style="width:${Math.max(0,(b[k]||0)/d*100)}%;background:var(${c})"></i>`).join("")}</div>
+ <div class="leg">${SEG.map(([k,l,c])=>`<span><b style="background:var(${c})"></b>${l} ${won(b[k]||0)}</span>`).join("")}</div>`}
+function tl(){
+ $("tl").innerHTML=`<h2>진행 기록</h2><p class="mut" style="margin-top:-6px">지급 단계를 누르면 영수증이 보입니다.</p>`+(R.steps||[]).map(s=>{const a=s.ai;
+ return `<div class="step${s.outcome==="PAID"?" pay":""}${sel===s.n?" sel":""}" data-n="${esc(s.n)}"><div class="n">${esc(s.n)}</div><div>
+ <div class="row"><span class="mut">${esc(s.at)}</span><span class="chip">${esc(ACT[who(s)]||who(s))}</span>${signer(s)&&signer(s)!==who(s)?`<span class="chip">tx 서명: ${esc(ACT[signer(s)]||signer(s))}</span>`:""}<span class="b ${esc(s.outcome)}">${esc(OUT[s.outcome]||s.outcome)}</span>${s.amount!=null?`<b>${won(s.amount)}</b>`:""}</div>
+ <div>${esc(s.title)}</div>
+ ${s.reason?`<div class="mut">${esc(s.reason_ko||"")} <span class="mono">${esc(s.reason)}</span></div>`:""}
+ ${s.payee||s.vendor?`<div class="mut">받는 곳 ${esc(s.vendor||"")} ${s.payee?`<span class="mono">${esc(s.payee.slice(0,12))}…</span>`:""}</div>`:""}
+ <div class="row mut" style="font-size:12px">${s.log_index!=null?`<span>로그 #${esc(s.log_index)} <span class="mono">${sh(s.log_head)}</span></span>`:""}${s.tx?`<span>tx ${txLink(s.tx)}</span>`:""}${s.tx_error?`<span class="err">체인 거부: ${esc(s.tx_error)}</span>`:""}
+ ${a?`<span>AI ${esc(a.flow)} · ${esc(a.tokens)} 토큰 · $${Number(a.cost_usd||0).toFixed(4)} · ${esc(a.seconds)}s${a.cached?" · 캐시":""}</span>`:""}</div>
+ ${a&&a.extracted&&Object.keys(a.extracted).length?`<div class="mono mut">${esc(JSON.stringify(a.extracted))}</div>`:""}</div></div>`}).join("");
+ $("tl").querySelectorAll(".step").forEach(el=>el.onclick=()=>{sel=+el.dataset.n;render(false)})}
+function rcp(){const st=(R.steps||[]).find(s=>s.n===sel);let r=null;
+ if(st&&st.outcome==="PAID")r=(R.receipts||[]).find(x=>x.payment_tx===st.tx)||null;
+ if(!r&&st&&st.outcome==="PAID")r={vendor:st.vendor,payee:st.payee,total:st.amount,verdict:"PAID",reason:st.reason,log_index:st.log_index,log_head:st.log_head,payment_tx:st.tx};
+ $("rcp").innerHTML=`<h2>영수증</h2>`+(r?`<dl class="kv">${r.seq!=null?`<dt>번호</dt><dd>${esc(r.seq)}</dd>`:""}<dt>판매처</dt><dd>${esc(r.vendor)}</dd><dt>받는 주소</dt><dd>${addrLink(r.payee)}</dd><dt>금액</dt><dd><b>${won(r.total)}</b></dd>
+ <dt>판정</dt><dd><span class="b ${esc(r.verdict)}">${esc(OUT[r.verdict]||r.verdict)}</span> <span class="mono">${esc(r.reason||"")}</span></dd>
+ ${r.policy_hash?`<dt>정책 해시</dt><dd class="mono">${esc(r.policy_hash)}</dd>`:""}${r.mandate_hash?`<dt>규칙 해시</dt><dd class="mono">${esc(r.mandate_hash)}</dd>`:""}
+ <dt>로그</dt><dd class="mono">#${esc(r.log_index)} ${esc(r.log_head)}</dd>${r.decision_tx?`<dt>결정 tx</dt><dd>${txLink(r.decision_tx)}</dd>`:""}<dt>지급 tx</dt><dd>${txLink(r.payment_tx)}</dd></dl>`
+ :`<p class="mut">진행 기록에서 '지급' 단계를 선택하세요. (영수증 ${(R.receipts||[]).length}건)</p>`)}
+const ok=v=>`<span class="b ${v?"APPROVE":"BLOCK"}">${v?"일치":"불일치"}</span>`;
+function aud(){const a=R.audit||{};
+ $("aud").innerHTML=`<h2>제3자 감사 ${ok(a.all_ok)}</h2><dl class="kv"><dt>로그 체인</dt><dd>${ok(a.log_chain_ok)}</dd><dt>재현 해시</dt><dd class="mono">${esc(a.replay_state_hash)}</dd><dt>실행 해시</dt><dd class="mono">${esc(a.live_state_hash)}</dd><dt>재현 = 실행</dt><dd>${ok(a.match)}</dd></dl>
+ <div class="tw"><table><tr><th>체인 이벤트</th><th>tx</th><th></th><th>근거</th></tr>${(a.onchain||[]).map(e=>`<tr><td>${esc(e.event)}</td><td>${txLink(e.tx)}</td><td>${ok(e.matches)}</td><td class="mut">${esc(e.why)}</td></tr>`).join("")}</table></div>`}
+function use(){const u=R.usage||{};const f=u.by_flow||[];const s=k=>f.reduce((t,x)=>t+(+x[k]||0),0);
+ $("use").innerHTML=`<h2>Kiln 사용량 (흐름별)</h2><div class="tw"><table><tr><th>흐름</th><th>모델</th><th>호출 (실시간/캐시)</th><th>입력 토큰</th><th>출력 토큰</th><th>$</th><th>초</th><th>Wh</th></tr>
+ ${f.map(x=>`<tr><td>${esc(x.flow)}</td><td>${esc(x.model)}</td><td>${esc(x.calls)} (${esc(x.live_calls)}/${esc(x.cached_calls)})</td><td>${esc(x.prompt_tokens)}</td><td>${esc(x.completion_tokens)}</td><td>${Number(x.cost_usd||0).toFixed(4)}</td><td>${esc(x.seconds)}</td><td>${esc(x.energy_wh)}</td></tr>`).join("")}
+ <tr><th>합계</th><th></th><th>${s("calls")} (${s("live_calls")}/${s("cached_calls")})</th><th>${s("prompt_tokens")}</th><th>${s("completion_tokens")}</th><th>${Number(u.total_cost_usd??s("cost_usd")).toFixed(4)}</th><th>${s("seconds").toFixed(1)}</th><th>${s("energy_wh").toFixed(2)}</th></tr></table></div>
+ <p class="mut">에너지 가정: ${esc(u.energy_assumption)}</p>`}
+function crit(){
+ $("crit").innerHTML=`<h2>Challenge B 체크리스트</h2><div class="tw"><table><tr><th></th><th>기준</th><th>단계</th></tr>${(R.criteria||[]).map(c=>`<tr><td><span class="b ${c.ok?"APPROVE":"BLOCK"}">${c.ok?"충족":"미충족"}</span></td><td style="white-space:normal">${esc(c.text)}</td><td>${(c.steps||[]).map(n=>`<a href="#" data-n="${esc(n)}">${esc(n)}</a>`).join(", ")}</td></tr>`).join("")}</table></div>`;
+ $("crit").querySelectorAll("a[data-n]").forEach(a=>a.onclick=e=>{e.preventDefault();sel=+a.dataset.n;render(false);const el=document.querySelector(`.step[data-n="${sel}"]`);el&&el.scrollIntoView({behavior:"smooth",block:"center"})})}
+function render(all=true){try{if(all){hdr();pol();aud();use();crit()}bal();tl();rcp()}catch(e){$("hdr").insertAdjacentHTML("beforeend",`<p class="err">렌더 오류: ${esc(e.message)}</p>`);console.error(e)}}
+function load(run,src){R=run;const p=(R.steps||[]).filter(s=>s.outcome==="PAID");sel=p.length?p[0].n:null;$("src").textContent="출처: "+src;render()}
+async function boot(){for(const u of["../runs/demo.json","./sample-run.json"]){try{const r=await fetch(u,{cache:"no-store"});if(r.ok){load(await r.json(),u);return}}catch(e){}}
+ $("hdr").innerHTML=`<h1>SmartEscrow 실행 기록</h1><p class="err">실행 기록을 찾지 못했습니다. 아래에서 JSON 파일을 여세요.</p>`}
+$("pick").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>load(JSON.parse(t),f.name)).catch(err=>alert("JSON 오류: "+err.message))};
+boot();
+</script>
+</body>
+</html>
