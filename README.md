@@ -4,6 +4,8 @@ Phase 1 is the Base Sepolia contracts only. The API, UI, and demo evidence table
 
 The accepted target architecture is documented in [`docs/adr`](docs/adr/README.md). Those ADRs include bilateral purchase commitments, settlement deadlines, policy versioning, refunds, asset handover, and shared-expense allocation that the current Phase 1 contracts do not yet implement.
 
+For a human-readable introduction, start with [`docs/README.md`](docs/README.md), then read the product overview, end-to-end flows, system architecture, and terminology guide.
+
 ## Quickstart
 
 ```shell

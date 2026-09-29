@@ -93,7 +93,7 @@ Rounding is down in invoice minor units and settlement-token base units. Any rem
 ## Conflict behavior
 
 - Capacity available: continue normal policy evaluation.
-- Capacity exceeded: `INTEGRITY_RISK` HOLD under [ADR 0005](0005-purchase-commitments-and-settlement.md); no automatic settlement.
+- Capacity exceeded for the same attested nullifier: BLOCK the new allocation before reservation. Existing valid allocations are unchanged.
 - Mismatched normalization version or expired attestation: `POLICY_OR_SYSTEM_AMBIGUITY` HOLD.
 - Probable duplicate without the same attested nullifier: risk signal and resolver review, not automatic fraud determination.
 - A resolver may release an unused RESERVED allocation but cannot erase a SETTLED allocation or raise total capacity.

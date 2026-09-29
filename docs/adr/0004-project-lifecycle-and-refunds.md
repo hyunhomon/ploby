@@ -30,7 +30,7 @@ DRAFT -> ACTIVE -> CLOSING -> CLOSED
 | State | Entry condition | Allowed actions |
 | --- | --- | --- |
 | DRAFT | Project created; funding or bilateral policy acceptance incomplete | Fund, accept policy, activate, or cancel |
-| ACTIVE | Policy accepted and required funding available | Create commitments, submit evidence, settle, amend policy, pause new commitments, or begin close |
+| ACTIVE | Policy accepted and the policy's initial funding requirement met | Create commitments, submit evidence, deliver milestones, settle, amend policy, pause new commitments, or begin close |
 | CLOSING | Either client or contractor initiates close | No new commitments; existing obligations settle, expire, cancel bilaterally, or resolve through dispute; unreserved funds may be refunded |
 | CLOSED | No active obligations or reservations remain and refundable funds were withdrawn | Read-only audit access |
 | CANCELLED | DRAFT project cancelled, or ACTIVE project with no active obligation cancelled bilaterally | Refund funded balance, then read-only audit access |
@@ -80,6 +80,30 @@ The security freeze is not available for commercial disputes.
 7. When no active reservation, settlement, or dispute remains and every asset-register item is resolved under [ADR 0006](0006-project-assets-and-handover.md), the remaining balance is refundable and the project becomes CLOSED after withdrawal.
 
 Closing never accelerates rejection of a valid obligation and never changes its policy version.
+
+## Funding and accounting
+
+The target architecture permits partial deposits and later top-ups. `projectBudgetBaseUnits` is a spending cap, not a requirement to deposit the entire budget at creation.
+
+The project tracks:
+
+```text
+funded
+expenseReserved
+milestoneReserved
+released
+refunded
+available = funded - expenseReserved - milestoneReserved - released - refunded
+```
+
+- A project activates only after the policy-defined initial funding amount is deposited.
+- Deposits may not raise cumulative funded principal above the active project budget; increasing that cap requires a bilateral policy version.
+- A purchase or milestone commitment is created only when its full maximum amount can be reserved from `available` and the relevant sub-budget.
+- Top-ups are allowed in DRAFT, ACTIVE, and CLOSING. In CLOSING they may only cure an existing obligation shortfall and cannot authorize new work.
+- The client cannot withdraw available funds while ACTIVE. Withdrawals begin only in CLOSING or CANCELLED.
+- Escrowed funds earn no yield. The MVP charges no platform fee.
+- Relayer gas is paid outside project escrow and is not deducted from contractor settlement.
+- Accounting uses observed token balance changes and supports only allowlisted fixed-supply, non-rebasing, non-fee-on-transfer tokens.
 
 ## Refund destination and recovery
 

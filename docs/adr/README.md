@@ -8,7 +8,7 @@ An ADR marked **Accepted - implementation pending** is binding for future design
 
 SmartEscrow is a bilateral commitment system, not a client surveillance tool.
 
-It protects the client from unauthorized spending and protects the contractor from pre-financing, silent payment delay, retroactive policy changes, and unpaid scope expansion. Neither party may unilaterally rewrite an accepted commitment.
+It protects the client from unauthorized spending and unverified delivery. It protects the contractor from pre-financing, unpaid milestones, silent payment delay, retroactive policy changes, and unpaid scope expansion. Neither party may unilaterally rewrite an accepted commitment.
 
 ## Index
 
@@ -21,6 +21,8 @@ It protects the client from unauthorized spending and protects the contractor fr
 | [0005](0005-purchase-commitments-and-settlement.md) | Reserve before spend, settle after evidence, and give every HOLD a deadline | Accepted - implementation pending |
 | [0006](0006-project-assets-and-handover.md) | Record asset ownership and couple handover acceptance to a defined holdback | Accepted - implementation pending |
 | [0007](0007-shared-expense-allocation-registry.md) | Enforce cross-project invoice allocation without publishing invoice contents | Accepted - implementation pending |
+| [0008](0008-contract-deployment-and-migration.md) | Use isolated immutable project escrows with bilateral migration | Accepted - implementation pending |
+| [0009](0009-work-milestones-and-acceptance.md) | Pre-fund work milestones and make acceptance deadline-backed | Accepted - implementation pending |
 
 ## Precedence and conventions
 
@@ -29,6 +31,7 @@ It protects the client from unauthorized spending and protects the contractor fr
 - Amounts are integers in the settlement asset's base unit. Floating-point monetary values are prohibited.
 - Unknown, unavailable, malformed, or invalid AI output never produces APPROVE.
 - Every payable obligation is identified by an immutable commitment or settlement digest.
+- Project expenses and work milestones are separate obligation types with separate acceptance rules.
 - Every HOLD has a class, deadline, and deterministic fallback. No state may wait indefinitely for client action.
 - Existing commitments survive policy replacement, project pause, and project closing unless both parties cancel them or the defined dispute process rejects them.
 - An uncommitted, post-spend reimbursement request has no automatic-payment guarantee.

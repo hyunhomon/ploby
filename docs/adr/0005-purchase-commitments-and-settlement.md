@@ -138,16 +138,20 @@ The policy's `clientReviewPeriodSeconds` starts when a settlement envelope passe
 | `CLIENT_REVIEW` | Client preference or business review with no objective rule failure | Silence: auto-settle. Explicit objection: escalate to resolver | Auto-settle the committed payable amount |
 | `POLICY_OR_SYSTEM_AMBIGUITY` | Parser, policy-engine, or infrastructure result is unavailable or ambiguous after a valid commitment | Escalate to resolver | Auto-settle the committed payable amount |
 | `EVIDENCE_DEFECT` | Required evidence is missing, corrupt, or below the accepted assurance level | Escalate to resolver | Reject with evidence-defect reason; release reservation |
-| `INTEGRITY_RISK` | Deterministic duplicate allocation conflict, invalid signature, or supported fraud signal | Escalate to resolver | Reject with integrity-risk reason; release reservation |
+| `INTEGRITY_RISK` | Post-commitment invalid evidence signature, probable duplicate, or supported fraud signal that requires adjudication | Escalate to resolver | Reject with integrity-risk reason; release reservation |
 | `EXCESS_AMOUNT` | Eligible actual cost exceeds the commitment | Settle committed payable immediately; excess remains unpaid | Excess is rejected unless a bilateral change order is signed |
 
 `INTEGRITY_RISK` cannot be selected solely because the client objects. It requires a deterministic verifier or policy-engine reason code included in the decision bundle. A client-only objection is `CLIENT_REVIEW`.
+
+An exact new allocation that would make an attested invoice exceed 100 percent is not a disputable HOLD: the new commitment is BLOCKED before reservation. `INTEGRITY_RISK` applies when a non-capacity integrity issue appears after a commitment already exists or when similarity is probable rather than exact.
 
 `POLICY_OR_SYSTEM_AMBIGUITY` is valid only when the evidence meets the policy's minimum assurance and the asset, payee, and eligible actual amount are determinable. If those facts cannot be established, the class is `EVIDENCE_DEFECT`; system failure cannot manufacture a payable amount.
 
 For a valid prior commitment, client rejection is never terminal by itself. It opens resolver review and preserves the reservation. `EVIDENCE_DEFECT` can return to evaluation when the contractor supplies the missing evidence. The client cannot waive a mandatory evidence or integrity rule; only a policy-compliant re-evaluation or bounded resolver decision can settle it. Retroactive requests are the exception: because no prior promise exists, explicit client rejection or client timeout is terminal.
 
 The resolver period starts on escalation. The resolver can approve or reject only the disputed amount and must provide reason codes. It cannot change the payee or exceed the commitment maximum. Every timeout transition is recorded with `RELEASED_BY_TIMEOUT`, `ESCALATED_BY_TIMEOUT`, or `REJECTED_BY_TIMEOUT` as applicable.
+
+Deadlines use the destination chain's `block.timestamp`. After a deadline, `executeTimeout(obligationId)` is permissionless and deterministic. The platform keeper normally submits it and pays gas, but the client, contractor, resolver, or any third party may submit the same transition. A backend outage therefore cannot suppress a timeout outcome.
 
 The demo policy uses 72 hours for client review and seven days for resolver review. The UI shows exact deadlines in absolute time and displays the fallback before either party signs the policy.
 

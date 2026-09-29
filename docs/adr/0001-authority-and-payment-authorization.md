@@ -36,12 +36,15 @@ The MVP policy signer and resolver are explicitly trusted platform components. T
 
 The policy signer, resolver, and administrator use separate keys. The administrator is a multisig before any non-demo deployment. Key rotation never changes or revives an existing obligation.
 
+A resolver decision is final for the on-chain obligation. The MVP has no on-chain appeal. Contractual or legal rights outside SmartEscrow remain unaffected, but an external claim does not rewrite the immutable settlement record.
+
 ## Typed authorization payloads
 
-The system uses two financial payloads defined in [ADR 0005](0005-purchase-commitments-and-settlement.md):
+The system uses three financial payload families:
 
 - `PurchaseCommitment`: reserves budget before the contractor spends.
 - `SettlementIntent`: pays an eligible amount against that commitment.
+- `MilestoneCommitment`: reserves service compensation against defined deliverables under [ADR 0009](0009-work-milestones-and-acceptance.md).
 
 Both payloads are domain-separated by `chainId` and `escrowContract` and bind at least:
 
@@ -59,6 +62,17 @@ Both payloads are domain-separated by `chainId` and `escrowContract` and bind at
 
 The payee and settlement asset are fixed before authorization. For direct vendor payment, the payee is the vendor address registered in the commitment. For reimbursement, the payee is the contractor wallet registered by the accepted project policy. A relayer cannot substitute either value.
 
+All participant and service signatures use EIP-712 typed structured data with a versioned domain containing `chainId`, verifying contract, schema name, and schema version. Smart-contract wallets are supported through EIP-1271. Personal-sign and unsigned JSON payloads are not authorization mechanisms.
+
+Identifiers are deterministic and collision-resistant:
+
+```text
+projectId    = keccak256(chainId, projectEscrow, client, contractor, projectNonce)
+obligationId = keccak256(projectId, obligationType, creator, obligationNonce)
+```
+
+Nonces are monotonic within their scope and consumed exactly once.
+
 ## Bilateral authority rules
 
 - A policy or change order activates only after client and contractor signatures.
@@ -69,6 +83,7 @@ The payee and settlement asset are fixed before authorization. For direct vendor
 - Client rejection of a committed settlement is an objection that opens resolver review; it is not a unilateral terminal rejection.
 - Resolver decisions are bounded by the existing commitment and cannot create a larger payment.
 - BLOCK and REJECTED obligations are never payable.
+- Any account may submit a valid signed payload or trigger an elapsed timeout. The platform relayer is a convenience, not a liveness dependency.
 
 ## Key and service controls
 

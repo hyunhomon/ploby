@@ -32,6 +32,8 @@ ProjectPolicy
 - settlementAssetAddress
 - settlementAssetDecimals
 - projectBudgetBaseUnits
+- expenseBudgetBaseUnits
+- milestoneBudgetBaseUnits
 - paymentMode: DIRECT_VENDOR | REIMBURSEMENT
 - allowedCategories[]
 - categoryBudgets[]
@@ -46,11 +48,12 @@ ProjectPolicy
 - evidenceRequirements
 - foreignCurrencyRules
 - assetOwnershipRules
+- milestones[]
 - rules[]
 - createdAt
 ```
 
-All monetary values are non-negative integer strings in settlement-asset base units. Floating-point values are invalid. The MVP supports one settlement asset per project and performs no implicit foreign-exchange conversion.
+All monetary values are non-negative integer strings in settlement-asset base units. Floating-point values are invalid. Expense and milestone budgets are non-overlapping sub-limits whose sum may not exceed the project budget. The MVP supports one settlement asset per project and performs no implicit foreign-exchange conversion.
 
 Every policy must specify a resolver, client review period, resolver review period, evidence-submission period, and evidence minimum. The demo policy uses a 72-hour client review period, a seven-day resolver period, and a seven-day evidence-submission period after spend is reported. Future policies may set different values only within schema-defined safety bounds: 24 hours to seven days for client review, one to fourteen days for resolver review, and one to thirty days for evidence submission.
 
