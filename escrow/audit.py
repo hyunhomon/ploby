@@ -47,7 +47,11 @@ def load(target, data):
         path = Path(data) / 'projects' / str(target) / 'log.jsonl'
     if not path.exists():
         raise SystemExit(f'no log for {target!r} (a project id under {data}/projects, or a log.jsonl path)')
-    return path, [json.loads(t) for t in path.read_text(encoding='utf-8').splitlines() if t.strip()]
+    text = path.read_text(encoding='utf-8')
+    rows = text.splitlines()
+    if rows and not text.endswith('\n'):  # a line the server is still writing (each line ends with its newline)
+        rows = rows[:-1]
+    return path, [json.loads(t) for t in rows if t.strip()]
 
 
 def doc_check(docs, doc, total=None):
