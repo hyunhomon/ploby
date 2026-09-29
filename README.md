@@ -32,6 +32,12 @@ flowchart LR
   X --> V
 ```
 
+<p>
+<img src="docs/images/expenses.png" width="32%" alt="작업자 화면: 구매 에이전트의 계획과 요청마다 규칙이 답한 판정 (APPROVE, HOLD 가격 이상, BLOCK 건별 한도·공급자·프로젝트 상태)">
+<img src="docs/images/overview.png" width="32%" alt="클라이언트 요약: Monad testnet PlobyEscrow의 예치·예약·지급·환불·가용이 엔진 원장과 일치">
+<img src="docs/images/activity.png" width="32%" alt="기록: 서명된 해시 체인 로그의 각 줄 아래 그 줄을 미러링한 tx 링크">
+</p>
+
 증거를 직접 다시 확인하려면 (키 없이, 공개 RPC만 사용):
 
 ```bash
