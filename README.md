@@ -39,6 +39,7 @@ flowchart LR
 <img src="docs/images/overview.png" width="32%" alt="클라이언트 요약: Monad testnet PlobyEscrow의 예치·예약·지급·환불·가용이 엔진 원장과 일치">
 <img src="docs/images/activity.png" width="32%" alt="기록: 서명된 해시 체인 로그의 각 줄 아래 그 줄을 미러링한 tx 링크">
 </p>
+<p><img src="docs/images/audit.png" width="66%" alt="검증 탭: 서명·해시 체인·재생, 지급마다 근거, 기록된 멈춤, 각 tx를 로그 줄과 대조"></p>
 
 증거를 직접 다시 확인하려면 (키 없이, 공개 RPC만 사용):
 

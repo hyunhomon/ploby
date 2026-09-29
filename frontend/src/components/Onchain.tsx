@@ -282,6 +282,11 @@ export function AuditCard({ view }: { view: ProjectView }) {
       setBusy(false)
     }
   }
+  // `#/p/…?tab=audit&run=1` opens the tab with the check already running (a link for the demo).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("run") === "1") void run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const v = report?.verdict
   return (
     <Card
