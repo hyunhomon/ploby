@@ -82,7 +82,7 @@ cd frontend && npm ci && npm run dev        # 화면: http://localhost:5173  (/a
 ## 검증
 
 ```shell
-python3 harness/check.py        # 오프라인 검사 61개: 모델·네트워크 없이 PROJECT_OVERVIEW 원칙, 에이전트, 감사, 컨트랙트 규칙(파이썬 모델) 확인
+python3 harness/check.py        # 오프라인 검사 64개: 모델·네트워크 없이 PROJECT_OVERVIEW 원칙, 에이전트, 감사, 컨트랙트 규칙(파이썬 모델) 확인
 python3 harness/fuzz.py         # 무작위 프로젝트 200개: 모든 동작을 섞어도 체인 호출이 컨트랙트 규칙을 통과하고 원장과 일치
 forge test                      # PlobyEscrow 12개 + 레거시 컨트랙트 테스트
 cd frontend && npm run build    # 타입 검사 + 프로덕션 빌드
@@ -106,7 +106,7 @@ python3 -m pcp spend            # Kiln 키 사용액 (팀 공용 예산)
 | `escrow/chain.py`, `src/PlobyEscrow.sol`, `src/TestKRW.sol` | 로그를 컨트랙트 호출로 바꾸는 미러와 Monad testnet 컨트랙트 (`deployments/monad-testnet.json`, `script/deploy_ploby.py`) |
 | `escrow/audit.py` | 기록만으로 하는 감사 |
 | `frontend/` | React 19 + Vite 7 역할별 화면 |
-| `harness/check.py`, `harness/fuzz.py` | 오프라인 검증 61개, 무작위 프로젝트로 체인 미러 검증 |
+| `harness/check.py`, `harness/fuzz.py` | 오프라인 검증 64개, 무작위 프로젝트로 체인 미러 검증 |
 | `harness/evidence.py`, `harness/tamper.py`, `harness/demo_setup.py`, `harness/usage_report.py` | 챌린지 증거 실행, 변조 데모, 데모 준비, Kiln 흐름별 사용량 |
 | `evidence/` | 증거 실행의 로그·증빙 파일·감사 결과 |
 | `src/ExpenseEscrow.sol`, `script/Deploy.s.sol` | 레거시 Solidity 프로토타입 (현재 앱과 미연결) |
