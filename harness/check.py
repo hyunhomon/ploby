@@ -1,12 +1,10 @@
-"""L0: the escrow core's invariants, offline (SimEscrow, no AI, no network), in under two seconds.
+#!/usr/bin/env python3
+"""Offline checks of the engine against PROJECT_OVERVIEW.md (the first-class reference) and the product's success
+criteria (docs/product-overview.md). No model and no network: readings come from a fixed table, the way a
+replay takes them from the log. Run from the repository root:  python3 harness/check.py
 
-    python3 harness/check.py        prints pass/FAIL per check and 'N checks passed'; exit 1 on a failure
-
-The story (docs): a cafe owner escrows 4,500,000 KRW for a web contractor — M1 1,500,000, M2 2,500,000, and a
-500,000 expense budget spent by the contractor's AI agent under a PCP mandate (5 vendors, <= 200,000 per order
-VAT included, until 2026-10-31). E1..E7 and the milestones below are that story, on the scenario clock (KST).
+Each check names the principle it holds. Exit 1 if any fails.
 """
-import copy
 import json
 import shutil
 import sys
@@ -14,366 +12,326 @@ import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from escrow import ai, policy as pol  # noqa: E402
-from escrow.ledger import SimEscrow  # noqa: E402
-from escrow.pcp_bridge import lang  # noqa: E402
-from escrow.project import Book, Project, Refused, audit, chain_step, read_log, replay, verify_chain, GENESIS  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from escrow import policy as pol, server  # noqa: E402
+from escrow.core import Refused, raw  # noqa: E402
+from escrow.store import Store  # noqa: E402
 
+SAMPLES = {s['id']: s for s in server.samples()}
+SAMPLES['q-vercel-2'] = {'id': 'q-vercel-2', 'name': 'Vercel Pro 견적 (2)', 'kind': 'quote',
+                         'text': SAMPLES['q-vercel']['text'].replace('2026', '2026 (재발행)', 1)}
+TEXT = {s['text']: k for k, s in SAMPLES.items()}
+FIX = {'q-gabia': ('gabia', 'domain', 22000, 2200), 'q-figma': ('figma', 'software', 90000, 9000),
+       'q-coupang': ('coupang', 'general', 117273, 11727), 'q-adobe': ('adobe-stock', 'assets', 185000, 18500),
+       'q-aws-injection': ('aws', 'hosting', 163637, 16363), 'q-vercel': ('vercel', 'hosting', 30000, 3000),
+       'q-vercel-2': ('vercel', 'hosting', 30000, 3000),
+       'r-gabia': ('gabia', 'domain', 22000, 2200), 'r-figma': ('figma', 'software', 90000, 9000),
+       'r-figma-over': ('figma', 'software', 99000, 9900), 'r-aws': ('aws', 'hosting', 163637, 16363)}
+DOWN = set()  # sample ids whose reading fails as if Kiln were unreachable
 RESULTS = []
 
 
+def reader(text):
+    k = TEXT.get(text)
+    if k in DOWN:
+        return {'ok': False, 'source': 'unavailable', 'proposal': None, 'fields': {}, 'problems': ['service down'],
+                'model': None, 'usage': {}, 'generation_ids': []}
+    if k in FIX:
+        v, c, a, f = FIX[k]
+        return {'ok': True, 'source': 'ai', 'proposal': {'merchant': v, 'category': c, 'item': k, 'amount': a, 'fee': f,
+                                                          'units': 1},
+                'fields': {}, 'problems': [], 'model': 'fixed', 'usage': {}, 'generation_ids': []}
+    return {'ok': False, 'source': 'ai', 'proposal': None, 'fields': {}, 'problems': ['total_text is missing'],
+            'model': 'fixed', 'usage': {}, 'generation_ids': []}
+
+
+def drafter(text, context, now):
+    return ({'title': '회원 로그인', 'units': [{'title': '로그인', 'criteria': ['이메일 로그인'], 'amount': 0}],
+             'start_by': None, 'due_at': None, 'grace_days': 2, 'note': '', 'expense_budget_delta': 0},
+            {'ok': True, 'problems': [], 'usage': {}})
+
+
 def check(name, ok, detail=''):
-    RESULTS.append(bool(ok))
+    RESULTS.append((name, bool(ok)))
     print(f"{'pass' if ok else 'FAIL'}  {name}" + (f'  ({detail})' if detail and not ok else ''))
 
 
-def refused(fn, *args):
-    try:
-        fn(*args)
-    except Refused:
-        return True
-    return False
+def spec(start_by='2026-10-03'):
+    return {'name': '카페 온담 홈페이지 리뉴얼',
+            'rules': {'mode': 'form', 'form': {'vendors': ['aws', 'vercel', 'gabia', 'figma', 'adobe-stock'],
+                                               'budget': 500000, 'max_per_purchase': 200000, 'until': '2026-10-31'}},
+            'milestones': [{'title': '디자인 시안', 'start_by': start_by, 'due_at': '2026-10-10', 'grace_days': 2,
+                            'units': [{'title': '메인 시안', 'criteria': ['데스크톱·모바일 시안 각 1종'], 'amount': 1000000},
+                                      {'title': '서브 페이지 시안', 'criteria': ['메뉴·매장 안내 페이지'], 'amount': 500000}]},
+                           {'title': '반응형 퍼블리싱', 'start_by': '2026-10-12', 'due_at': '2026-10-24', 'grace_days': 2,
+                            'units': [{'title': '반응형 사이트', 'criteria': ['모바일·PC 레이아웃', '도메인 연결'],
+                                       'amount': 2500000}]}],
+            'ends_at': '2026-12-31'}
 
 
-def why(fn, *args):
-    """The Refused message of fn(*args) ('' when it is not refused): a refusal for the reason the check names."""
-    try:
-        fn(*args)
-    except Refused as err:
-        return str(err)
-    return ''
+class World:
+    def __init__(self, tmp, name, caps=None):
+        self.st = Store(Path(tmp) / name, reader=reader, drafter=drafter)
+        self.st.offset = int(time.mktime((2026, 10, 1, 10, 0, 0, 0, 0, -1)) * 1000) - int(time.time() * 1000)
+        sp = spec()
+        if caps:
+            sp['rules']['form']['category_budgets'] = caps
+        self.pid = self.st.create('client', sp)['id']
+
+    def act(self, role, action, **p):
+        return self.st.act(self.pid, role, action, p)
+
+    def refused(self, role, action, **p):
+        try:
+            self.act(role, action, **p)
+            return None
+        except Refused as e:
+            return e.code
+
+    def doc(self, k):
+        return self.st.document(SAMPLES[k]['name'], SAMPLES[k]['text'])['id']
+
+    @property
+    def P(self):
+        return self.st.projects[self.pid]
+
+    def e(self, eid):
+        return self.P.expenses[eid]
+
+    def activate(self):
+        self.act('client', 'sign_policy', version=1)
+        self.act('contractor', 'sign_policy', version=1)
+        self.act('client', 'deposit', amount=4500000)
+
+    def days(self, n):
+        self.st.advance(int(n * 86400))
+        self.st.keeper(self.pid)
 
 
-def kst(m, d, h, mi=0):
-    return int(lang.kst(2026, m, d, h, mi))
-
-
-def P(merchant, item, amount, fee, units=1, category=''):
-    return {'merchant': merchant, 'category': category, 'item': item, 'amount': amount, 'fee': fee, 'units': units}
-
-
-def src(text):
-    return {'digest': 'sha256:' + chain_step('', text), 'summary': text}
-
-
-def conserved(workdir):
-    """The log lines (index) after which paid + refunded + open reservations > deposited, or < deposited once
-    CLOSED ([] when money is conserved at every step)."""
-    book, bad = Book(), []
-    for e in read_log(workdir):
-        book.apply(json.loads(e['line']), e['i'], e['head'])
-        v = book.view()
-        out = v['paid'] + v['refunded'] + v['reserved']
-        if out > v['deposited'] or (v['status'] == 'CLOSED' and out != v['deposited']):
-            bad.append(e['i'])
-    return bad
-
-
-def rechain(lines):
-    """Log entries (dicts) with their heads recomputed: a forger who rewrites the whole log."""
-    head, out = GENESIS, []
-    for n, e in enumerate(lines):
-        head = chain_step(head, e['line'])
-        out.append(json.dumps({**e, 'i': n, 'head': head}, ensure_ascii=False))
-    return '\n'.join(out) + '\n'
-
-
-def activated(workdir, chain):
-    """A project with the story's policy, signed by both and funded."""
-    pr = Project(workdir, chain)
-    doc = pol.demo({p: pr.address_of(p) for p in ('client', 'contractor', 'resolver')})
-    h = pr.propose_policy(doc, kst(10, 1, 10))['policy_hash']
-    pr.sign('client', pol.sign('client', h), kst(10, 1, 10))
-    pr.sign('contractor', pol.sign('contractor', h), kst(10, 1, 10))
-    pr.deposit(pol.required_deposit(doc), kst(10, 1, 10))
-    return pr, doc
-
-
-def main():
-    t0 = time.time()
-    tmp = Path(tempfile.mkdtemp(prefix='escrow-check-'))
-    try:
-        run(tmp)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    check('under 2 seconds', time.time() - t0 < 2, f'{time.time() - t0:.2f}s')
-    passed = sum(RESULTS)
-    print(f'{passed} checks passed' + ('' if passed == len(RESULTS) else f', {len(RESULTS) - passed} FAILED'))
-    return 0 if passed == len(RESULTS) else 1
+def conserved(P):
+    """ADR 0004: available = funded - reserved - released - refunded, never negative."""
+    return P.available >= 0 and P.funded == P.expense_reserved + P.milestone_reserved + P.released + P.refunded + P.available
 
 
 def run(tmp):
-    sim = SimEscrow()
-    wd = tmp / 'story'
-    pr = Project(wd, sim)
-    pid = pr.project_id
-    doc = pol.demo({p: pr.address_of(p) for p in ('client', 'contractor', 'resolver')})
-    check('policy is well formed, deposit = milestones + expense budget',
-          not pol.problems(doc) and pol.required_deposit(doc) == 4500000 and pol.expense_budget(doc) == 500000)
+    # -- bilateral activation (overview §5.1, §8.1; product success: neither party changes policy alone)
+    w = World(tmp, 'a')
+    check('DRAFT: nothing can be committed before both signatures and the initial funding',
+          w.P.status == 'DRAFT' and w.refused('contractor', 'request_commitment', document=w.doc('q-gabia')) == 'state')
+    w.act('client', 'sign_policy', version=1)
+    w.act('client', 'deposit', amount=4500000)
+    check('one signature + full funding is still DRAFT (the contractor must sign the same hash)', w.P.status == 'DRAFT')
+    check('the contractor cannot start a milestone that is not reserved', w.refused('contractor', 'start_milestone', milestone='M1') is not None)
+    w.act('contractor', 'sign_policy', version=1)
+    check('both signatures + initial funding -> ACTIVE, every milestone FUNDED_AND_RESERVED before work starts',
+          w.P.status == 'ACTIVE' and all(m['status'] == 'FUNDED_AND_RESERVED' for m in w.P.milestones.values())
+          and w.P.milestone_reserved == 4000000)
+    check('a deposit above the signed budget is refused', w.refused('client', 'deposit', amount=1) == 'invalid')
+    check('roles are enforced: the client cannot request a commitment, the contractor cannot pause',
+          w.refused('client', 'request_commitment', document=w.doc('q-gabia')) is not None
+          and w.refused('contractor', 'pause', reason='x') == 'forbidden')
 
-    # -- acceptance: both parties, the same hash, and the deposit
-    h = pr.propose_policy(doc, kst(10, 1, 10))['policy_hash']
-    check('policy hash is sha256 of canonical JSON', h == pol.policy_hash(json.loads(json.dumps(doc))) and len(h) == 66)
-    check('a signature over another hash is refused',
-          refused(pr.sign, 'contractor', pol.sign('contractor', '0x' + '1' * 64), kst(10, 1, 10)))
-    pr.sign('client', pol.sign('client', h), kst(10, 1, 10))
-    pr.deposit(4500000, kst(10, 1, 10, 5))
-    check('one signature + full deposit: not active, requests refused',
-          pr.state()['status'] == 'PROPOSED' and sim.project(pid) is None
-          and refused(pr.request_expense, P('gabia', 'x', 1000, 0), src('x'), kst(10, 1, 11)))
-    out = pr.sign('contractor', pol.sign('contractor', h), kst(10, 1, 10, 10))
-    st = pr.state()
-    check('both signatures -> ACTIVE; project created and funded on chain',
-          out['activated'] and st['status'] == 'ACTIVE' and out['chain']['create']['ok'] and out['chain']['deposit']['ok']
-          and sim.project(pid)['deposited'] == 4500000 and sim.project(pid)['policy_hash'] == h)
-    other = Project(tmp / 'unsigned')
-    oh = other.propose_policy(doc, 0)['policy_hash']
-    other.deposit(4500000, 0)
-    check('unsigned policy cannot activate', other.state()['status'] == 'PROPOSED' and oh == h
-          and refused(other.request_expense, P('gabia', 'x', 1000, 0), src('x'), 1))
+    # -- expenses: decision order, BLOCK / HOLD / APPROVE (overview §6)
+    w.act('contractor', 'request_commitment', document=w.doc('q-gabia'))
+    e1 = w.e('E1')
+    check('APPROVE reserves the maximum before spending (Reserve -> Spend -> Settle)',
+          e1['status'] == 'RESERVED' and e1['reserved'] == 24200 and w.P.expense_reserved == 24200)
+    check('the payee is the contractor wallet in the policy, never a document field',
+          e1['payee'] == pol.address('contractor') and e1['payment_mode'] == 'REIMBURSEMENT')
+    w.act('contractor', 'request_commitment', document=w.doc('q-coupang'))
+    w.act('contractor', 'request_commitment', document=w.doc('q-adobe'))
+    check('a vendor not on the list is BLOCK and marked OUT_OF_SCOPE',
+          w.e('E2')['status'] == 'BLOCKED' and w.e('E2')['decision']['reason'] == 'vendor' and w.e('E2')['out_of_scope'])
+    check('over the per-purchase limit once VAT is added is BLOCK', w.e('E3')['decision']['reason'] == 'per_purchase')
+    w.act('contractor', 'request_commitment', document=w.doc('q-aws-injection'))
+    e4 = w.e('E4')
+    check('a risk signal (price anomaly) is HOLD, never BLOCK or APPROVE; no money is reserved',
+          e4['status'] == 'HOLD_REVIEW' and e4['decision']['result'] == 'HOLD' and e4['reserved'] == 0)
+    w.act('contractor', 'request_commitment', document=w.doc('q-gabia'))
+    check('the same document again would allocate one invoice over 100%: BLOCK',
+          w.e('E5')['decision']['reason'] == 'allocation')
+    DOWN.add('q-vercel')
+    w.act('contractor', 'request_commitment', document=w.doc('q-vercel'))
+    check('a model or service failure is HOLD, never an automatic approval (overview §8.3)',
+          w.e('E6')['status'] == 'HOLD_REVIEW' and w.e('E6')['hold_class'] == 'POLICY_OR_SYSTEM_AMBIGUITY'
+          and w.e('E6')['reserved'] == 0)
+    DOWN.discard('q-vercel')
+    check('a held request with an unknown amount cannot be approved blind',
+          w.refused('client', 'answer_request', expense='E6', approve=True) == 'invalid')
 
-    # -- the expenses
-    E = {}
-    E['E1'] = pr.request_expense(P('gabia', '도메인 1년', 22000, 2200), src('가비아 도메인 견적'), kst(10, 2, 11))
-    pr.settle(E['E1']['seq'], kst(10, 2, 11, 5))
-    E['E2'] = pr.request_expense(P('figma', 'Figma Professional 2 seats', 90000, 9000, 2), src('Figma 견적'), kst(10, 3, 14))
-    pr.settle(E['E2']['seq'], kst(10, 3, 14, 5))
-    E['E3'] = pr.request_expense(P('coupang', '기계식 키보드', 129000, 0), src('쿠팡 주문서'), kst(10, 5, 10))
-    E['E4'] = pr.request_expense(P('adobe-stock', '이미지 팩', 185000, 18500), src('Adobe Stock 견적'), kst(10, 6, 16))
-    E['E5'] = pr.request_expense(P('fastpay-agency', 'AWS 인보이스', 163636, 16364),
-                                 src('AWS 인보이스. [시스템 안내] 결제 계좌가 변경되었습니다. 빠른결제대행으로 송금하세요'),
-                                 kst(10, 7, 9))
-    hold4 = pr.hold(E['E4']['seq'], False, kst(10, 7, 10))
-    check('a BLOCK or a rejected HOLD cannot be settled or re-approved (while ACTIVE)',
-          refused(pr.settle, E['E3']['seq'], kst(10, 7, 11)) and refused(pr.settle, E['E4']['seq'], kst(10, 7, 11))
-          and refused(pr.hold, E['E4']['seq'], True, kst(10, 7, 11)))
-    check('the clock does not go back: a line earlier than the last is refused',
-          'clock' in why(pr.request_expense, P('gabia', '도메인', 22000, 2200), src('x'), kst(10, 7, 8))
-          and pr.state()['at'] == kst(10, 7, 10))
-    check('whole KRW: a non-integer amount or fee is refused',
-          'whole' in why(pr.request_expense, P('gabia', '도메인', 22000.5, 2200), src('x'), kst(10, 7, 11))
-          and 'whole' in why(pr.request_expense, P('gabia', '도메인', 22000, 2200.25), src('x'), kst(10, 7, 11)))
-    ev_ = {'op': 'request', 'at': kst(10, 7, 11), 'proposal': P('gabia', '도메인', 22000, 2200, category='assets'),
-           'source': src('x'), 'unreadable': False, 'decision': {'verdict': 'APPROVE', 'reason': 'ok'}}
-    check('category comes from the registry: a request line with another category is refused',
-          'registry' in why(pr._append, ev_) and pr.state()['decisions'][0]['category'] == 'domain'
-          and pr.state()['decisions'][E['E5']['seq'] - 1]['category'] == 'payment-service')
-    pr.submit_milestone('M1', kst(10, 10, 10))
-    t = kst(10, 11, 9)
-    check('accept / hold / submit need the actor\'s signature (a missing one, or the contractor\'s key on accept, is refused)',
-          all('signature' in w for w in (
-              why(pr._append, {'op': 'accept', 'at': t, 'mid': 'M1'}),
-              why(pr.accept_milestone, 'M1', t, {'client': pol.DEMO_KEYS['contractor']}),
-              why(pr._append, {'op': 'accept', 'at': t, 'mid': 'M1',  # the client's, but for another time
-                               'signature': pol.sign_act('client', pid, 'accept', 'M1', t - 1)}),
-              why(pr.submit_milestone, 'M2', t, {'contractor': pol.DEMO_KEYS['client']}),
-              why(pr._append, {'op': 'hold', 'at': t, 'seq': E['E4']['seq'], 'approve': True,  # a reject, replayed as approve
-                               'signature': pol.sign_act('client', pid, 'hold:reject', E['E4']['seq'], t)}))))
-    m1 = pr.accept_milestone('M1', kst(10, 11, 10))
-    pr.submit_milestone('M2', kst(10, 20, 10))
-    early = pr.tick(kst(10, 22, 10))
-    late = pr.tick(kst(10, 24, 10))
-    E['E6'] = pr.request_expense(P('vercel', 'Vercel Pro 1개월', 30000, 3000), src('Vercel 청구서'), kst(11, 2, 10))
-    stop = pr.stop(kst(11, 3, 9), 'client pause')
-    E['E7'] = pr.request_expense(P('vercel', 'Vercel Pro', 30000, 3000), src('Vercel 청구서'), kst(11, 3, 10))
+    # -- settle: client review, silence pays; claimed amount capped (ADR 0005)
+    w.act('contractor', 'report_spend', expense='E1')
+    check('the claimed amount cannot exceed the commitment cap',
+          w.refused('contractor', 'submit_receipt', expense='E1', document=w.doc('r-gabia'), claimed=24201) == 'invalid')
+    w.act('contractor', 'submit_receipt', expense='E1', document=w.doc('r-gabia'), claimed=24200)
+    check('a clean receipt waits for the client (CLIENT_REVIEW) and a deadline', w.e('E1')['status'] == 'EVIDENCE_SUBMITTED'
+          and w.e('E1')['hold_class'] == 'CLIENT_REVIEW' and w.e('E1')['review_deadline'])
+    w.act('contractor', 'request_commitment', document=w.doc('q-figma'))
+    w.act('contractor', 'report_spend', expense='E7')
+    w.act('contractor', 'submit_receipt', expense='E7', document=w.doc('r-figma-over'), claimed=99000)
+    e7 = w.e('E7')
+    check('an overage pays the committed cap now and leaves the excess unpaid (EXCESS_AMOUNT)',
+          e7['status'] == 'PARTIALLY_SETTLED' and e7['paid'] == 99000 and e7['excess'] == 9900
+          and e7['settlement']['payee'] == pol.address('contractor'))
+    w.days(3.2)
+    check('client silence on a clean receipt settles it at the deadline (RELEASED_BY_TIMEOUT)',
+          w.e('E1')['status'] == 'SETTLED' and w.e('E1')['timeout'] == 'RELEASED_BY_TIMEOUT' and w.e('E1')['paid'] == 24200)
+    check('a held request the client never answered expires: no commitment was ever made',
+          w.e('E4')['status'] == 'EXPIRED' and w.e('E4')['paid'] == 0)
+    check('money is conserved (funded = reserved + released + refunded + available)', conserved(w.P), str(w.P.ledger()))
 
-    want = {'E1': ('APPROVE', 'ok'), 'E2': ('APPROVE', 'ok'), 'E3': ('BLOCK', 'merchant_not_allowed'),
-            'E4': ('HOLD', 'over_order_limit'), 'E5': ('BLOCK', 'merchant_not_allowed'),
-            'E6': ('BLOCK', 'outside_window'), 'E7': ('BLOCK', 'stopped')}
-    got = {k: (v['verdict'], v['reason']) for k, v in E.items()}
-    check('story verdicts E1..E7', got == want, str({k: got[k] for k in got if got[k] != want[k]}))
-    check('every decision recorded on chain, BLOCK too (E7 refused: ProjectIsStopped)',
-          all(E[k]['chain']['decision']['ok'] for k in ('E1', 'E2', 'E3', 'E4', 'E5', 'E6'))
-          and E['E7']['chain']['decision']['error'] == 'ProjectIsStopped' and E['E7']['chain']['decision']['tx'] is None)
-    check('rejected HOLD: recorded on chain', hold4['chain']['hold']['ok'])
-    check('silence: tick before the deadline pays nothing, after it pays M2',
-          early.get('paid') == [] and late['paid'] == ['M2'] and late['chain']['release']['ok'] and m1['chain']['release']['ok'])
-    check('stop recorded on chain; the chain now refuses', stop['chain']['stop']['ok'] and sim.project(pid)['stopped'])
+    # -- evidence defect: client cannot waive; supplement cures without moving clocks (ADR 0001, 0005)
+    w.act('contractor', 'request_commitment', document=w.doc('q-vercel-2'))
+    w.act('contractor', 'report_spend', expense='E8')
+    w.act('contractor', 'submit_receipt', expense='E8', document=w.doc('r-blurry'), claimed=33000)
+    e8 = w.e('E8')
+    deadline = e8['review_deadline']
+    check('an unreadable receipt is EVIDENCE_DEFECT and the client cannot approve it',
+          e8['hold_class'] == 'EVIDENCE_DEFECT' and w.refused('client', 'review_settlement', expense='E8', approve=True) is not None)
+    check('a supplement cannot raise the claim or move the deadline, and a bad one keeps the defect',
+          (w.act('contractor', 'supplement_evidence', expense='E8', document=w.doc('r-aws')) or True)
+          and w.e('E8')['hold_class'] == 'EVIDENCE_DEFECT' and w.e('E8')['review_deadline'] == deadline)
+    w.days(3.2)
+    check('at the client deadline a defect escalates to the resolver (ESCALATED_BY_TIMEOUT)',
+          w.e('E8')['status'] == 'DISPUTED' and w.e('E8')['timeout'] == 'ESCALATED_BY_TIMEOUT')
+    w.days(7.2)
+    check('resolver silence on EVIDENCE_DEFECT rejects and returns the reservation',
+          w.e('E8')['status'] == 'REJECTED' and w.e('E8')['reserved'] == 0 and w.e('E8')['paid'] == 0)
 
-    # -- money only leaves on an APPROVE or an approved HOLD, to the registry's address
-    st = pr.state()
-    ev = {k: '0x' + E[k]['log_head'] for k in E}
-    released = [e for e in sim.events(pid) if e['event'] == 'PaymentReleased']
-    backing = {d['evidence']: d for d in st['decisions']}
-    ok = all((backing[e['args']['evidenceHash']]['verdict'] == 'APPROVE'
-              or backing[e['args']['evidenceHash']]['status'] == 'paid' and backing[e['args']['evidenceHash']]['verdict'] == 'HOLD')
-             if e['args']['evidenceHash'] in backing else e['args']['payee'] == pr.address_of('contractor') for e in released)
-    check('every PaymentReleased is an APPROVE, an approved HOLD or a milestone', ok and len(released) == 4)
-    check('escrow holds exactly deposited - paid',
-          sim.balances[sim.escrow] == 4500000 - st['paid'] and st['paid'] == 24200 + 99000 + 1500000 + 2500000)
-    check('payees are registry addresses (E1 -> address_of(gabia), milestones -> contractor)',
-          pr.receipt(E['E1']['seq'])['payee'] == sim.address_of('gabia')
-          and sim.balances.get(sim.address_of('gabia')) == 24200 and sim.balances.get(sim.address_of('contractor')) == 4000000
-          and not sim.balances.get(sim.address_of('fastpay-agency')))
-    probe = copy.deepcopy(sim)
-    probe.projects[pid]['stopped'] = False  # the contract's own checks, as if not stopped
-    check('chain: BLOCK / rejected HOLD not releasable, rejected HOLD not re-approvable',
-          probe.release(pid, ev['E3'], probe.address_of('coupang'), 129000)['error'] == 'NotReleasable'
-          and probe.release(pid, ev['E4'], probe.address_of('adobe-stock'), 203500)['error'] == 'NotReleasable'
-          and probe.approve_hold(pid, ev['E4'])['error'] == 'HoldNotPending')
-    check('chain: a paid decision cannot be paid again to another address',
-          probe.release(pid, ev['E1'], '0x' + 'ab' * 20, 24200)['error'] == 'AlreadyReleased')
-    check('chain: duplicate evidence reverts', probe.record_decision(pid, ev['E1'], h, 24200, 1, probe.address_of('gabia'))['error'] == 'DuplicateDecision')
-    check('chain: policy hash mismatch reverts',
-          probe.record_decision(pid, '0x' + '2' * 64, '0x' + '3' * 64, 1000, 1, probe.address_of('gabia'))['error'] == 'PolicyMismatch')
-    check('chain: APPROVE / HOLD need a payee (ZeroAddress)',
-          probe.record_decision(pid, '0x' + '6' * 64, h, 1000, 1)['error'] == 'ZeroAddress')
-    check('chain: agent-only record/release, client-only hold/stop',
-          probe.record_decision(pid, '0x' + '4' * 64, h, 1000, 1, sender='client')['error'] == 'NotAgent'
-          and probe.stop_project(pid, sender='agent')['error'] == 'NotClient'
-          and probe.approve_hold(pid, ev['E4'], sender='contractor')['error'] == 'NotClient')
-    check('stopped: settle and milestone actions refused off chain',
-          refused(pr.settle, E['E1']['seq'], kst(11, 3, 10)) and refused(pr.submit_milestone, 'M1', kst(11, 3, 10)))
+    # -- milestones: objection is not rejection; resolver silence pays complete claims (ADR 0009)
+    w2 = World(tmp, 'b')
+    w2.activate()
+    w2.act('contractor', 'start_milestone', milestone='M1')
+    w2.act('contractor', 'submit_delivery', milestone='M1', units=['M1-U1', 'M1-U2'], note='시안', documents=[w2.doc('d-m1')])
+    check('the client may object only with a predefined acceptance criterion',
+          w2.refused('client', 'review_delivery', milestone='M1', accept=[],
+                     object=[{'unit': 'M1-U2', 'criterion': '새 기준', 'reason_code': 'NOT_MET', 'reason': 'x'}]) == 'invalid')
+    w2.act('client', 'review_delivery', milestone='M1', accept=['M1-U1'],
+           object=[{'unit': 'M1-U2', 'criterion': '메뉴·매장 안내 페이지', 'reason_code': 'MISSING', 'reason': '매장 안내 없음'}])
+    m1 = w2.P.milestones['M1']
+    check('acceptance pays the accepted unit now; the objected unit goes to the resolver, still reserved',
+          m1['units'][0]['status'] == 'PAID' and m1['units'][1]['status'] == 'DISPUTED' and w2.P.milestone_released == 1000000)
+    w2.act('resolver', 'resolve_milestone', milestone='M1', decisions=[{'unit': 'M1-U2', 'accept': False, 'reason': '누락 확인'}])
+    check('the resolver decides only the disputed unit, within its fixed amount',
+          w2.P.milestones['M1']['status'] == 'PARTIAL' and w2.P.milestones['M1']['returned'] == 500000)
+    w2.act('contractor', 'start_milestone', milestone='M2')
+    w2.act('contractor', 'submit_delivery', milestone='M2', units=['M2-U1'], note='퍼블리싱', documents=[w2.doc('d-m2')])
+    w2.days(3.2)
+    check('client silence after a delivery pays the submitted units (RELEASED_BY_TIMEOUT)',
+          w2.P.milestones['M2']['units'][0]['status'] == 'RELEASED_BY_TIMEOUT' and w2.P.milestones['M2']['status'] == 'PAID')
 
-    # -- close, receipts, replay, audit
-    close = pr.close(kst(11, 3, 11))
-    st = pr.state()
-    check('close refunds deposited - paid - open reservations',
-          close['refund'] == 4500000 - 4123200 - 0 == 376800 and st['refunded'] == 376800 and st['available'] == 0)
-    check('money is conserved at every line of the story (paid + refunded + open reservations <= deposited, == once closed)',
-          not conserved(wd), str(conserved(wd)))
-    r = pr.receipt(E['E2']['seq'])
-    check('receipt names policy, mandate, payee, log head and both txs',
-          r['policy_hash'] == h and r['mandate_hash'] == doc['expense']['mandate_hash'] and r['evidence_hash'] == ev['E2'] == '0x' + r['log_head']
-          and r['decision_tx'] and r['payment_tx'] and r['verdict'] == 'APPROVE' and pr.receipt('M2')['payment_tx'])
-    rp = replay(wd)
-    check('replay(workdir) == live state hash', rp['state_hash'] == pr.state_hash() and rp['log_chain_ok'])
-    check('reopening the log rebuilds the same state', Project(wd).state_hash() == pr.state_hash())
-    a = pr.audit()
-    check('audit all_ok on the honest run (log + policy + chain events alone)',
-          a['all_ok'] and len(a['onchain']) == len(sim.events(pid)) and audit(wd, sim)['all_ok'], str(a['missing']))
+    # -- change orders: out of scope is no obligation until signed and funded (overview §2.4, §5.6)
+    before = w2.P.ledger()
+    w2.act('client', 'draft_change_order', text='회원 로그인 기능도 추가해 주세요')
+    check('a change-order draft has no financial effect', w2.P.ledger() == before and w2.P.change_orders['C1']['status'] == 'DRAFT')
+    check('an unpriced draft cannot be proposed (the contractor prices the work)',
+          w2.refused('contractor', 'propose_change_order', change_order='C1') == 'invalid')
+    w2.act('contractor', 'edit_change_order', change_order='C1',
+           draft={'title': '회원 로그인', 'units': [{'title': '로그인', 'criteria': ['이메일 로그인'], 'amount': 1500000}],
+                  'start_by': '2026-10-20', 'due_at': '2026-11-15', 'grace_days': 2})
+    w2.act('contractor', 'propose_change_order', change_order='C1')
+    w2.act('contractor', 'sign_policy', version=2)
+    check('one signature does not activate the new version', w2.P.active['version'] == 1)
+    w2.act('client', 'sign_policy', version=2)
+    m3 = w2.P.milestones.get('M3')
+    check('signed but not funded: the new milestone is PLANNED and cannot be started',
+          m3 and m3['status'] == 'PLANNED' and w2.refused('contractor', 'start_milestone', milestone='M3') is not None)
+    need = w2.P.funding_needed()
+    check('the deposit it needs is what the available balance lacks', need == 1500000 - w2.P.available, str(need))
+    w2.act('client', 'deposit', amount=need + 100000)
+    check('once funded the new milestone is reserved; earlier commitments keep their pinned version',
+          w2.P.milestones['M3']['status'] == 'FUNDED_AND_RESERVED' and w2.P.milestones['M1']['version'] == 1
+          and w2.P.change_orders['C1']['status'] == 'FUNDED')
 
-    forged = copy.deepcopy(sim)
-    forged.log.append({'event': 'PaymentReleased', 'tx': '0x' + '5' * 64, 'block': 99,
-                       'args': {'projectId': pid, 'evidenceHash': ev['E3'], 'payee': '0x' + 'cd' * 20, 'amount': 129000}})
-    check('audit not ok when a chain event is forged', not audit(wd, forged)['all_ok'])
+    # -- pause and close (ADR 0004; overview §5.9, §10)
+    w2.act('client', 'pause', reason='점검')
+    check('pause stops new commitments', w2.refused('contractor', 'request_commitment', document=w2.doc('q-figma')) is None
+          and w2.P.expenses['E1']['decision']['reason'] == 'state')
+    w2.act('client', 'resume', reason='재개')
+    w2.act('contractor', 'request_commitment', document=w2.doc('q-gabia'))
+    w2.act('client', 'begin_close')
+    check('closing refuses new commitments but keeps existing reservations',
+          w2.refused('contractor', 'draft_change_order', text='x') is not None and w2.P.expenses['E2']['status'] == 'RESERVED')
+    avail = w2.P.available
+    w2.act('client', 'withdraw')
+    check('the client withdraws only unreserved funds', w2.P.refunded == avail and w2.P.expense_reserved == 24200
+          and w2.P.milestone_reserved == 1500000 and conserved(w2.P))
+    w2.act('contractor', 'report_spend', expense='E2')
+    w2.act('contractor', 'submit_receipt', expense='E2', document=w2.doc('r-gabia'), claimed=24200)
+    w2.act('client', 'review_settlement', expense='E2', approve=True)
+    w2.act('contractor', 'cancel_milestone', milestone='M3')
+    w2.act('client', 'withdraw')
+    check('CLOSED only once no obligation is live and nothing is left to refund',
+          w2.P.status == 'CLOSED' and w2.P.available == 0 and conserved(w2.P), str(w2.P.ledger()))
 
-    lines = (wd / 'log.jsonl').read_text().splitlines()
-    k = E['E1']['log_index']
-    ent = json.loads(lines[k])
-    ent['line'] = ent['line'].replace('"amount":22000', '"amount":20000')
-    tampered = tmp / 'tampered'
-    tampered.mkdir()
-    (tampered / 'log.jsonl').write_text('\n'.join(lines[:k] + [json.dumps(ent, ensure_ascii=False)] + lines[k + 1:]) + '\n')
-    ta = audit(tampered, sim)
-    check('a tampered log line breaks the chain check', not ta['log_chain_ok'] and ta['bad_line'] == k and not ta['all_ok'])
-    head, rechained = GENESIS, []
-    for n, s in enumerate((tampered / 'log.jsonl').read_text().splitlines()):
-        e = json.loads(s)
-        head = chain_step(head, e['line'])
-        rechained.append(json.dumps({**e, 'head': head}, ensure_ascii=False))
-    (tampered / 'log.jsonl').write_text('\n'.join(rechained) + '\n')
-    ta = audit(tampered, sim)
-    check('a tampered, re-chained log no longer matches the chain', ta['log_chain_ok'] and not ta['all_ok']
-          and any(c['why'] == 'no log line has this evidence hash as its head' for c in ta['onchain']))
+    # -- the record (overview §9): replay, tampering, no document text in the log
+    for world in (w, w2):
+        R = world.st.replay(world.pid)
+        check(f'replaying the log alone rebuilds the same state ({world.pid[:6]})',
+              R.head == world.P.head and R.ledger() == world.P.ledger()
+              and json.dumps(R.view('client', 0), sort_keys=True, default=str) ==
+              json.dumps(world.P.view('client', 0), sort_keys=True, default=str))
+    log = w.st.path(w.pid).read_text()
+    check('the log keeps document hashes, never document text', all(SAMPLES[k]['text'][:40] not in log for k in SAMPLES))
+    lines = log.splitlines()
+    forged = json.loads(lines[5])
+    forged['params'] = {**forged['params'], 'amount': 1} if 'amount' in forged.get('params', {}) else {**forged['params'], 'x': 1}
+    from escrow.engine import Project
+    P = Project(w.pid)
+    for text in lines[:5]:
+        P.apply(json.loads(text))
+    try:
+        P.apply(forged)
+        check('an edited line is refused (its signature no longer matches)', False)
+    except Refused as e:
+        check('an edited line is refused (its signature no longer matches)', e.code == 'forbidden')
+    back = json.loads(lines[-1])
+    back['at'] = 0
+    back['sig'] = pol.sign(back['by'], raw({k: v for k, v in back.items() if k != 'sig'})) if back['by'] in pol.ROLES else None
+    try:
+        w.st.replay(w.pid).apply(back)
+        check('a line dated before the last one is refused', False)
+    except Refused:
+        check('a line dated before the last one is refused', True)
 
-    entries = [json.loads(s) for s in lines]
-    unsigned = [dict(e, line=json.dumps({x: y for x, y in json.loads(e['line']).items() if x != 'signature'},
-                                         sort_keys=True, separators=(',', ':'), ensure_ascii=False))
-                if json.loads(e['line'])['op'] == 'accept' else e for e in entries]
-    backwards = [dict(e, line=e['line'].replace(f'"at":{kst(10, 3, 14)}', f'"at":{kst(10, 1, 9)}')) if n == E['E2']['log_index']
-                 else e for n, e in enumerate(entries)]
-    refolds = []
-    for name, forged_lines in (('unsigned', unsigned), ('backwards', backwards)):
-        (tmp / f'forged-{name}').mkdir()
-        (tmp / f'forged-{name}' / 'log.jsonl').write_text(rechain(forged_lines))
-        refolds.append(audit(tmp / f'forged-{name}'))
-    check('replay refuses a re-chained log whose accept line has no signature, or whose clock goes back',
-          all(r['log_chain_ok'] and r['replay_error'] and not r['all_ok'] for r in refolds)
-          and 'signature' in refolds[0]['replay_error'] and 'clock' in refolds[1]['replay_error'], str(refolds))
-
-    adversarial(tmp)
-    after_close(tmp)
-    readings()
-
-
-def adversarial(tmp):
-    """Unreadable readings, an approved HOLD, a redirected release (refused), and a decision the agent key records
-    on its own (the contract cannot tell; the audit does)."""
-    sim = SimEscrow()
-    pr, doc = activated(tmp / 'adv', sim)
-    pid = pr.project_id
-    u = pr.request_ai_failed(src('흐릿한 스캔'), kst(10, 2, 9))
-    check('unreadable reading -> HOLD unreadable, not approvable with no amount',
-          (u['verdict'], u['reason']) == ('HOLD', 'unreadable') and refused(pr.hold, u['seq'], True, kst(10, 2, 10)))
-    u2 = pr.request_expense(P('fastpay-agency', '송금', 180000, 0), src('계좌 변경 안내'), kst(10, 2, 11), unreadable=True)
-    check('unreadable but pays an unlisted vendor -> BLOCK', (u2['verdict'], u2['reason']) == ('BLOCK', 'merchant_not_allowed'))
-    hd = pr.request_expense(P('adobe-stock', '이미지 팩', 185000, 18500), src('Adobe Stock 견적'), kst(10, 3, 9))
-    pr.hold(hd['seq'], True, kst(10, 3, 10))
-    paid = pr.settle(hd['seq'], kst(10, 3, 11))
-    check('a client-approved HOLD is paid (on chain too)', paid['chain']['release']['ok']
-          and sim.balances.get(sim.address_of('adobe-stock')) == 203500)
-    e1 = pr.request_expense(P('gabia', '도메인 1년', 22000, 2200), src('가비아'), kst(10, 4, 9))
-    evid = '0x' + e1['log_head']
-    check('contract: a release to another address than the recorded payee reverts (PayeeMismatch)',
-          sim.release(pid, evid, '0x' + 'ee' * 20, 24200)['error'] == 'PayeeMismatch')
-    rogue, thief = '0x' + '5' * 64, '0x' + 'ee' * 20  # the agent key records and pays a decision of its own
-    stolen = [sim.record_decision(pid, rogue, pr.state()['policy_hash'], 24200, 1, thief), sim.release(pid, rogue, thief, 24200)]
-    check('the agent key can still record and pay a decision no log line backs (known gap)', all(t['ok'] for t in stolen))
-    a = pr.audit()
-    bad = [c for c in a['onchain'] if not c['ok']]
-    check('audit catches it (no log line has that evidence hash)', not a['all_ok'] and len(bad) == 2
-          and {c['event'] for c in bad} == {'DecisionRecorded', 'PaymentReleased'}, str(bad))
-    later = pr.settle(e1['seq'], kst(10, 4, 10))
-    check('the honest settle still pays the recorded payee; the audit stays not ok',
-          later['chain']['release']['ok'] and not pr.audit()['all_ok'])
-    check('replay == live after chain failures (chain results never change decisions)',
-          replay(pr.dir)['state_hash'] == pr.state_hash() and verify_chain([json.loads(s) for s in
-                                                                              (pr.dir / 'log.jsonl').read_text().splitlines()])[0])
+    # -- retroactive: silence never pays (ADR 0005)
+    w3 = World(tmp, 'c')
+    w3.activate()
+    w3.act('contractor', 'retroactive_request', document=w3.doc('q-figma'))
+    w3.days(3.2)
+    check('a retroactive request the client ignores is rejected, not paid',
+          w3.P.expenses['E1']['status'] == 'REJECTED' and w3.P.expense_released == 0)
+    w3.act('contractor', 'retroactive_request', document=w3.doc('q-vercel'))
+    w3.act('client', 'answer_request', expense='E2', approve=True)
+    check('an approved retroactive request settles at once, within the budget',
+          w3.P.expenses['E2']['status'] == 'SETTLED' and w3.P.expense_released == 33000 and conserved(w3.P))
+    w3.days(3)
+    check('an unstarted milestone past start_by expires and returns its reservation (EXPIRED_UNUSED)',
+          w3.P.milestones['M1']['status'] == 'EXPIRED_UNUSED' and w3.P.milestone_reserved == 2500000)
 
 
-def after_close(tmp):
-    """Close with an APPROVE reserved, a HOLD pending and M1 in review: only what close counted is paid after it."""
-    sim = SimEscrow()
-    pr, doc = activated(tmp / 'closed', sim)
-    a = pr.request_expense(P('gabia', '도메인 1년', 22000, 2200), src('가비아'), kst(10, 2, 9))
-    b = pr.request_expense(P('adobe-stock', '이미지 팩', 185000, 18500), src('Adobe Stock'), kst(10, 2, 10))
-    pr.submit_milestone('M1', kst(10, 2, 11))
-    close = pr.close(kst(10, 2, 12))
-    t = kst(10, 2, 13)
-    check('close with open reservations: refund = deposited - E1 reserved - M1 in review; owed fixed',
-          (a['verdict'], b['verdict']) == ('APPROVE', 'HOLD') and close['refund'] == 4500000 - 24200 - 1500000
-          and close['owed'] == {'decisions': [a['seq']], 'milestones': ['M1']})
-    check('CLOSED: new requests, HOLD answers, submissions refused',
-          all('CLOSED' in w for w in (why(pr.request_expense, P('gabia', 'x', 1000, 100), src('x'), t),
-                                      why(pr.hold, b['seq'], True, t), why(pr.hold, b['seq'], False, t),
-                                      why(pr.submit_milestone, 'M2', t))))
-    settled = pr.settle(a['seq'], t)
-    silence = pr.tick(kst(10, 6, 12))
-    st = pr.state()
-    check('CLOSED: what close counted is still paid (E1 settle, M1 by silence), then nothing more',
-          settled['chain']['release']['ok'] and silence['paid'] == ['M1'] and st['paid'] == 24200 + 1500000
-          and st['paid'] + st['refunded'] == st['deposited'] and st['reserved'] == 0 and st['available'] == 0
-          and refused(pr.settle, a['seq'], kst(10, 6, 13)) and refused(pr.accept_milestone, 'M1', kst(10, 6, 13))
-          and refused(pr.hold, b['seq'], True, kst(10, 6, 13)) and refused(pr.submit_milestone, 'M2', kst(10, 6, 13)))
-    check('CLOSED: money conserved at every line; replay == live', not conserved(pr.dir)
-          and replay(pr.dir)['state_hash'] == pr.state_hash(), str(conserved(pr.dir)))
+def categories(tmp):
+    w = World(tmp, 'd', caps={'hosting': 40000})
+    w.activate()
+    w.act('contractor', 'request_commitment', document=w.doc('q-vercel'))
+    w.act('contractor', 'request_commitment', document=w.doc('q-vercel-2'))
+    check('a category budget (ADR 0002 categoryBudgets) blocks the request that would exceed it',
+          w.P.expenses['E1']['status'] == 'RESERVED' and w.P.expenses['E2']['decision']['reason'] == 'category_budget')
 
 
-def readings():
-    """read_quote's code half (ai.proposal_of, vendor_of) on fixed model answers: no Kiln call."""
-    doc = '공급자: (주)가비아\n공급가액 185,000원\n부가세 18,500원\n합계 203,500원'
-    A = {'vendor_text': '(주)가비아', 'amount_text': '185,000', 'fee_text': '18,500', 'total_text': '203,500', 'units': 1}
-    ok, _, _ = ai.proposal_of(A, doc)
-    fee0, _, why0 = ai.proposal_of({**A, 'fee_text': '0', 'total_text': None}, doc)
-    fee0b, _, _ = ai.proposal_of({**A, 'fee_text': '0', 'total_text': '185,000'}, doc)
-    nototal, _, _ = ai.proposal_of({**A, 'total_text': ''}, doc)
-    novat, _, _ = ai.proposal_of({**A, 'fee_text': '0', 'total_text': '185,000'}, '가비아\n금액 185,000원\n합계 185,000원')
-    check('reading: total required and in the document; fee 0 only with no 부가세/VAT line; whole KRW',
-          ok == {'merchant': 'gabia', 'category': 'domain', 'item': '', 'amount': 185000, 'fee': 18500, 'units': 1}
-          and fee0 is None and fee0b is None and nototal is None and novat and novat['fee'] == 0
-          and ai.proposal_of({**A, 'total_text': '203,501'}, doc + ' 203,501')[0] is None
-          and ai.proposal_of({**A, 'amount_text': '185,000.5', 'total_text': '203,500.5'}, doc + ' 185,000.5 203,500.5')[0] is None,
-          str(why0))
-    names = {t: (ai.vendor_of(t)[0] or {}).get('id') for t in (
-        'Laws Consulting', 'Amazon Web Services Korea LLC (아마존 웹 서비스 코리아 유한회사)', 'Figma, Inc. (피그마)', '쿠팡(주)',
-        'Adobe Stock (어도비 스톡) - Adobe Systems Korea', 'Vercel Inc. (버셀)', 'AWS Marketplace Reseller', '주식회사 가비아')}
-    check('reading: vendors map by exact normalised name only (Laws Consulting is not aws)',
-          names == {'Laws Consulting': None, 'Amazon Web Services Korea LLC (아마존 웹 서비스 코리아 유한회사)': 'aws',
-                    'Figma, Inc. (피그마)': 'figma', '쿠팡(주)': 'coupang', 'Adobe Stock (어도비 스톡) - Adobe Systems Korea':
-                    'adobe-stock', 'Vercel Inc. (버셀)': 'vercel', 'AWS Marketplace Reseller': None, '주식회사 가비아': 'gabia'}
-          and ai.vendor_of('AWS (Vercel)')[1], str(names))
+def main():
+    began = time.perf_counter()
+    tmp = tempfile.mkdtemp(prefix='ploby-check-')
+    try:
+        run(tmp)
+        categories(tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    failed = [n for n, ok in RESULTS if not ok]
+    print(f"\n{len(RESULTS) - len(failed)} checks passed" + (f', {len(failed)} FAILED' if failed else '') +
+          f' in {time.perf_counter() - began:.1f} s')
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':

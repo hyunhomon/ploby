@@ -15,5 +15,9 @@
   "quote": {
     "model": "qwen3-32b",
     "think": false
+  },
+  "change": {
+    "model": "qwen3-32b",
+    "think": false
   }
 }

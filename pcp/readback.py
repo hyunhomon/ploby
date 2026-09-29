@@ -283,7 +283,7 @@ def text(f, domain, lang='ko'):
     elif not yes:
         who = ('목록에 없는 곳만' if unlisted else '없음 — 결제할 수 있는 곳이 없습니다') if ko else \
               ('only unlisted ones' if unlisted else 'none — nothing can be paid')
-    elif len(yes) <= len(no):
+    elif len(yes) <= len(no) or not unlisted:  # an allow-list (nothing unlisted) reads as the ones allowed
         who = (f'{names(yes)}만' + (' (목록에 없는 곳도 허용)' if unlisted else '')) if ko else \
               (f'only {names(yes)}' + (' (and unlisted ones)' if unlisted else ''))
     else:
