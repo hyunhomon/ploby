@@ -1,6 +1,12 @@
-A Smart Escrow system that uses AI to interpret project contracts, budgets, and financial evidence, and releases only expenses that comply with pre-agreed conditions.
+A bilateral Smart Escrow system that pre-funds outsourced work and project expenses, uses AI to interpret supporting documents, and enforces accepted commitments with deterministic rules.
 
 Phase 1 is the Base Sepolia contracts only. The API, UI, and demo evidence table are not built yet.
+
+> **Legacy prototype warning:** the current Solidity contracts implement only the original Phase 1 expense demo. They do not bind a decision to its payee, provide refunds after `stopProject`, reserve milestone or expense funds, or implement the accepted target architecture. Do not use the current deployment script for real funds or represent it as the target SmartEscrow protocol.
+
+The accepted target architecture is documented in [`docs/adr`](docs/adr/README.md). Those ADRs include bilateral purchase commitments, settlement deadlines, policy versioning, refunds, asset handover, and shared-expense allocation that the current Phase 1 contracts do not yet implement.
+
+For a human-readable introduction, start with [`docs/README.md`](docs/README.md), then read the product overview, end-to-end flows, system architecture, and terminology guide.
 
 ## Quickstart
 
@@ -8,7 +14,7 @@ Phase 1 is the Base Sepolia contracts only. The API, UI, and demo evidence table
 forge test
 ```
 
-Deploy to Base Sepolia when you have a funded deployer key and the backend signer address. This does not run as part of `forge test`.
+Deploy the legacy prototype to Base Sepolia only when reproducing the original Phase 1 demo. This does not run as part of `forge test`.
 
 ```shell
 export ESCROW_AGENT=0xYourBackendSigner
