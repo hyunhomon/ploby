@@ -2,7 +2,7 @@
 
 ## One sentence
 
-SmartEscrow turns outsourced work, project expenses, and scope changes into funded, deadline-backed commitments that neither the client nor contractor can rewrite alone.
+Ploby turns outsourced work, project expenses, and scope changes into funded, deadline-backed commitments that neither the client nor contractor can rewrite alone.
 
 ## The problem
 
@@ -14,7 +14,7 @@ Outsourced projects usually rely on informal promises at the moments when money 
 - Additional work appears in chat without a corresponding budget or schedule change.
 - Project accounts, domains, subscriptions, and licenses remain under the wrong party's control at close.
 
-A conventional expense approval tool solves only the client's visibility problem. SmartEscrow treats payment assurance and client control as equal requirements.
+A conventional expense approval tool solves only the client's visibility problem. Ploby treats payment assurance and client control as equal requirements.
 
 ## The product promise
 
@@ -38,7 +38,7 @@ A conventional expense approval tool solves only the client's visibility problem
 
 ## Two kinds of obligation
 
-SmartEscrow keeps work compensation and project expenses separate.
+Ploby keeps work compensation and project expenses separate.
 
 ### Work milestone
 

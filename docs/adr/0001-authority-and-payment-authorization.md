@@ -6,7 +6,7 @@
 
 ## Context
 
-SmartEscrow uses an LLM to extract meaning from contracts, expense requests, and evidence. A deterministic policy engine evaluates that structured input. The product claim is that AI interprets information while code controls permission.
+Ploby uses an LLM to extract meaning from contracts, expense requests, and evidence. A deterministic policy engine evaluates that structured input. The product claim is that AI interprets information while code controls permission.
 
 The Phase 1 contract uses one backend `agent` address to record decisions and release funds. The payee is stored when the decision is recorded, and `release` reverts if the caller substitutes another address. The agent still chooses that payee, so the signer remains a trusted spending authority. The target design binds the payee in the bilateral commitment before the backend signs.
 
@@ -37,7 +37,7 @@ The MVP policy signer, resolver, and Evidence Attestation Service are explicitly
 
 The policy signer, evidence attestor, resolver, and administrator use separate keys. The administrator is a multisig before any non-demo deployment. The service registry appends monotonically increasing signer epochs and may revoke a compromised epoch for new submissions. Already recorded obligations and attestations remain immutable; an envelope from a revoked epoch that was never accepted on-chain is rejected. Rotation never changes, cancels, or revives an existing obligation.
 
-A resolver decision is final for the on-chain obligation. The MVP has no on-chain appeal. Contractual or legal rights outside SmartEscrow remain unaffected, but an external claim does not rewrite the immutable settlement record.
+A resolver decision is final for the on-chain obligation. The MVP has no on-chain appeal. Contractual or legal rights outside Ploby remain unaffected, but an external claim does not rewrite the immutable settlement record.
 
 ## Typed authorization payloads
 
