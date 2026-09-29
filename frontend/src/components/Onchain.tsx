@@ -315,7 +315,11 @@ export function AuditCard({ view }: { view: ProjectView }) {
                 payments: v.payments,
                 inside: v.inside,
                 stops: v.stops,
-                state: v.records_consistent ? t("audit.consistent") : t("audit.inconsistent"),
+                state: v.records_consistent
+                  ? t("audit.consistent")
+                  : v.chain === "unreachable"
+                    ? t("audit.unverified")
+                    : t("audit.inconsistent"),
               })}
             </Banner>
           )}
@@ -385,7 +389,7 @@ export function AuditCard({ view }: { view: ProjectView }) {
           {report.chain && (
             <>
               <h3 className="agent-h">{t("audit.chain")}</h3>
-              {report.chain.error && <p className="muted small">{report.chain.error}</p>}
+              {report.chain.error && <Banner tone="bad">{t("audit.unreachable", { error: report.chain.error })}</Banner>}
               <ul className="audit-checks">
                 {report.chain.balances_match !== undefined && (
                   <li>

@@ -465,11 +465,119 @@ def rare_paths(tmp):
           and conserved(w.P), str((w.e('E1')['status'], w.e('E1')['excess_paid'], w.e('E2')['status'])))
 
 
+class ChainStub:
+    """A chain that holds exactly what the log's calls imply (their events, balances and reservations), or that is
+    unreachable; for the auditor's chain checks without a network."""
+    escrow, chain_id = '0x' + '00' * 20, 10143
+
+    def __init__(self, pid, lines, down=False):
+        from escrow import audit, chain
+        from escrow.engine import Project
+        self.pid, self.down, self.receipts = pid, down, {}
+        P, todo, done = chain.plan(pid, lines, Project)
+        contractor = (P.active or P.versions[0])['doc']['contractorAddress']
+        model = Escrow()
+        for c in todo:
+            model.apply(c)
+            r = done.get((c['line'], c['n']))
+            if r and r.get('tx'):
+                event, want = audit.expected(c, pid, P.log[c['line']]['head'], contractor)
+                self.receipts[r['tx']] = {'status': '0x1', 'blockNumber': '0x1', 'events': [{'event': event, 'args': want}]}
+        self.state, self.held, self.contractor = model.p.get(pid), model.held, contractor
+        m = chain.money(P)
+        self.policy = m['active']
+
+    def _up(self):
+        if self.down:
+            raise RuntimeError('eth_call: RPC unreachable')
+
+    def receipt(self, tx, wait=0):
+        self._up()
+        return self.receipts.get(tx)
+
+    def events_of(self, receipt):
+        return receipt['events']
+
+    def project(self, pid):
+        self._up()
+        p = self.state
+        return p and {'client': '0x' + '11' * 20, 'contractor': self.contractor, 'policy_hash': self.policy,
+                      'budget': p['budget'], 'funded': p['funded'], 'reserved': p['reserved'], 'paid': p['paid'],
+                      'refunded': p['refunded'], 'paused': p['paused'], 'log_head': '0x',
+                      'available': p['funded'] - p['reserved'] - p['paid'] - p['refunded']}
+
+    def reserved_for(self, pid, ref):
+        self._up()
+        return self.held.get((pid, ref), 0)
+
+    def applied(self, pid, head, n):
+        return True
+
+    def tx_url(self, tx):
+        return f'https://testnet.monadvision.com/tx/{tx}' if tx else None
+
+    def address_url(self, address):
+        return f'https://testnet.monadvision.com/address/{address}'
+
+
+def chain_paths(tmp):
+    """The worker's and the auditor's handling of the network, with stubs: a failure is retried, never logged as a
+    refusal; an earlier send that lands is used; an unreadable chain is never called consistent."""
+    from escrow import audit, chain
+    from escrow.engine import Project
+    call = {'pid': 'p1', 'line': 3, 'n': 0, 'head': 'a' * 64, 'call': 'fund', 'args': {'amount': 1}}
+    ok = {'tx': '0x' + '1' * 64, 'ok': True, 'error': None, 'block': 7, 'seconds': 0}
+
+    class Flaky:
+        roles = {'client': '0x' + '11' * 20}
+
+        def __init__(self, answers):
+            self.answers, self.sent = list(answers), 0
+
+        def send(self, c):
+            self.sent += 1
+            return self.answers.pop(0)
+
+        def receipt(self, tx, wait=0):
+            return {'status': '0x1', 'blockNumber': '0x9'} if tx == '0x' + '2' * 64 else None
+
+        def applied(self, pid, head, n):
+            return True
+    got = []
+    w = chain.Worker(Flaky([{'tx': None, 'ok': False, 'error': 'rpc'}, {'tx': None, 'ok': False, 'error': 'rpc'}, ok]),
+                     lambda c, r: got.append(r), backoff=0.001)
+    first = w.deliver(call)
+    late = chain.Worker(Flaky([{'tx': '0x' + '2' * 64, 'ok': False, 'error': 'no_receipt'}]), None, backoff=0.001).deliver(call)
+    check('a network failure is retried in order, never logged as a refusal; a send that lands late is used',
+          first == ok and late['tx'] == '0x' + '2' * 64 and late['ok'] and late['block'] == 9)
+    w = World(tmp, 'h')
+    w.activate()
+    w.act('contractor', 'request_commitment', document=w.doc('q-gabia'))
+    w.act('contractor', 'request_commitment', document=w.doc('q-coupang'))
+    w.act('client', 'pause', reason='점검')
+    w.st.rail = StubRail()
+    for n, c in enumerate(chain.plan(w.pid, w.st.lines(w.pid), Project)[1], 1):
+        w.st.chain_result(c, {'tx': '0x%064x' % n, 'ok': True, 'error': None, 'block': n})
+    lines = w.st.lines(w.pid)
+    P = audit.replay(w.pid, lines)[0]
+    stub = ChainStub(w.pid, lines)
+    clean = audit.check_chain(w.pid, P, lines, stub)
+    ev = stub.receipts['0x%064x' % 1]['events'][0]
+    ev['args'] = {**ev['args'], 'logHead': '0x' + '0' * 64}
+    tampered = audit.check_chain(w.pid, P, lines, stub)
+    down = audit.audit(str(w.st.path(w.pid)), str(w.st.root), rail=ChainStub(w.pid, lines, down=True))['verdict']
+    check("the auditor matches every logged call to its line, and the chain's balances, reservations, policy and pause "
+          'to the replayed project', clean['problems'] == [] and len(clean['calls']) >= 5, str(clean['problems'][:2]))
+    check('an event that names another log head is caught; an unreadable chain is never called consistent',
+          any('differs from its line' in x for x in tampered['problems'])
+          and down['chain'] == 'unreachable' and not down['records_consistent'])
+
+
 def onchain(tmp):
     """The chain mirror (escrow/chain.py, src/PlobyEscrow.sol), from every scenario above; no network."""
     from escrow import chain
     from escrow.engine import Project
-    refused, mismatched, every = [], [], []
+    refused, mismatched, every, opens = [], [], [], []
     for world in WORLDS:  # one contract per scenario (their project ids may coincide)
         model = Escrow()
         P, todo, _ = chain.plan(world.pid, world.st.lines(world.pid), Project)
@@ -483,9 +591,12 @@ def onchain(tmp):
                 'refunded': L['refunded']}
         if (p and {k: p[k] for k in want} != want) or (not p and L['funded']):
             mismatched.append(f"{world.pid[:6]} {p} != {want}")
-        held = {ref: r for ref, (r, _) in chain.money(P)['refs'].items() if r}
-        if {ref: model.held.get((world.pid, ref), 0) for ref in held} != held:
+        refs = set(chain.money(P)['refs']) | {ref for (pid, ref) in model.held if pid == world.pid}
+        engine_held = {ref: chain.money(P)['refs'].get(ref, (0, 0))[0] for ref in refs}
+        if {ref: model.held.get((world.pid, ref), 0) for ref in refs} != engine_held:
             mismatched.append(f"{world.pid[:6]} per-ref reservations differ")
+        v1 = P.versions[0] if P.versions else None
+        opens.extend((c, v1) for c in todo if c['call'] == 'open')
     check('every money change in every scenario is a contract call PlobyEscrow accepts (its rules, in Python)',
           not refused and every, '; '.join(refused[:3]))
     check('after those calls the contract holds exactly the engine ledger (funded, reserved per ref, paid, refunded)',
@@ -493,10 +604,10 @@ def onchain(tmp):
     kinds = {(c['call'], c['args'].get('decision')) for c in every}
     check('a stop is recorded on chain, never silent: BLOCK and HOLD decisions and the client pause are calls',
           {('decide', 'BLOCK'), ('decide', 'HOLD'), ('pause', None)} <= kinds, str(sorted(kinds, key=str)))
-    opens = [c for c in every if c['call'] == 'open']
     check('the contract is opened with the signed policy hash and can pay only the contractor fixed in it',
-          opens and all(c['args']['contractor'] == pol.address('contractor') and c['args']['policy'].startswith('0x')
-                        for c in opens))
+          opens and all(c['args']['policy'] == v1['hash'] and c['args']['contractor'] == v1['doc']['contractorAddress']
+                        == pol.address('contractor') and c['args']['budget'] == v1['doc']['projectBudget']
+                        for c, v1 in opens))
     w = WORLDS[0]
     c = next(c for c in chain.plan(w.pid, w.st.lines(w.pid), Project)[1] if c['call'] == 'decide')
     before, tx = w.P.ledger(), '0x' + 'ab' * 32
@@ -527,6 +638,7 @@ def main():
         auditor(tmp)
         rare_paths(tmp)
         onchain(tmp)
+        chain_paths(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     failed = [n for n, ok in RESULTS if not ok]

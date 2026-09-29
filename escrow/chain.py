@@ -55,7 +55,7 @@ EVENTS = {  # name -> (indexed [(field, type)], data [(field, type)]), in the So
                 [('paid', 'uint256'), ('returned', 'uint256'), ('logHead', 'bytes32')]),
     'Refunded': ([('projectId', 'bytes32'), ('client', 'address')], [('amount', 'uint256'), ('logHead', 'bytes32')]),
 }
-TRANSIENT = {'rpc', 'no_receipt', 'nonce', 'send_failed'}  # never logged: the call stays first in line until it goes
+TRANSIENT = {'rpc', 'no_receipt', 'nonce', 'send_failed'}  # the network, not the contract: retried, never logged
 CALL_EVENT = {'open': 'Opened', 'fund': 'Funded', 'accept': 'PolicyAccepted', 'pause': 'PauseSet',
               'decide': 'Decided', 'settle': 'Settled', 'refund': 'Refunded'}
 
@@ -69,12 +69,15 @@ def money(P):
     for m in P.milestones.values():
         refs[m['id']] = (sum(u['amount'] for u in m['units'] if u['status'] in HELD),
                          sum(u['amount'] for u in m['units'] if u['status'] in PAID))
+    excess = {}
     for e in P.expenses.values():
         refs[e['id']] = (e['reserved'], e['paid'])
         decided[e['id']] = (e['decision'] or {}).get('result')
+        excess[e['id']] = e['excess_paid']
     return {'policy': v and v['hash'], 'active': P.active and P.active['hash'],
             'budget': v['doc']['projectBudget'] if v else 0, 'contractor': v and v['doc']['contractorAddress'],
-            'funded': P.funded, 'refunded': P.refunded, 'paused': P.paused, 'refs': refs, 'decided': decided}
+            'funded': P.funded, 'refunded': P.refunded, 'paused': P.paused, 'refs': refs, 'decided': decided,
+            'excess': excess}
 
 
 def rule_of(e):
@@ -108,6 +111,7 @@ def calls(pid, i, head, m0, m1, P):
         e = P.expenses.get(ref)
         if need > 0:
             rule = ('milestone' if ref in P.milestones else 'all_rules_passed' if ref not in m0['refs']
+                    else 'change_order' if m1['excess'].get(ref, 0) > m0['excess'].get(ref, 0)
                     else 'client_approved' if m0['decided'].get(ref) == 'HOLD' else 'change_order')
             add('decide', ref=ref, decision='APPROVE', rule=rule, amount=need, policy=m1['active'])
         elif e and ref not in m0['refs'] and m1['decided'].get(ref) in ('HOLD', 'BLOCK'):
@@ -245,7 +249,8 @@ class Rail:
         self.topics = {self.keccak(f'{n}({",".join(t for _, t in ix + data)})'): n for n, (ix, data) in EVENTS.items()}
         self.fn = {name: self.keccak(sig)[:10] for name, sig in
                    {'projects': 'projects(bytes32)', 'available': 'available(bytes32)',
-                    'reservedFor': 'reservedFor(bytes32,bytes32)', 'balanceOf': 'balanceOf(address)'}.items()}
+                    'reservedFor': 'reservedFor(bytes32,bytes32)', 'balanceOf': 'balanceOf(address)',
+                    'applied': 'applied(bytes32)'}.items()}
 
     def tx_url(self, tx):
         return f'{self.explorer_base}tx/{tx}' if tx else None
@@ -296,11 +301,15 @@ class Rail:
         raise RuntimeError(f'{method}: RPC {why}')
 
     def _error(self, err):
+        """The custom error a failed estimate names, 'reverted' for a revert without a known one, or None when the
+        node failed rather than the contract (the call is then retried, never logged as a refusal)."""
         data = f"{err.get('data') or ''} {err.get('message') or ''}"
         for s in re.findall(r'0x[0-9a-fA-F]{8}', data):
             if s.lower() in self.errors:
                 return self.errors[s.lower()]
-        return 'reverted'
+        if err.get('code') == 3 or re.search(r'revert', str(err.get('message') or ''), re.I):
+            return 'reverted'
+        return None
 
     def _send(self, who, to, data):
         """Estimate, then send and wait for the receipt. A call the contract would refuse is not sent."""
@@ -311,7 +320,7 @@ class Rail:
         with self.lock:
             est = self._rpc('eth_estimateGas', [{'from': sender, 'to': to, 'data': data}], raw=True)
             if 'error' in est:
-                return done(error=self._error(est['error']))
+                return done(error=self._error(est['error']) or 'rpc')
             if who not in self.nonces:
                 self.nonces[who] = int(self._rpc('eth_getTransactionCount', [sender, 'pending']), 16)
             try:
@@ -322,8 +331,12 @@ class Rail:
                 return done(error='nonce' if 'nonce' in str(e).lower() else 'send_failed')
             self.nonces[who] += 1
             tx = re.search(r'0x[0-9a-fA-F]{64}', out).group(0)
-            receipt = self.receipt(tx, wait=90)
+            try:
+                receipt = self.receipt(tx, wait=90)
+            except RuntimeError:
+                receipt = None
             if not receipt:
+                self.nonces.pop(who, None)  # read the pending nonce again: a dropped tx leaves no gap behind it
                 return done(tx, error='no_receipt')
             ok = int(receipt['status'], 16) == 1
             return done(tx, ok, None if ok else 'reverted', int(receipt['blockNumber'], 16))
@@ -338,25 +351,36 @@ class Rail:
 
     # the calls
     def calldata(self, c):
-        a, pid, head, n = c['args'], b32(c['pid']), h32(c['head']), str(c['n'])
+        """The ABI calldata of a call (every argument is a static type): selector + one word per argument."""
+        a, pid, head, n = c['args'], b32(c['pid']), h32(c['head']), int(c['n'])
         values = {
-            'open': [pid, a.get('contractor'), h32(a.get('policy') or ''), a.get('budget'), head],
-            'fund': [pid, a.get('amount'), head, n],
-            'accept': [pid, h32(a.get('policy') or ''), a.get('budget'), head, n],
-            'pause': [pid, 'true' if a.get('paused') else 'false', head, n],
-            'decide': [pid, b32(a.get('ref')), DECISION.get(a.get('decision'), 0), b32(a.get('rule')), a.get('amount'),
-                       h32(a.get('policy') or ''), head, n],
-            'settle': [pid, b32(a.get('ref')), a.get('pay'), a.get('returned'), head, n],
-            'refund': [pid, a.get('amount'), head, n],
-        }[c['call']]
-        return self._cast('calldata', SIGNATURES[c['call']], *[str(v) for v in values])
+            'open': lambda: [pid, a['contractor'], h32(a['policy']), a['budget'], head],
+            'fund': lambda: [pid, a['amount'], head, n],
+            'accept': lambda: [pid, h32(a['policy']), a['budget'], head, n],
+            'pause': lambda: [pid, int(bool(a['paused'])), head, n],
+            'decide': lambda: [pid, b32(a['ref']), DECISION[a['decision']], b32(a['rule']), a['amount'], h32(a['policy']),
+                               head, n],
+            'settle': lambda: [pid, b32(a['ref']), a['pay'], a['returned'], head, n],
+            'refund': lambda: [pid, a['amount'], head, n],
+        }[c['call']]()
+        for v in values:
+            if isinstance(v, str) and not re.fullmatch(r'0x[0-9a-fA-F]{40}|0x[0-9a-fA-F]{64}', v):
+                raise ValueError(f'not an address or bytes32: {v!r}')
+            if isinstance(v, int) and not 0 <= v < 2 ** 256:
+                raise ValueError(f'out of range: {v}')
+        return self.keccak(SIGNATURES[c['call']])[:10] + ''.join(word(v) for v in values)
 
     def send(self, c):
+        """One call's result: sent, refused by the contract (its error named), 'invalid' when its calldata cannot be
+        built (logged, never retried), or one of TRANSIENT when the network failed (retried by the worker)."""
         try:
-            return self._send(WHO[c['call']], self.escrow, self.calldata(c))
-        except (RuntimeError, TimeoutError, KeyError) as e:
-            return {'tx': None, 'ok': False, 'error': 'rpc' if 'RPC' in str(e) or 'HTTP' in str(e) else 'failed',
-                    'block': None, 'seconds': 0}
+            data = self.calldata(c)
+        except (KeyError, TypeError, ValueError):
+            return {'tx': None, 'ok': False, 'error': 'invalid', 'block': None, 'seconds': 0}
+        try:
+            return self._send(WHO[c['call']], self.escrow, data)
+        except (RuntimeError, TimeoutError, OSError, ValueError):
+            return {'tx': None, 'ok': False, 'error': 'rpc', 'block': None, 'seconds': 0}
 
     # reads
     def _call(self, data):
@@ -376,6 +400,11 @@ class Rail:
 
     def reserved_for(self, pid, ref):
         return int(self._call(self.fn['reservedFor'] + word(b32(pid)) + word(b32(ref))), 16)
+
+    def applied(self, pid, head, n):
+        """Did the contract apply the call keyed (project, log head, n)? (`key` in PlobyEscrow.sol)"""
+        k = keccak256(bytes.fromhex(word(b32(pid)) + word(h32(head)) + word(int(n))))
+        return bool(int(self._call(self.fn['applied'] + k.hex()), 16))
 
     def balance(self, address):
         out = self._rpc('eth_call', [{'to': self.token, 'data': self.fn['balanceOf'] + word(address)}, 'latest'])
@@ -400,11 +429,13 @@ class Rail:
 
 
 class Worker(threading.Thread):
-    """Sends the calls one by one, in log order, and hands each result to `record(call, result)`."""
+    """Sends the calls one by one, in log order, and hands each final result to `record(call, result)`. A network
+    failure is never recorded: the call stays first in line and is tried again, after checking whether an earlier
+    send of it landed after all."""
 
-    def __init__(self, rail, record):
+    def __init__(self, rail, record, backoff=2.0):
         super().__init__(daemon=True, name='ploby-chain')
-        self.rail, self.record = rail, record
+        self.rail, self.record, self.backoff = rail, record, backoff
         self.queue, self.cv, self.busy = deque(), threading.Condition(), None
 
     def submit(self, calls):
@@ -424,29 +455,62 @@ class Worker(threading.Thread):
                 while not self.queue:
                     self.cv.wait()
                 self.busy = c = self.queue.popleft()
-            result, wait, sent_tx = self.rail.send(c), 2, None
-            while result['error'] in TRANSIENT:  # the network, not the contract: keep the order, try again later
-                sent_tx = result['tx'] or sent_tx  # sent but unconfirmed: a resend is refused as AlreadyApplied
-                print(f"chain: {c['call']} for line {c['line']} not confirmed ({result['error']}), retrying in {wait}s",
-                      flush=True)
-                if result['error'] == 'send_failed':
-                    self.top_up()
-                time.sleep(wait)
-                wait = min(wait * 2, 60)
-                result = self.rail.send(c)
-            if result['error'] == 'AlreadyApplied' and sent_tx:
-                receipt = self.rail.receipt(sent_tx)
-                if receipt and int(receipt['status'], 16) == 1:
-                    result = {**result, 'tx': sent_tx, 'ok': True, 'error': None, 'block': int(receipt['blockNumber'], 16)}
+            try:
+                result = self.deliver(c)
+            except Exception as e:  # never let one call kill the worker: try it again, first in line
+                print(f"chain: {c['call']} for line {c['line']} failed ({type(e).__name__}), retrying", flush=True)
+                with self.cv:
+                    self.queue.appendleft(c)
+                    self.busy = None
+                time.sleep(self.backoff)
+                continue
             try:
                 self.record(c, result)
-            except Exception as e:  # never kill the worker: the call stays pending until the next start
-                print(f'chain: could not log {c["call"]} for line {c["line"]}: {type(e).__name__}', flush=True)
+            except Exception as e:  # the call stays unsent in the log and is sent again at the next start
+                print(f"chain: could not log {c['call']} for line {c['line']}: {type(e).__name__}", flush=True)
             with self.cv:
                 self.busy = None
             sent += 1
             if sent % 20 == 0:
                 self.top_up()
+
+    def deliver(self, c):
+        """Send until the contract itself answers: a tx, or a refusal it names."""
+        result, wait, sent_tx = self.rail.send(c), self.backoff, None
+        while result['error'] in TRANSIENT:
+            sent_tx = result.get('tx') or sent_tx
+            print(f"chain: {c['call']} for line {c['line']} not confirmed ({result['error']}), retrying in {wait:g}s",
+                  flush=True)
+            if result['error'] == 'send_failed':
+                self.top_up()
+            time.sleep(wait)
+            wait = min(wait * 2, 60)
+            landed = sent_tx and self.landed(sent_tx)
+            if landed:
+                return landed
+            result = self.rail.send(c)
+        if result['error'] == 'AlreadyApplied':  # an earlier send (this run or before a restart) is on chain
+            landed = sent_tx and self.landed(sent_tx)
+            if landed:
+                return landed
+            return {**result, 'ok': self.rail.applied(c['pid'], c['head'], c['n'])}
+        if result['error'] == 'ProjectExists':  # ours only if the contract holds the same client, payee and policy
+            p, a = self.rail.project(c['pid']), c['args']
+            ours = bool(p) and p['client'].lower() == self.rail.roles['client'].lower() and \
+                p['contractor'].lower() == a['contractor'].lower() and p['policy_hash'].lower() == h32(a['policy']).lower()
+            return {**result, 'ok': ours, 'error': 'ProjectExists' if ours else 'ProjectTaken'}
+        return result
+
+    def landed(self, tx):
+        """The final result of a tx that was sent, or None while it has no receipt."""
+        try:
+            r = self.rail.receipt(tx)
+        except (RuntimeError, OSError, ValueError):
+            return None
+        if not r:
+            return None
+        ok = int(r['status'], 16) == 1
+        return {'tx': tx, 'ok': ok, 'error': None if ok else 'reverted', 'block': int(r['blockNumber'], 16), 'seconds': 0}
 
     def top_up(self):
         """Keep the operator's gas above 0.3 MON from the client wallet (testnet MON only)."""
@@ -455,5 +519,5 @@ class Worker(threading.Thread):
                 self.rail._cast('send', self.rail.roles['operator'], '--value', '1ether', '--rpc-url',
                                 self.rail.rpc_url, key=self.rail._keys['client'])
                 self.rail.nonces.pop('client', None)
-        except RuntimeError:
+        except (RuntimeError, OSError, KeyError):
             pass

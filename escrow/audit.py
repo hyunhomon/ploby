@@ -151,38 +151,55 @@ def short(v):
     return s[:10] + '…' if s.startswith('0x') and len(s) > 14 else (f'{v:,}' if isinstance(v, int) and not isinstance(v, bool) else s)
 
 
+def expected(c, pid, head, contractor):
+    """(the event a call must emit, the arguments it must carry) for call c of the line whose head is `head`."""
+    a = c['args']
+    want = {'projectId': chain.b32(pid).lower(), 'logHead': chain.h32(head).lower()}
+    want.update({
+        'open': lambda: {'contractor': a['contractor'].lower(), 'policyHash': a['policy'].lower(), 'budget': a['budget']},
+        'fund': lambda: {'amount': a['amount']},
+        'accept': lambda: {'policyHash': a['policy'].lower(), 'budget': a['budget']},
+        'pause': lambda: {'paused': a['paused']},
+        'decide': lambda: {'ref': chain.b32(a['ref']).lower(), 'decision': chain.DECISION[a['decision']],
+                           'rule': chain.b32(a['rule']).lower(), 'amount': a['amount'], 'policyHash': a['policy'].lower()},
+        'settle': lambda: {'ref': chain.b32(a['ref']).lower(), 'paid': a['pay'], 'returned': a['returned'],
+                           'payee': contractor.lower()},
+        'refund': lambda: {'amount': a['amount']},
+    }[c['call']]())
+    return chain.CALL_EVENT[c['call']], want
+
+
 def check_chain(pid, P, lines, rail):
-    """Each logged tx against the chain, the contract's balances against the ledger, and what is still unsent."""
+    """Each logged chain result against the call its line implies and against the chain; the contract's balances,
+    reservations, policy and pause flag against the replayed project; and what is still unsent."""
     _, todo, done = chain.plan(pid, lines, Project)
     contractor = (P.active or P.versions[0])['doc']['contractorAddress'].lower()
     checked, problems = [], []
     for c in todo:
+        at = f"#{c['line']}.{c['n']} {c['call']}"
         r = done.get((c['line'], c['n']))
         if r is None:
-            problems.append(f"#{c['line']}.{c['n']} {c['call']}: no chain result in the log yet")
+            problems.append(f"{at}: no chain result in the log yet")
+            continue
+        if r.get('call') != c['call'] or r.get('args') != c['args']:
+            problems.append(f"{at}: the logged result names {r.get('call')} {r.get('args')}, not the call its line implies")
             continue
         if not r.get('tx'):
             if not r.get('ok'):
-                problems.append(f"#{c['line']}.{c['n']} {c['call']}: the contract refused it ({r.get('error')})")
+                problems.append(f"{at}: the contract refused it ({r.get('error')})")
+            elif c['call'] == 'open':
+                p = rail.project(pid)
+                if not p or p['contractor'].lower() != c['args']['contractor'].lower():
+                    problems.append(f"{at}: logged as already open, but the contract holds another project under this id")
+            elif not rail.applied(pid, c['head'], c['n']):
+                problems.append(f"{at}: logged as already applied, but the contract has no such call")
             continue
         receipt = rail.receipt(r['tx'])
-        want = {'projectId': chain.b32(pid).lower(), 'logHead': chain.h32(P.log[c['line']]['head']).lower()}
-        a = c['args']
-        want.update({
-            'open': lambda: {'contractor': a['contractor'].lower(), 'policyHash': a['policy'].lower(), 'budget': a['budget']},
-            'fund': lambda: {'amount': a['amount']},
-            'accept': lambda: {'policyHash': a['policy'].lower(), 'budget': a['budget']},
-            'pause': lambda: {'paused': a['paused']},
-            'decide': lambda: {'ref': chain.b32(a['ref']).lower(), 'decision': chain.DECISION[a['decision']],
-                               'rule': chain.b32(a['rule']).lower(), 'amount': a['amount'], 'policyHash': a['policy'].lower()},
-            'settle': lambda: {'ref': chain.b32(a['ref']).lower(), 'paid': a['pay'], 'returned': a['returned'],
-                               'payee': contractor},
-            'refund': lambda: {'amount': a['amount']},
-        }[c['call']]())
+        event, want = expected(c, pid, P.log[c['line']]['head'], contractor)
         if not receipt or int(receipt['status'], 16) != 1:
-            problems.append(f"#{c['line']}.{c['n']} {c['call']}: tx {r['tx']} has no successful receipt")
+            problems.append(f"{at}: tx {r['tx']} has no successful receipt")
             continue
-        found = [ev for ev in rail.events_of(receipt) if ev['event'] == chain.CALL_EVENT[c['call']]]
+        found = [ev for ev in rail.events_of(receipt) if ev['event'] == event]
         diffs = sorted(([k for k, v in want.items() if str(ev['args'].get(k)).lower() != str(v).lower()], ev)
                        for ev in found) if found else [(list(want), {'args': {}})]
         diffs.sort(key=lambda d: len(d[0]))
@@ -190,23 +207,35 @@ def check_chain(pid, P, lines, rail):
         if not match:
             differ = ', '.join(f"{k} {short(diffs[0][1]['args'].get(k))} on chain vs {short(want[k])} in the log"
                                for k in diffs[0][0])
-            problems.append(f"#{c['line']}.{c['n']} {c['call']}: tx {r['tx'][:12]}… differs from its line ({differ})")
+            problems.append(f"{at}: tx {r['tx'][:12]}… differs from its line ({differ})")
         checked.append({'line': c['line'], 'n': c['n'], 'call': c['call'], 'tx': r['tx'], 'ok': match,
                         'url': rail.tx_url(r['tx'])})
     onchain = rail.project(pid)
-    L = P.ledger()
+    L, m = P.ledger(), chain.money(P)
     engine = {'funded': L['funded'], 'reserved': L['expense_reserved'] + L['milestone_reserved'], 'paid': L['released'],
               'refunded': L['refunded']}
     same = bool(onchain) and all(onchain[k] == v for k, v in engine.items())
-    if onchain and onchain['contractor'].lower() != contractor:
-        problems.append('the contract pays a different contractor than the policy names')
-    if onchain and not same:
-        problems.append(f'the contract holds {({k: onchain[k] for k in engine})}, the ledger says {engine}')
+    if onchain:
+        if onchain['contractor'].lower() != contractor:
+            problems.append('the contract pays a different contractor than the policy names')
+        if not same:
+            problems.append(f'the contract holds {({k: onchain[k] for k in engine})}, the ledger says {engine}')
+        if m['active'] and onchain['policy_hash'].lower() != m['active'].lower():
+            problems.append(f"the contract's policy {short(onchain['policy_hash'])} is not the active one {short(m['active'])}")
+        if onchain['paused'] != P.paused:
+            problems.append(f"the contract is {'paused' if onchain['paused'] else 'not paused'}, the log says otherwise")
+        for ref, (held, _) in m['refs'].items():
+            if onchain['reserved'] or held:
+                there = rail.reserved_for(pid, ref)
+                if there != held:
+                    problems.append(f'{ref}: the contract reserves {there:,}, the ledger {held:,}')
+    elif L['funded']:
+        problems.append('the ledger holds funds, but the contract never opened the project')
     return {'contract': rail.escrow, 'contract_url': rail.address_url(rail.escrow), 'calls': checked,
             'onchain': onchain, 'engine': engine, 'balances_match': same if onchain else None, 'problems': problems}
 
 
-def audit(target, data=str(ROOT / 'var'), offline=False):
+def audit(target, data=str(ROOT / 'var'), offline=False, rail=None):
     path, lines = load(target, data)
     pid = path.parent.name
     docs = Path(data) / 'docs' if (Path(data) / 'docs').exists() else path.parent.parent.parent / 'docs'
@@ -232,13 +261,17 @@ def audit(target, data=str(ROOT / 'var'), offline=False):
                         'via': next(x['params'].get('via') for x in events if x.get('ref') == e['id'] and x['kind'] == 'request'),
                         'amount': e['maximum']}
                        for e in P.expenses.values() if (e['decision'] or {}).get('result') in ('BLOCK', 'HOLD') and not e['paid']]
+    state = 'offline'
     if not offline and chain.deployment():
         try:
-            report['chain'] = check_chain(pid, P, lines, chain.Rail(write=False))
-        except (RuntimeError, OSError) as e:
+            report['chain'] = check_chain(pid, P, lines, rail or chain.Rail(write=False))
+            state = 'checked'
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             report['chain'] = {'error': f'chain unreachable ({type(e).__name__})'}
-    report['verdict'] = {'records_consistent': refused is None and not (report.get('chain') or {}).get('problems'),
-                         'payments': len(report['payments']),
+            state = 'unreachable'
+    report['verdict'] = {'records_consistent': refused is None and state != 'unreachable'
+                                               and not (report.get('chain') or {}).get('problems'),
+                         'chain': state, 'payments': len(report['payments']),
                          'inside': sum(1 for p in report['payments'] if p['inside']), 'stops': len(report['stops'])}
     return report
 
@@ -296,7 +329,7 @@ def render(r):
     if c:
         out.append('\nchain')
         if 'error' in c:
-            out.append(f"  {mark(None)} {c['error']}")
+            out.append(f"  {mark(False)} {c['error']}: the logged transactions and balances were not checked")
         else:
             out.append(f"  contract {c['contract']} ({c['contract_url']})")
             for x in c['calls']:
@@ -305,8 +338,10 @@ def render(r):
             for problem in c['problems']:
                 out.append(f"  {mark(False)} {problem}")
     v = r['verdict']
+    state = ('consistent' if v['records_consistent'] else
+             'NOT verified: the chain could not be read' if v.get('chain') == 'unreachable' else 'NOT consistent')
     out.append(f"\nverdict: {v['inside']} of {v['payments']} payments shown inside what the client allowed; "
-               f"{v['stops']} stops recorded; records {'consistent' if v['records_consistent'] else 'NOT consistent'}")
+               f"{v['stops']} stops recorded; records {state}" + (' (chain not checked: offline)' if v.get('chain') == 'offline' else ''))
     return '\n'.join(out)
 
 

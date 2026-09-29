@@ -139,9 +139,12 @@ def run(seed, steps=120):
             'refunded': L['refunded']}
     p = model.p.get(pid)
     got = {k: p[k] for k in want} if p else None
-    held = {ref: r for ref, (r, _) in chain.money(P)['refs'].items() if r}
-    per_ref = {ref: model.held.get((pid, ref), 0) for ref in held}
-    bad = refused or (p and got != want) or (not p and L['funded']) or per_ref != held
+    m = chain.money(P)
+    refs = set(m['refs']) | {ref for (q, ref) in model.held if q == pid}
+    held = {ref: m['refs'].get(ref, (0, 0))[0] for ref in refs}
+    per_ref = {ref: model.held.get((pid, ref), 0) for ref in refs}
+    same_policy = not p or p['policy'] == (m['active'] or m['policy']) and p['paused'] == P.paused
+    bad = refused or (p and got != want) or (not p and L['funded']) or per_ref != held or not same_policy
     return bad, refused, got, want, ok, tried, len(todo), P.status, len(P.expenses), len(P.change_orders)
 
 

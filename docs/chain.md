@@ -67,5 +67,7 @@ One worker sends the calls in log order. Before sending, it estimates each call:
 ## Limits
 
 - The engine decides; the contract does not recompute the rules. A stolen operator key could record an out-of-policy APPROVE and pay it, but only to the contractor and only within funded money. The target design removes this with bilateral EIP-712 signatures verified on chain.
+- Project ids are first-come: the contract keys a project by Ploby's id, so whoever learns an id before the client opens it could open it first with their own wallet. No money is at risk (such a project holds only its opener's funds), but ours could then not be mirrored. The worker treats an existing project as ours only when it holds the same client, contractor and policy hash, and logs `ProjectTaken` otherwise. The target per-project escrow removes this, since the project is then its own contract.
+- A network failure never becomes a logged refusal: the call stays first in line and is retried, after checking whether an earlier send landed (`applied(key)` on chain). Only the contract's own refusals are written back.
 - The demo client wallet and the operator key are held by the server (`.env`), like the demo HMAC keys for the log.
 - Testnet only; tKRW is an open-mint test token.

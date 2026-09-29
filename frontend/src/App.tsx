@@ -110,6 +110,8 @@ export function App() {
   useEffect(() => {
     const on = () => {
       setRoute(parseHash())
+      const pinned = roleInUrl()
+      if (pinned) setRoleState(pinned)
       window.scrollTo(0, 0)
     }
     window.addEventListener("hashchange", on)

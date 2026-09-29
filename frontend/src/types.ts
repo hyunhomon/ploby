@@ -641,7 +641,7 @@ export interface AuditReport {
     balances_match?: boolean | null
     problems?: string[]
   }
-  verdict?: { records_consistent: boolean; payments: number; inside: number; stops: number }
+  verdict?: { records_consistent: boolean; chain?: "checked" | "offline" | "unreachable"; payments: number; inside: number; stops: number }
 }
 
 export interface LogEntry {

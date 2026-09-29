@@ -115,10 +115,10 @@ class Store:
         return [c for c in todo if (c['line'], c['n']) not in done]
 
     def chain_result(self, c, r):
-        params = {'line': c['line'], 'n': c['n'], 'call': c['call'], 'args': c['args'], 'tx': r['tx'],
-                  'url': self.rail.tx_url(r['tx']), 'ok': r['ok'] or r['error'] in ('AlreadyApplied', 'ProjectExists'),
-                  'error': r['error'], 'block': r['block']}
+        params = {'line': c['line'], 'n': c['n'], 'call': c['call'], 'args': c['args'], 'tx': r.get('tx'),
+                  'url': self.rail.tx_url(r.get('tx')), 'ok': bool(r['ok']), 'error': r['error'], 'block': r.get('block')}
         with self.lock:
+            self.keeper(c['pid'])  # elapsed deadlines first, at their own times, so a late result never delays one
             P = self.get(c['pid'])
             self.commit(P, self.line('relayer', 'chain', params, {}, max(self.now(), P.at)))
 
@@ -127,16 +127,18 @@ class Store:
         no call of this project is still on its way (otherwise the engine's own state is the newer one)."""
         if not self.rail:
             return None
+        with self.lock:
+            head = self.get(pid).head
         waiting = len(self.worker.pending(pid))
         if waiting:
             return {'skipped': f'{waiting} calls pending'}
         try:
             p = self.rail.project(pid)
-        except (RuntimeError, OSError):
+        except (RuntimeError, OSError, ValueError):
             return {'skipped': 'chain unreachable'}
         if p is None:
             return {'skipped': 'not opened'}
-        return {'paused': p['paused'], 'available': p['available'], 'contract': self.rail.escrow}
+        return {'paused': p['paused'], 'available': p['available'], 'contract': self.rail.escrow, 'head': head}
 
     def chain_status(self, pid):
         if not self.rail:
@@ -291,6 +293,9 @@ class Store:
             self.keeper(pid)
             P = self.get(pid)
             now = max(self.now(), P.at)  # a demo clock set back never dates a line before the last one
+            read = inputs.get('chain') or {}
+            if 'head' in read and (read['head'] != P.head or self.worker.pending(pid)):
+                inputs['chain'] = {'skipped': 'the project changed while the contract was read'}  # stale: engine only
             if action == 'sign_policy':
                 inputs['signature'] = pol.sign(role, P.version(params.get('version'))['hash'])
             if 'manifest_docs' in inputs:
@@ -320,6 +325,7 @@ class Store:
             raise Refused(f"에이전트가 계획을 세우지 못했습니다 ({'; '.join(meta.get('problems') or [])}) — 직접 요청하세요",
                           'state')
         with self.lock:
+            self.keeper(pid)
             P = self.get(pid)
             offers = [{'id': d['id'], 'name': d['name']} for d in docs]
             P, _ = self.commit(P, self.line('contractor', 'agent_task', {'task': task, 'offers': offers},
