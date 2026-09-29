@@ -8,9 +8,10 @@ interface IEscrowToken {
 }
 
 /// @title ExpenseEscrow
-/// @notice Holds a project budget and pays a payee only after a recorded APPROVE,
-///         or a HOLD the client has approved. The contract does not interpret invoices.
-///         Policy checks live in the backend. See DECISIONS.md for ABI choices the spec left open.
+/// @notice Legacy Phase 1 prototype. Holds a project budget and pays the payee stored with a
+///         recorded APPROVE, or a HOLD the client has approved. `release` cannot substitute that
+///         payee. This is not the target protocol in docs/adr. The contract does not interpret
+///         invoices. See DECISIONS.md.
 contract ExpenseEscrow {
     uint8 public constant DECISION_APPROVE = 1;
     uint8 public constant DECISION_HOLD = 2;
@@ -38,6 +39,7 @@ contract ExpenseEscrow {
 
     struct Record {
         PaymentDecision decision;
+        address payee;
         bool exists;
         bool clientApproved;
         bool rejected;
@@ -59,6 +61,7 @@ contract ExpenseEscrow {
     event DecisionRecorded(
         bytes32 indexed projectId,
         bytes32 indexed evidenceHash,
+        address payee,
         bytes32 policyHash,
         uint256 amount,
         uint8 decision,
@@ -88,6 +91,7 @@ contract ExpenseEscrow {
     error NotReleasable();
     error AlreadyReleased();
     error AmountMismatch();
+    error PayeeMismatch();
     error OverBudget();
     error InsufficientDeposit();
     error HoldNotPending();
@@ -150,8 +154,9 @@ contract ExpenseEscrow {
         emit Deposited(projectId, msg.sender, amount);
     }
 
-    /// @notice Backend logs APPROVE, HOLD, or BLOCK. Does not move tokens.
-    function recordDecision(PaymentDecision calldata decision) external {
+    /// @notice Backend logs APPROVE, HOLD, or BLOCK and binds `payee`. Does not move tokens.
+    ///         APPROVE and HOLD require a non-zero payee. That address cannot be changed later.
+    function recordDecision(PaymentDecision calldata decision, address payee) external {
         if (msg.sender != agent) revert NotAgent();
         if (decision.projectId == bytes32(0) || decision.evidenceHash == bytes32(0)) revert ZeroHash();
         if (decision.amount == 0) revert ZeroAmount();
@@ -159,6 +164,7 @@ contract ExpenseEscrow {
             decision.decision != DECISION_APPROVE && decision.decision != DECISION_HOLD
                 && decision.decision != DECISION_BLOCK
         ) revert BadDecision();
+        if (decision.decision != DECISION_BLOCK && payee == address(0)) revert ZeroAddress();
 
         Project storage project = projects[decision.projectId];
         if (!project.exists) revert ProjectNotFound();
@@ -170,11 +176,18 @@ contract ExpenseEscrow {
 
         PaymentDecision memory stored = decision;
         stored.timestamp = block.timestamp;
-        records[hash] =
-            Record({decision: stored, exists: true, clientApproved: false, rejected: false, released: false});
+        records[hash] = Record({
+            decision: stored, payee: payee, exists: true, clientApproved: false, rejected: false, released: false
+        });
 
         emit DecisionRecorded(
-            stored.projectId, stored.evidenceHash, stored.policyHash, stored.amount, stored.decision, stored.timestamp
+            stored.projectId,
+            stored.evidenceHash,
+            payee,
+            stored.policyHash,
+            stored.amount,
+            stored.decision,
+            stored.timestamp
         );
     }
 
@@ -188,12 +201,10 @@ contract ExpenseEscrow {
         _holdAction(projectId, evidenceHash, false);
     }
 
-    /// @notice Pays `payee` the recorded amount. Agent only. APPROVE, or HOLD after `approveHold`.
-    ///         `evidenceHash` identifies the decision. The brief listed (projectId, payee, amount);
-    ///         two expenses with the same amount cannot be told apart without the evidence hash.
+    /// @notice Pays the payee stored on the decision. Agent only. APPROVE, or HOLD after `approveHold`.
+    ///         A different `payee` reverts. `evidenceHash` identifies the decision.
     function release(bytes32 projectId, bytes32 evidenceHash, address payee, uint256 amount) external nonReentrant {
         if (msg.sender != agent) revert NotAgent();
-        if (payee == address(0)) revert ZeroAddress();
 
         Project storage project = projects[projectId];
         if (!project.exists) revert ProjectNotFound();
@@ -202,6 +213,7 @@ contract ExpenseEscrow {
         Record storage record = records[decisionHash(projectId, evidenceHash)];
         if (!record.exists) revert DecisionNotFound();
         if (record.released) revert AlreadyReleased();
+        if (payee != record.payee) revert PayeeMismatch();
 
         uint8 code = record.decision.decision;
         bool payableDecision = code == DECISION_APPROVE || (code == DECISION_HOLD && record.clientApproved);
@@ -230,10 +242,10 @@ contract ExpenseEscrow {
     function getRecord(bytes32 projectId, bytes32 evidenceHash)
         external
         view
-        returns (PaymentDecision memory decision, bool clientApproved, bool rejected, bool released)
+        returns (PaymentDecision memory decision, address payee, bool clientApproved, bool rejected, bool released)
     {
         Record storage record = records[decisionHash(projectId, evidenceHash)];
-        return (record.decision, record.clientApproved, record.rejected, record.released);
+        return (record.decision, record.payee, record.clientApproved, record.rejected, record.released);
     }
 
     /// @dev Same evidence cannot be decided twice on one project. BLOCK and APPROVE share this key.

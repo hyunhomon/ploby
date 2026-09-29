@@ -34,11 +34,12 @@ contract ExpenseEscrowTest is Test {
         uint256 amount = 200e6;
 
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, amount, APPROVE));
+        escrow.recordDecision(_decision(evidence, amount, APPROVE), payee);
 
-        (ExpenseEscrow.PaymentDecision memory stored,,,) = escrow.getRecord(projectId, evidence);
+        (ExpenseEscrow.PaymentDecision memory stored, address boundPayee,,,) = escrow.getRecord(projectId, evidence);
         assertEq(stored.timestamp, block.timestamp);
         assertEq(stored.decision, APPROVE);
+        assertEq(boundPayee, payee);
 
         vm.prank(agent);
         escrow.release(projectId, evidence, payee, amount);
@@ -62,7 +63,7 @@ contract ExpenseEscrowTest is Test {
         _openAndFund();
         bytes32 evidence = keccak256("held");
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, 200e6, HOLD));
+        escrow.recordDecision(_decision(evidence, 200e6, HOLD), payee);
 
         vm.prank(agent);
         vm.expectRevert(ExpenseEscrow.NotReleasable.selector);
@@ -73,7 +74,7 @@ contract ExpenseEscrowTest is Test {
         _openAndFund();
         bytes32 evidence = keccak256("console");
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, 300e6, BLOCK_DECISION));
+        escrow.recordDecision(_decision(evidence, 300e6, BLOCK_DECISION), payee);
 
         vm.prank(agent);
         vm.expectRevert(ExpenseEscrow.NotReleasable.selector);
@@ -87,8 +88,8 @@ contract ExpenseEscrowTest is Test {
         bytes32 second = keccak256("second");
 
         vm.startPrank(agent);
-        escrow.recordDecision(_decision(first, 600e6, APPROVE));
-        escrow.recordDecision(_decision(second, 500e6, APPROVE));
+        escrow.recordDecision(_decision(first, 600e6, APPROVE), payee);
+        escrow.recordDecision(_decision(second, 500e6, APPROVE), payee);
         escrow.release(projectId, first, payee, 600e6);
 
         vm.expectRevert(ExpenseEscrow.OverBudget.selector);
@@ -104,7 +105,7 @@ contract ExpenseEscrowTest is Test {
         uint256 amount = budget + 1;
 
         vm.startPrank(agent);
-        escrow.recordDecision(_decision(evidence, amount, APPROVE));
+        escrow.recordDecision(_decision(evidence, amount, APPROVE), payee);
         vm.expectRevert(ExpenseEscrow.OverBudget.selector);
         escrow.release(projectId, evidence, payee, amount);
         vm.stopPrank();
@@ -114,7 +115,7 @@ contract ExpenseEscrowTest is Test {
         _openAndFund();
         bytes32 evidence = keccak256("aws");
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, 200e6, APPROVE));
+        escrow.recordDecision(_decision(evidence, 200e6, APPROVE), payee);
 
         vm.prank(client);
         escrow.stopProject(projectId);
@@ -131,7 +132,7 @@ contract ExpenseEscrowTest is Test {
 
         vm.prank(agent);
         vm.expectRevert(ExpenseEscrow.ProjectIsStopped.selector);
-        escrow.recordDecision(_decision(keccak256("late"), 200e6, BLOCK_DECISION));
+        escrow.recordDecision(_decision(keccak256("late"), 200e6, BLOCK_DECISION), payee);
     }
 
     function test_duplicateDecisionHashReverts() public {
@@ -139,9 +140,9 @@ contract ExpenseEscrowTest is Test {
         bytes32 evidence = keccak256("invoice-1023");
 
         vm.startPrank(agent);
-        escrow.recordDecision(_decision(evidence, 200e6, APPROVE));
+        escrow.recordDecision(_decision(evidence, 200e6, APPROVE), payee);
         vm.expectRevert(ExpenseEscrow.DuplicateDecision.selector);
-        escrow.recordDecision(_decision(evidence, 200e6, BLOCK_DECISION));
+        escrow.recordDecision(_decision(evidence, 200e6, BLOCK_DECISION), payee);
         vm.stopPrank();
     }
 
@@ -151,7 +152,7 @@ contract ExpenseEscrowTest is Test {
         uint256 amount = 200e6;
 
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, amount, HOLD));
+        escrow.recordDecision(_decision(evidence, amount, HOLD), payee);
 
         vm.prank(client);
         escrow.approveHold(projectId, evidence);
@@ -166,7 +167,7 @@ contract ExpenseEscrowTest is Test {
         bytes32 evidence = keccak256("invoice-1023");
 
         vm.prank(agent);
-        escrow.recordDecision(_decision(evidence, 200e6, HOLD));
+        escrow.recordDecision(_decision(evidence, 200e6, HOLD), payee);
 
         vm.prank(client);
         escrow.rejectHold(projectId, evidence);
@@ -186,7 +187,7 @@ contract ExpenseEscrowTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(ExpenseEscrow.NotAgent.selector);
-        escrow.recordDecision(_decision(keccak256("x"), 200e6, APPROVE));
+        escrow.recordDecision(_decision(keccak256("x"), 200e6, APPROVE), payee);
 
         vm.prank(stranger);
         vm.expectRevert(ExpenseEscrow.NotClient.selector);
@@ -197,6 +198,33 @@ contract ExpenseEscrowTest is Test {
         escrow.release(projectId, keccak256("x"), payee, 200e6);
     }
 
+    function test_releaseCannotSubstitutePayee() public {
+        _openAndFund();
+        bytes32 evidence = keccak256("aws-invoice");
+        address other = makeAddr("other");
+
+        vm.prank(agent);
+        escrow.recordDecision(_decision(evidence, 200e6, APPROVE), payee);
+
+        vm.prank(agent);
+        vm.expectRevert(ExpenseEscrow.PayeeMismatch.selector);
+        escrow.release(projectId, evidence, other, 200e6);
+
+        assertEq(usdc.balanceOf(other), 0);
+        assertEq(usdc.balanceOf(payee), 0);
+        assertEq(usdc.balanceOf(address(escrow)), budget);
+    }
+
+    function test_payableDecisionRequiresPayee() public {
+        _openAndFund();
+        vm.startPrank(agent);
+        vm.expectRevert(ExpenseEscrow.ZeroAddress.selector);
+        escrow.recordDecision(_decision(keccak256("approve"), 200e6, APPROVE), address(0));
+        vm.expectRevert(ExpenseEscrow.ZeroAddress.selector);
+        escrow.recordDecision(_decision(keccak256("hold"), 200e6, HOLD), address(0));
+        vm.stopPrank();
+    }
+
     function test_policyMismatchReverts() public {
         _openAndFund();
         ExpenseEscrow.PaymentDecision memory decision = _decision(keccak256("x"), 200e6, APPROVE);
@@ -204,7 +232,7 @@ contract ExpenseEscrowTest is Test {
 
         vm.prank(agent);
         vm.expectRevert(ExpenseEscrow.PolicyMismatch.selector);
-        escrow.recordDecision(decision);
+        escrow.recordDecision(decision, payee);
     }
 
     function _openAndFund() internal {

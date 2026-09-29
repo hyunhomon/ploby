@@ -8,7 +8,7 @@
 
 SmartEscrow uses an LLM to extract meaning from contracts, expense requests, and evidence. A deterministic policy engine evaluates that structured input. The product claim is that AI interprets information while code controls permission.
 
-The initial contract uses one backend `agent` address to record decisions and release funds. The payee is supplied only at release time. That design makes the signer a trusted spending authority and does not bind the recorded approval to the eventual recipient.
+The Phase 1 contract uses one backend `agent` address to record decisions and release funds. The payee is stored when the decision is recorded, and `release` reverts if the caller substitutes another address. The agent still chooses that payee, so the signer remains a trusted spending authority. The target design binds the payee in the bilateral commitment before the backend signs.
 
 A bilateral escrow also requires constrained client authority. A client must be able to stop new obligations and respond to fraud, but must not cancel an expense after the contractor relied on an accepted commitment.
 
