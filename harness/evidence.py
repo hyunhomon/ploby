@@ -77,9 +77,22 @@ class Run:
         return not self.st.worker.pending(self.pid)
 
 
+def rerender():
+    """docs/evidence.md again from evidence/ as it is: no model call, no transaction (reads the public chain)."""
+    saved = json.loads((OUT / 'runs.json').read_text(encoding='utf-8'))
+    r = Run.__new__(Run)
+    r.st, r.pid, r.notes = Store(OUT), saved['project'], []
+    r.st.rail = chain.Rail(write=False)
+    report = audit.audit(r.pid, str(OUT))
+    DOC.write_text(render(r, saved['runs'], report, True), encoding='utf-8')
+    print(f'wrote {DOC.relative_to(ROOT)} from {OUT.relative_to(ROOT)}/')
+
+
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
+    if '--render' in sys.argv:
+        return rerender()
     if not chain.enabled():
         raise SystemExit('chain is off: deployments/monad-testnet.json and DEPLOYER_KEY/RELAYER_KEY in .env are needed')
     r = Run()
@@ -237,6 +250,20 @@ def render(r, results, report, drained):
             row[3] += u.get('seconds') or 0
     for f, (calls, tokens, cost, seconds) in flows.items():
         out.append(f'| {f} | {calls} | {tokens:,} | {cost:.5f} | {seconds:.1f} |')
+    out += ['', 'Every Kiln answer this run used, with the generation id Kiln returned (`X-Neocloud-Generation-Id`, the '
+            'evidence that the call reached the API; a reading replayed from the local cache keeps the id of the call '
+            'that produced it):', '', '| Log line | Flow | What | Generation id | Tokens | Replayed |', '| --- | --- | --- | --- | --- | --- |']
+    for n, x in enumerate(lines):
+        if x['op'] == 'agent_task':
+            ai_, what, flow = x['inputs'].get('ai') or {}, f"plan: {x['params']['task'][:40]}", 'agent'
+        elif (x.get('inputs') or {}).get('reading'):
+            ai_, flow = x['inputs']['reading'], 'quote'
+            what = f"reading: {(x['inputs'].get('document') or {}).get('name', '')[:40]}"
+        else:
+            continue
+        u = ai_.get('usage') or {}
+        for g in ai_.get('generation_ids') or ['—']:
+            out.append(f"| #{n} | {flow} | {what} | `{g}` | {u.get('tokens', 0):,} | {'yes' if u.get('cached') else 'no'} |")
     out += ['', 'No model call decides a payment: the rules run in code on the reading, and the contract checks '
             'the money again. See [efficiency.md](efficiency.md).', '']
     return '\n'.join(out)
