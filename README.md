@@ -41,7 +41,7 @@ flowchart LR
 증거를 직접 다시 확인하려면 (키 없이, 공개 RPC만 사용):
 
 ```bash
-python3 -m escrow.audit evidence/projects/p16821e868189/log.jsonl --data evidence
+python3 -m escrow.audit evidence/projects/p20951e674af4/log.jsonl --data evidence
 ```
 
 제품의 목적, 흐름, 의사결정, 권한, 회계는 [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)가 1급 기준이며, 이 문서는 수정하지 않는 불변 문서입니다 (문서 안에서는 제품을 이전 이름인 SmartEscrow로 부릅니다). 그 문서 §22에 따라 현재 동작은 코드와 테스트가 기준이고, 이 README와 [`docs/api.md`](docs/api.md)가 현재 구현을 설명합니다. 목표 아키텍처의 세부 결정은 [`docs/adr`](docs/adr/README.md)에 있습니다. 아래에서 **현재 구현**과 **목표 설계**를 구분해 적습니다.

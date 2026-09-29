@@ -24,6 +24,7 @@ SAMPLES['q-vercel-2'] = {'id': 'q-vercel-2', 'name': 'Vercel Pro 견적 (2)', 'k
 TEXT = {s['text']: k for k, s in SAMPLES.items()}
 FIX = {'q-gabia': ('gabia', 'domain', 22000, 2200), 'q-figma': ('figma', 'software', 90000, 9000),
        'q-coupang': ('coupang', 'general', 117273, 11727), 'q-adobe': ('adobe-stock', 'assets', 185000, 18500),
+       'q-adobe-10': ('adobe-stock', 'assets', 50000, 5000),
        'q-aws-injection': ('aws', 'hosting', 163637, 16363), 'q-vercel': ('vercel', 'hosting', 30000, 3000),
        'q-vercel-2': ('vercel', 'hosting', 30000, 3000),
        'r-gabia': ('gabia', 'domain', 22000, 2200), 'r-figma': ('figma', 'software', 90000, 9000),

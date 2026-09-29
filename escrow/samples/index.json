@@ -1,15 +1,86 @@
 [
-  {"id": "q-gabia", "kind": "quote", "name": "가비아 도메인 견적 (24,200원)", "file": "quotes/e1-gabia.txt"},
-  {"id": "q-figma", "kind": "quote", "name": "Figma 2석 견적 (99,000원)", "file": "quotes/e2-figma.txt"},
-  {"id": "q-coupang", "kind": "quote", "name": "쿠팡 기계식 키보드 (129,000원, 범위 밖)", "file": "quotes/e3-coupang.txt"},
-  {"id": "q-adobe", "kind": "quote", "name": "Adobe Stock 이미지 팩 (203,500원, 건별 한도 초과)", "file": "quotes/e4-adobe-stock.txt"},
-  {"id": "q-aws-injection", "kind": "quote", "name": "AWS 청구서 + 송금 지시 삽입 (180,000원)", "file": "quotes/e5-aws-injection.txt"},
-  {"id": "q-vercel", "kind": "quote", "name": "Vercel Pro 1개월 (33,000원)", "file": "quotes/e6-vercel.txt"},
-  {"id": "r-gabia", "kind": "receipt", "name": "가비아 영수증 (24,200원)", "file": "samples/r1-gabia-receipt.txt"},
-  {"id": "r-figma", "kind": "receipt", "name": "Figma 영수증 (99,000원)", "file": "samples/r2-figma-receipt.txt"},
-  {"id": "r-figma-over", "kind": "receipt", "name": "Figma 영수증 + 추가 요금 (108,900원, 상한 초과)", "file": "samples/r3-figma-receipt-over.txt"},
-  {"id": "r-aws", "kind": "receipt", "name": "AWS 결제 영수증 (180,000원)", "file": "samples/r4-aws-receipt.txt"},
-  {"id": "r-blurry", "kind": "receipt", "name": "흐린 스캔 영수증 (판독 불가)", "file": "samples/r5-blurry-receipt.txt"},
-  {"id": "d-m1", "kind": "delivery", "name": "M1 디자인 시안 제출물", "file": "samples/d1-m1-design.txt"},
-  {"id": "d-m2", "kind": "delivery", "name": "M2 반응형 퍼블리싱 제출물", "file": "samples/d2-m2-publish.txt"}
+  {
+    "id": "q-gabia",
+    "kind": "quote",
+    "name": "가비아 도메인 견적 (24,200원)",
+    "file": "quotes/e1-gabia.txt"
+  },
+  {
+    "id": "q-figma",
+    "kind": "quote",
+    "name": "Figma 2석 견적 (99,000원)",
+    "file": "quotes/e2-figma.txt"
+  },
+  {
+    "id": "q-coupang",
+    "kind": "quote",
+    "name": "쿠팡 기계식 키보드 (129,000원, 범위 밖)",
+    "file": "quotes/e3-coupang.txt"
+  },
+  {
+    "id": "q-adobe",
+    "kind": "quote",
+    "name": "Adobe Stock 이미지 팩 (203,500원, 건별 한도 초과)",
+    "file": "quotes/e4-adobe-stock.txt"
+  },
+  {
+    "id": "q-adobe-10",
+    "kind": "quote",
+    "name": "Adobe Stock 이미지 10장 (55,000원)",
+    "file": "quotes/e8-adobe-stock-10.txt"
+  },
+  {
+    "id": "q-aws-injection",
+    "kind": "quote",
+    "name": "AWS 청구서 + 송금 지시 삽입 (180,000원)",
+    "file": "quotes/e5-aws-injection.txt"
+  },
+  {
+    "id": "q-vercel",
+    "kind": "quote",
+    "name": "Vercel Pro 1개월 (33,000원)",
+    "file": "quotes/e6-vercel.txt"
+  },
+  {
+    "id": "r-gabia",
+    "kind": "receipt",
+    "name": "가비아 영수증 (24,200원)",
+    "file": "samples/r1-gabia-receipt.txt"
+  },
+  {
+    "id": "r-figma",
+    "kind": "receipt",
+    "name": "Figma 영수증 (99,000원)",
+    "file": "samples/r2-figma-receipt.txt"
+  },
+  {
+    "id": "r-figma-over",
+    "kind": "receipt",
+    "name": "Figma 영수증 + 추가 요금 (108,900원, 상한 초과)",
+    "file": "samples/r3-figma-receipt-over.txt"
+  },
+  {
+    "id": "r-aws",
+    "kind": "receipt",
+    "name": "AWS 결제 영수증 (180,000원)",
+    "file": "samples/r4-aws-receipt.txt"
+  },
+  {
+    "id": "r-blurry",
+    "kind": "receipt",
+    "name": "흐린 스캔 영수증 (판독 불가)",
+    "file": "samples/r5-blurry-receipt.txt"
+  },
+  {
+    "id": "d-m1",
+    "kind": "delivery",
+    "name": "M1 디자인 시안 제출물",
+    "file": "samples/d1-m1-design.txt"
+  },
+  {
+    "id": "d-m2",
+    "kind": "delivery",
+    "name": "M2 반응형 퍼블리싱 제출물",
+    "file": "samples/d2-m2-publish.txt"
+  }
 ]

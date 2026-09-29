@@ -1,9 +1,9 @@
 {
-  "project": "p16821e868189",
+  "project": "p20951e674af4",
   "name": "카페 온담 홈페이지 리뉴얼",
-  "log": "evidence/projects/p16821e868189/log.jsonl",
-  "lines": 34,
-  "head": "8fbc6ff29d7d607b2772ea93b589d1f7c3454701066b01ced52389b41fa32948",
+  "log": "evidence/projects/p20951e674af4/log.jsonl",
+  "lines": 38,
+  "head": "eb04663a4e0056a2ece10252edff7ceb1a56de4f37cf3bae47ee0dc2c9671323",
   "replay": {
     "ok": true,
     "refused": null,
@@ -30,11 +30,11 @@
   "policies": [
     {
       "version": 1,
-      "hash": "0x679a6f550d7d7be5cd18983f2d4d7245cf05580d510cf7e85eb10dcd270dc73c",
+      "hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b",
       "status": "ACTIVE",
       "signed": {
-        "client": 1790812799784,
-        "contractor": 1790812799785
+        "client": 1790812799605,
+        "contractor": 1790812799606
       },
       "readback": [
         "총 한도: 50만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
@@ -54,10 +54,10 @@
       "payee": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
       "policy": {
         "version": 1,
-        "hash": "0x679a6f550d7d7be5cd18983f2d4d7245cf05580d510cf7e85eb10dcd270dc73c"
+        "hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b"
       },
       "request": {
-        "line": 6,
+        "line": 5,
         "op": "request_commitment",
         "by": "contractor",
         "via": {
@@ -84,7 +84,7 @@
           "total": 24200
         },
         "onchain_before": {
-          "skipped": "2 calls pending"
+          "skipped": "3 calls pending"
         }
       },
       "decision": {
@@ -186,7 +186,7 @@
       "client_approval": [],
       "payments": [
         {
-          "line": 9,
+          "line": 8,
           "op": "review_settlement",
           "by": "client",
           "amount": 24200,
@@ -219,17 +219,17 @@
       "status": "BLOCKED",
       "rule": "per_purchase",
       "label": "건별 한도 (부가세·수수료 포함)",
-      "line": 12,
+      "line": 11,
       "via": {
         "need": "메인 페이지 이미지 소스",
         "task": "A2",
         "try": 1,
-        "why": "Adobe Stock에서 제공하는 표준 라이선스 이미지 팩은 웹사이트 사용에 적합하며, 40장의 이미지로 메인 페이지 구성에 충분하다."
+        "why": "40장 팩이 우선이며, 웹사이트 사용이 허용된 정식 라이선스를 제공합니다."
       },
       "amount": 203500
     },
     {
-      "ref": "E3",
+      "ref": "E4",
       "result": "BLOCK",
       "status": "BLOCKED",
       "rule": "vendor",
@@ -244,12 +244,12 @@
       "amount": 129000
     },
     {
-      "ref": "E4",
+      "ref": "E5",
       "result": "HOLD",
       "status": "EXPIRED",
       "rule": "price_anomaly",
       "label": "가격 이상 (카테고리 대표값 대비)",
-      "line": 18,
+      "line": 17,
       "via": {
         "need": "웹 호스팅",
         "task": "A4",
@@ -259,12 +259,12 @@
       "amount": 180000
     },
     {
-      "ref": "E5",
+      "ref": "E6",
       "result": "BLOCK",
       "status": "BLOCKED",
       "rule": "state",
       "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
-      "line": 23,
+      "line": 22,
       "via": {
         "need": "디자인 협업 툴 2석",
         "task": "A5",
@@ -274,12 +274,12 @@
       "amount": 99000
     },
     {
-      "ref": "E6",
+      "ref": "E7",
       "result": "BLOCK",
       "status": "BLOCKED",
       "rule": "window",
       "label": "정책 기간",
-      "line": 27,
+      "line": 25,
       "via": {
         "need": "호스팅 플랜 한 달 구매",
         "task": "A6",
@@ -297,110 +297,126 @@
         "line": 3,
         "n": 0,
         "call": "open",
-        "tx": "0xd541aa14fec324e9a65809a31cfe89d6b7e45028d409b65832555bf75e977efc",
+        "tx": "0x1697a18e58f9089d64df011ceba5a94ac362cdb771a72a3745d6e84ce7807751",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xd541aa14fec324e9a65809a31cfe89d6b7e45028d409b65832555bf75e977efc"
+        "url": "https://testnet.monadvision.com/tx/0x1697a18e58f9089d64df011ceba5a94ac362cdb771a72a3745d6e84ce7807751"
       },
       {
         "line": 3,
         "n": 1,
         "call": "fund",
-        "tx": "0x13794a1c2ef5658a154cf0b8d484a176e2069ec3ad7501ae16b66ca4d5d2827b",
+        "tx": "0xaede16388700c247e1ccd465cded297218e934a84479d355c45a26bc84254b23",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0x13794a1c2ef5658a154cf0b8d484a176e2069ec3ad7501ae16b66ca4d5d2827b"
+        "url": "https://testnet.monadvision.com/tx/0xaede16388700c247e1ccd465cded297218e934a84479d355c45a26bc84254b23"
       },
       {
         "line": 3,
         "n": 2,
         "call": "decide",
-        "tx": "0x93d21436860afc7673a8b4f82ecb23f3795e8adb4d30fbd8c7b230e64e8bcb19",
+        "tx": "0x2ca05e43795df27231fc7fe2ee45abad0c82108ec5e0b0ce4224bb97ee4b5360",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0x93d21436860afc7673a8b4f82ecb23f3795e8adb4d30fbd8c7b230e64e8bcb19"
+        "url": "https://testnet.monadvision.com/tx/0x2ca05e43795df27231fc7fe2ee45abad0c82108ec5e0b0ce4224bb97ee4b5360"
       },
       {
-        "line": 6,
+        "line": 5,
         "n": 0,
         "call": "decide",
-        "tx": "0xc2298fc3b08bf037117e516c50153ecff9c7cb3e6df356b7ff0f6797c7e9fb6d",
+        "tx": "0xe44e6c6977570b23460eeebfe901adefbf185ec083e13f34afa9182b8284a97d",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xc2298fc3b08bf037117e516c50153ecff9c7cb3e6df356b7ff0f6797c7e9fb6d"
+        "url": "https://testnet.monadvision.com/tx/0xe44e6c6977570b23460eeebfe901adefbf185ec083e13f34afa9182b8284a97d"
       },
       {
-        "line": 9,
+        "line": 8,
         "n": 0,
         "call": "settle",
-        "tx": "0x32d8f2e71bf4bb5d1e02470a9f64ff7e122b75a68e4629a950d08da8006a96da",
+        "tx": "0xf9ae2da4ccb12527dbb8eaeb5575a5050f2f64c2cec4ab4d1558380cfa47ede4",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0x32d8f2e71bf4bb5d1e02470a9f64ff7e122b75a68e4629a950d08da8006a96da"
+        "url": "https://testnet.monadvision.com/tx/0xf9ae2da4ccb12527dbb8eaeb5575a5050f2f64c2cec4ab4d1558380cfa47ede4"
       },
       {
-        "line": 12,
+        "line": 11,
         "n": 0,
         "call": "decide",
-        "tx": "0xbb65526de1e10c8b92ed262afe1ab77aaee5399ae18983643d766461230a1052",
+        "tx": "0xe6c2340192ab7c7369127f79f536c4e86369876b4d9b85ecfa6f6e8a22829cf9",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xbb65526de1e10c8b92ed262afe1ab77aaee5399ae18983643d766461230a1052"
+        "url": "https://testnet.monadvision.com/tx/0xe6c2340192ab7c7369127f79f536c4e86369876b4d9b85ecfa6f6e8a22829cf9"
+      },
+      {
+        "line": 13,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x6f13721f1297c94d3cfc7bddbf7187104540d43507359f63c76607fb036da436",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x6f13721f1297c94d3cfc7bddbf7187104540d43507359f63c76607fb036da436"
       },
       {
         "line": 15,
         "n": 0,
         "call": "decide",
-        "tx": "0x77839358c2a0a11881e2044a7f737d84c367a89e01d8f850ab86eff08d0bc0d0",
+        "tx": "0xbd34ede855731d99ec9d450e154bc3de8d1163cde2f5cfd9f592bc7ffa6a31c2",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0x77839358c2a0a11881e2044a7f737d84c367a89e01d8f850ab86eff08d0bc0d0"
+        "url": "https://testnet.monadvision.com/tx/0xbd34ede855731d99ec9d450e154bc3de8d1163cde2f5cfd9f592bc7ffa6a31c2"
+      },
+      {
+        "line": 17,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x81566fccbb1f0b88e6c9f38004b685122051a0ae71345cb38037959536269f53",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x81566fccbb1f0b88e6c9f38004b685122051a0ae71345cb38037959536269f53"
       },
       {
         "line": 18,
         "n": 0,
-        "call": "decide",
-        "tx": "0xd446283d13bc9913441476c2bf664ba1599103c7d17b96abdeea2ad912b63d70",
+        "call": "settle",
+        "tx": "0xfe206d080eacdbbbca07b57cc4b2e2cad450644a8519c889349fb836fba28e29",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xd446283d13bc9913441476c2bf664ba1599103c7d17b96abdeea2ad912b63d70"
+        "url": "https://testnet.monadvision.com/tx/0xfe206d080eacdbbbca07b57cc4b2e2cad450644a8519c889349fb836fba28e29"
       },
       {
         "line": 20,
         "n": 0,
         "call": "pause",
-        "tx": "0xfa849be698356d4153f70d169df08077fb7d8f4985b6c2df2aa8c831e5a7421b",
+        "tx": "0x3517e8493ed6b78164e0c8e5f54c18bc9ba464a2ff259902a7abdcacba599e3f",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xfa849be698356d4153f70d169df08077fb7d8f4985b6c2df2aa8c831e5a7421b"
+        "url": "https://testnet.monadvision.com/tx/0x3517e8493ed6b78164e0c8e5f54c18bc9ba464a2ff259902a7abdcacba599e3f"
+      },
+      {
+        "line": 22,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x69b5e875f1f12822a15cfe43661941a93a1e2cf8d5f44c8b25299c4a1866073c",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x69b5e875f1f12822a15cfe43661941a93a1e2cf8d5f44c8b25299c4a1866073c"
       },
       {
         "line": 23,
         "n": 0,
-        "call": "decide",
-        "tx": "0x0d5412fe3d5b1baa95f5ced10cc533307331cc311ebe6ed46aba755d5e8bf13a",
-        "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0x0d5412fe3d5b1baa95f5ced10cc533307331cc311ebe6ed46aba755d5e8bf13a"
-      },
-      {
-        "line": 24,
-        "n": 0,
         "call": "pause",
-        "tx": "0xe2370cfda486360ea6026b6b373114e490e86f571e248ce053b84a2e9a0d7990",
+        "tx": "0x7335d51cedaa6b08d8d8587747d97c34252bd30b5193d0b85a3b065f1d2f5cc7",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xe2370cfda486360ea6026b6b373114e490e86f571e248ce053b84a2e9a0d7990"
+        "url": "https://testnet.monadvision.com/tx/0x7335d51cedaa6b08d8d8587747d97c34252bd30b5193d0b85a3b065f1d2f5cc7"
       },
       {
-        "line": 27,
+        "line": 25,
         "n": 0,
         "call": "decide",
-        "tx": "0xd723d80b65c851780a5f1562172352f106479eda8ae627c6564efe9155e60c3f",
+        "tx": "0x8fba4e7f2af3b6d85eb43122a03d31f6a8531667000cf62fb1bdec8ea021b651",
         "ok": true,
-        "url": "https://testnet.monadvision.com/tx/0xd723d80b65c851780a5f1562172352f106479eda8ae627c6564efe9155e60c3f"
+        "url": "https://testnet.monadvision.com/tx/0x8fba4e7f2af3b6d85eb43122a03d31f6a8531667000cf62fb1bdec8ea021b651"
       }
     ],
     "onchain": {
       "client": "0xd51bb0f75bebcb03ee5b40f1f0a04a5ba060f845",
       "contractor": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
-      "policy_hash": "0x679a6f550d7d7be5cd18983f2d4d7245cf05580d510cf7e85eb10dcd270dc73c",
+      "policy_hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b",
       "budget": 1500000,
       "funded": 1500000,
       "reserved": 1000000,
       "paid": 24200,
       "refunded": 0,
       "paused": false,
-      "log_head": "0x1f38b4ab85c862b7c44d26aaeca0f117af87cf5f6fb9e0baa1d1017bfd208285",
+      "log_head": "0xf9393a0f6b59b2d38d3cba693aa84e94276ba140479d720086fe7b6b02fc47b3",
       "available": 475800
     },
     "engine": {

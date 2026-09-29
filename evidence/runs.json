@@ -1,5 +1,5 @@
 {
-  "project": "p16821e868189",
+  "project": "p20951e674af4",
   "runs": {
     "inside": {
       "task": "A1",
@@ -20,10 +20,10 @@
         "problems": [],
         "usage": {
           "tokens": 715,
-          "cost_usd": 5.8e-05,
+          "cost_usd": 0,
           "recorded_cost_usd": 5.8e-05,
           "seconds": 1.49,
-          "cached": false,
+          "cached": true,
           "calls": 1
         },
         "model": "qwen3-32b",
@@ -50,9 +50,10 @@
           {
             "need": "메인 페이지 이미지 소스",
             "offers": [
-              "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124"
+              "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124",
+              "95c0098539109054968c5b6b6e51ee3395037d7544827d0cf829b35725fe971b"
             ],
-            "why": "Adobe Stock에서 제공하는 표준 라이선스 이미지 팩은 웹사이트 사용에 적합하며, 40장의 이미지로 메인 페이지 구성에 충분하다."
+            "why": "40장 팩이 우선이며, 웹사이트 사용이 허용된 정식 라이선스를 제공합니다."
           }
         ],
         "skip": []
@@ -61,16 +62,16 @@
         "ok": true,
         "problems": [],
         "usage": {
-          "tokens": 677,
-          "cost_usd": 6.4e-05,
-          "recorded_cost_usd": 6.4e-05,
-          "seconds": 1.73,
+          "tokens": 898,
+          "cost_usd": 7.5e-05,
+          "recorded_cost_usd": 7.5e-05,
+          "seconds": 1.64,
           "cached": false,
           "calls": 1
         },
         "model": "qwen3-32b",
         "generation_ids": [
-          "aeb7f4a0-34c2-409b-b59f-6ab96e99a0b0"
+          "d9c4efe3-0d3b-4b18-b0f1-189e457887e7"
         ]
       },
       "tried": [
@@ -81,6 +82,14 @@
           "result": "BLOCK",
           "rule": "per_purchase",
           "status": "BLOCKED"
+        },
+        {
+          "need": "메인 페이지 이미지 소스",
+          "document": "95c0098539109054968c5b6b6e51ee3395037d7544827d0cf829b35725fe971b",
+          "expense": "E3",
+          "result": "APPROVE",
+          "rule": null,
+          "status": "RESERVED"
         }
       ],
       "stopped": null
@@ -104,10 +113,10 @@
         "problems": [],
         "usage": {
           "tokens": 665,
-          "cost_usd": 5.5e-05,
+          "cost_usd": 0,
           "recorded_cost_usd": 5.5e-05,
           "seconds": 1.59,
-          "cached": false,
+          "cached": true,
           "calls": 1
         },
         "model": "qwen3-32b",
@@ -119,7 +128,7 @@
         {
           "need": "기계식 키보드",
           "document": "906988cc1a48840e57ee388ebd4f63906a33d9089f9119a22cd4130b9b73ee03",
-          "expense": "E3",
+          "expense": "E4",
           "result": "BLOCK",
           "rule": "vendor",
           "status": "BLOCKED"
@@ -146,10 +155,10 @@
         "problems": [],
         "usage": {
           "tokens": 878,
-          "cost_usd": 7.3e-05,
+          "cost_usd": 0,
           "recorded_cost_usd": 7.3e-05,
           "seconds": 1.61,
-          "cached": false,
+          "cached": true,
           "calls": 1
         },
         "model": "qwen3-32b",
@@ -161,7 +170,7 @@
         {
           "need": "웹 호스팅",
           "document": "e7ecdb3cba1f7e9b605a54151a2bcafb507388cc4aca5c1b300be17c47defe31",
-          "expense": "E4",
+          "expense": "E5",
           "result": "HOLD",
           "rule": null,
           "status": "HOLD_REVIEW"
@@ -188,10 +197,10 @@
         "problems": [],
         "usage": {
           "tokens": 660,
-          "cost_usd": 5.7e-05,
+          "cost_usd": 0,
           "recorded_cost_usd": 5.7e-05,
           "seconds": 1.76,
-          "cached": false,
+          "cached": true,
           "calls": 1
         },
         "model": "qwen3-32b",
@@ -203,7 +212,7 @@
         {
           "need": "디자인 협업 툴 2석",
           "document": "f1b264dfb388bb9dfadfc83722fe3998e27a8b90766b5ea91fc6ac9928724630",
-          "expense": "E5",
+          "expense": "E6",
           "result": "BLOCK",
           "rule": "state",
           "status": "BLOCKED"
@@ -230,10 +239,10 @@
         "problems": [],
         "usage": {
           "tokens": 623,
-          "cost_usd": 5.2e-05,
+          "cost_usd": 0,
           "recorded_cost_usd": 5.2e-05,
           "seconds": 1.46,
-          "cached": false,
+          "cached": true,
           "calls": 1
         },
         "model": "qwen3-32b",
@@ -245,7 +254,7 @@
         {
           "need": "호스팅 플랜 한 달 구매",
           "document": "5699c3e9e0d4d49b766f9eb24e99f5207363a91bbd0a0f4eec7a06bd7a681ab6",
-          "expense": "E6",
+          "expense": "E7",
           "result": "BLOCK",
           "rule": "window",
           "status": "BLOCKED"
