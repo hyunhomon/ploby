@@ -2,6 +2,8 @@ A Smart Escrow system that uses AI to interpret project contracts, budgets, and 
 
 Phase 1 is the Base Sepolia contracts only. The API, UI, and demo evidence table are not built yet.
 
+The accepted target architecture is documented in [`docs/adr`](docs/adr/README.md). Those ADRs include bilateral purchase commitments, settlement deadlines, policy versioning, refunds, asset handover, and shared-expense allocation that the current Phase 1 contracts do not yet implement.
+
 ## Quickstart
 
 ```shell

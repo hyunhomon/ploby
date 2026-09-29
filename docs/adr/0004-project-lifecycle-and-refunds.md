@@ -1,4 +1,4 @@
-# ADR 0004: Project Lifecycle and Refunds
+# ADR 0004: Project Lifecycle, Pause, Close, and Refunds
 
 - Status: Accepted - implementation pending
 - Date: 2026-09-29
@@ -6,102 +6,124 @@
 
 ## Context
 
-The initial contract exposes a terminal-looking `stopProject` operation but provides no withdrawal path. As a result, stopping a project can freeze unspent funds indefinitely. The product concept also uses "pause", "revoke authorization", and "emergency stop" as if they were interchangeable, although they have different operational and financial consequences.
+The initial contract exposes `stopProject` but has no refund path. It also freezes release of previously approved decisions. That allows emergency control to erase the practical value of a contractor's payment assurance and can lock unspent funds indefinitely.
 
-Pending HOLD and APPROVE decisions also need expiry rules so they cannot remain payable forever after project circumstances change.
+The product previously used pause, stop, revoke, close, and emergency freeze as if they were interchangeable. They require different authority and financial effects.
 
 ## Decision
 
-Project control will distinguish a reversible pause from a terminal close. Every terminal path provides a defined way to return unspent and unreserved funds to the client.
+Project lifecycle, new-commitment pause, and protocol security freeze are separate concepts.
 
-## Project states
+- Project lifecycle determines whether new obligations may be created and whether the project is winding down.
+- A client pause affects only new purchase commitments.
+- A bounded security freeze may delay all execution while a compromised signer or contract issue is contained, but it cannot cancel obligations.
+- Closing preserves existing commitments and returns only funds that are neither released nor reserved.
+
+## Lifecycle states
 
 ```text
-DRAFT -> ACTIVE <-> PAUSED -> CLOSING -> CLOSED
-   |        |          |          |
-   +--------+----------+----------+-> CANCELLED
+DRAFT -> ACTIVE -> CLOSING -> CLOSED
+   \         \
+    -> CANCELLED
 ```
 
-| State | Meaning | Allowed financial actions |
+| State | Entry condition | Allowed actions |
 | --- | --- | --- |
-| DRAFT | Project exists but is not funded and policy acceptance may be incomplete | Fund, activate, or cancel |
-| ACTIVE | New requests and eligible releases are allowed | Submit, decide, reserve, release, pause, or begin close |
-| PAUSED | Emergency reversible freeze | Review history, reject pending items, resume, or begin close; no new approval or release |
-| CLOSING | Terminal wind-down and pending-liability resolution | Reject or expire unresolved items and withdraw only unreserved funds |
-| CLOSED | Final state after liabilities are resolved and refundable funds withdrawn | Read-only |
-| CANCELLED | Final state for an unfunded project or a funded project with no remaining liabilities | Refund if funded, then read-only |
+| DRAFT | Project created; funding or bilateral policy acceptance incomplete | Fund, accept policy, activate, or cancel |
+| ACTIVE | Policy accepted and required funding available | Create commitments, submit evidence, settle, amend policy, pause new commitments, or begin close |
+| CLOSING | Either client or contractor initiates close | No new commitments; existing obligations settle, expire, cancel bilaterally, or resolve through dispute; unreserved funds may be refunded |
+| CLOSED | No active obligations or reservations remain and refundable funds were withdrawn | Read-only audit access |
+| CANCELLED | DRAFT project cancelled, or ACTIVE project with no active obligation cancelled bilaterally | Refund funded balance, then read-only audit access |
 
-The existing `stopProject` behavior is not the target terminal close behavior. A later implementation must either redefine it as pause or replace it with explicit lifecycle operations.
+An ACTIVE project cannot jump to CANCELLED while an active commitment exists. It enters CLOSING instead.
 
-## Decision lifecycle
+## Pause of new commitments
 
-```text
-SUBMITTED -> APPROVED -> RELEASED
-     |           |  \
-     |           |   -> EXPIRED
-     |           -> REVOKED
-     -> HELD -> CLIENT_APPROVED -> RELEASED
-          |             |
-          -> REJECTED    -> EXPIRED
-          -> EXPIRED
-     -> BLOCKED
-```
+`newCommitmentsPaused` is a project flag controlled by the client.
 
-- APPROVE reserves the decision amount until release or expiry.
-- HOLD reserves no budget until the client approves it, unless a project policy explicitly opts into reservations for review.
-- Client approval of a HOLD creates a reservation for the exact payment intent.
-- BLOCK and REJECTED are terminal.
-- Decisions carry `validUntil`; expiration is deterministic and cannot be extended without a new decision.
-- Pausing a project prevents release even for previously approved decisions.
-- Resuming does not revive an expired decision.
+When true:
 
-## Closing and refund rules
+- new commitment requests cannot be accepted;
+- bilaterally signed policy amendments may activate, but no new commitment may be created until the project resumes;
+- existing commitments may receive evidence, resolve HOLD, and settle normally;
+- existing deadlines continue to run;
+- the contractor may cancel an unused reservation;
+- the client may resume or begin closing.
 
-1. The client initiates closing from ACTIVE or PAUSED.
-2. New requests and new approvals stop immediately.
-3. Existing HOLD requests are rejected or allowed to expire.
-4. Existing approved reservations may be released during a configured closing grace period only if the project was not emergency-paused for suspected compromise.
-5. After the grace period, unreleased reservations expire.
-6. The client withdraws `deposited - released - activeReservations`.
-7. When active reservations and escrow balance are zero, or the refundable balance has been withdrawn, the project becomes CLOSED.
+The client cannot use pause to cancel, delay, or change an existing commitment. A reason code is recorded for every pause and resume.
 
-For the hackathon MVP, the closing grace period may be zero and every unreleased decision may expire on close. This simpler behavior must be shown in the UI and demo script.
+## Security freeze
 
-Refunds always go to the recorded client funding address. Changing the refund address requires a separate authenticated recovery flow and is out of scope for the MVP.
+`securityFreezeUntil` is a protocol-wide or contract-wide execution guard for signer compromise, contract vulnerability, or chain incident.
 
-## Emergency behavior
+- Only the administrator multisig may activate it.
+- One activation lasts at most 72 hours.
+- All activations for one incident have a cumulative maximum of seven days; changing the incident identifier does not reset the cap while the same root cause remains unresolved.
+- It blocks new commitments and fund transfers, including existing settlements.
+- It does not cancel or modify any obligation.
+- Every affected client-review, resolver-review, commitment, and settlement deadline is extended by the exact freeze duration.
+- Extending beyond 72 hours requires a new multisig action and public incident record.
+- Before the seven-day cumulative cap, the protocol must resume or offer a recovery contract migration that each project's client and contractor approve. The administrator cannot migrate a project unilaterally.
+- At the cumulative cap, the freeze expires automatically for projects that did not approve migration; administrator safety authority does not become an indefinite custody right.
+- Restoring signer service does not resume a client-paused project.
 
-- The client can pause immediately without cooperation from the agent.
-- A contract administrator may pause a compromised global signer but cannot take project funds.
-- A backend outage does not prevent the client from entering PAUSED or CLOSING.
-- Signer rotation does not reactivate a paused project.
-- A failed token transfer leaves accounting and the decision state unchanged.
+The security freeze is not available for commercial disputes.
+
+## Closing behavior
+
+1. Entering CLOSING stops new commitments immediately.
+2. Unused reservations remain valid until their pre-spend expiry; the contractor may cancel them earlier.
+3. Commitments against which the contractor spent before expiry remain payable under the pinned policy.
+4. Submitted settlements and disputes continue through their normal deadlines.
+5. The client may withdraw only `funded - released - activeReservations`.
+6. Expired or cancelled unused reservations return to available balance.
+7. When no active reservation, settlement, or dispute remains and every asset-register item is resolved under [ADR 0006](0006-project-assets-and-handover.md), the remaining balance is refundable and the project becomes CLOSED after withdrawal.
+
+Closing never accelerates rejection of a valid obligation and never changes its policy version.
+
+## Refund destination and recovery
+
+Refunds go to the recorded funding address by default. A refund address may change only through a separately signed recovery payload from the client and the configured recovery authority. The policy signer and resolver cannot change it.
+
+The MVP may omit address recovery, in which case the funding address is immutable and the UI must warn the client before funding.
+
+## Failure guarantees
+
+- A backend outage does not prevent the client from pausing new commitments or beginning close through the contract.
+- A client cannot prevent settlement by remaining silent; ADR 0005 timeout rules apply.
+- A failed token transfer leaves reservation, accounting, and settlement state unchanged.
+- No terminal path may leave funds without an identified owner or active obligation.
+- If a token is unsupported, fee-on-transfer, rebasing, paused, or otherwise incompatible, the project cannot activate with that asset.
 
 ## Consequences
 
 ### Positive
 
-- Emergency response no longer implies permanent loss of access to funds.
-- The UI can explain exactly which actions are available in each state.
-- Approved but unreleased expenses cannot remain valid indefinitely.
-- Refund accounting accounts for pending liabilities.
+- Client emergency control and contractor payment assurance coexist.
+- Accepted commitments survive pause and project wind-down.
+- Unreserved funds always have a defined refund path.
+- A genuine security incident can temporarily halt loss without erasing obligations.
 
 ### Negative
 
-- The contract and backend need explicit state-transition and reservation logic.
-- Closing requires time and expiry handling.
-- The current contract does not implement refunds, resume, closing, or decision expiry.
+- Closing may remain open until valid commitments and disputes resolve.
+- Reservation accounting and deadline extensions add contract state.
+- The current contract does not implement these states, refunds, or bounded freeze behavior.
 
 ## Rejected alternatives
 
-### Make stop permanent without a refund path
+### Freeze every existing commitment when the client stops the agent
 
-Rejected because unspent funds can become locked indefinitely.
+Rejected because the client could revoke costs after the contractor relied on an accepted commitment.
 
-### Allow immediate refund while approved decisions remain payable
+### Refund the entire balance immediately on close
 
-Rejected because the same funds could be promised to a payee and returned to the client.
+Rejected because reserved funds are already promised to existing obligations.
 
-### Allow the backend agent to resume a client pause
+### Allow an indefinite emergency freeze
 
-Rejected because the emergency control must remain effective if the backend or signer is compromised.
+Rejected because an administrator-controlled indefinite freeze recreates payment withholding.
+
+### Allow the backend signer to resume client pause
+
+Rejected because a compromised signer must not override the client's control over new obligations.

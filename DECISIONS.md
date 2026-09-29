@@ -1,6 +1,8 @@
 # Decisions
 
-Assumptions made where the spec is silent. Newest first.
+Implementation assumptions made where the initial spec is silent. Newest first.
+
+This file describes the current Phase 1 contracts. Accepted target architecture is recorded in [`docs/adr`](docs/adr/README.md). Where a Phase 1 choice conflicts with an ADR, this file remains the description of current behavior and the ADR is the required direction for future implementation. In particular, the target design replaces reimbursement-only decisions with bilateral purchase commitments, preserves accepted commitments through client pause, and adds settlement deadlines and refunds.
 
 ## 2026-09-29 — Phase 1 contracts
 

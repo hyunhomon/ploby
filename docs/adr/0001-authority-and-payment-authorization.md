@@ -6,109 +6,116 @@
 
 ## Context
 
-SmartEscrow uses an LLM to extract meaning from contracts, expense requests, and evidence. A deterministic policy engine then evaluates the structured expense. The product claim is that AI interprets information while code controls permission.
+SmartEscrow uses an LLM to extract meaning from contracts, expense requests, and evidence. A deterministic policy engine evaluates that structured input. The product claim is that AI interprets information while code controls permission.
 
-The initial contract uses one backend `agent` address for both recording a decision and releasing funds. A release supplies the payee at execution time, while the recorded decision commits only to the project, evidence, policy, amount, decision code, and timestamp. This makes the backend signer a trusted spending authority and allows it to choose a payee that was not part of the recorded decision.
+The initial contract uses one backend `agent` address to record decisions and release funds. The payee is supplied only at release time. That design makes the signer a trusted spending authority and does not bind the recorded approval to the eventual recipient.
 
-It is important to state the trust boundary honestly. An LLM is not trusted, but an online service that can sign arbitrary release transactions is still financially trusted even when it is called an agent.
+A bilateral escrow also requires constrained client authority. A client must be able to stop new obligations and respond to fraud, but must not cancel an expense after the contractor relied on an accepted commitment.
 
 ## Decision
 
-We will separate AI interpretation, deterministic policy evaluation, transaction authorization, and contract execution into distinct logical roles. The LLM will never have access to a blockchain signing key.
+AI interpretation, deterministic evaluation, transaction authorization, transaction submission, administration, and dispute resolution are separate logical authorities. The LLM has no wallet, signing key, contract write access, or ability to select the final decision.
 
-Every releasable decision will commit to an immutable `PaymentIntent`. The contract must only release the exact asset, amount, and payee committed by that intent.
+Every fund-changing action commits to an immutable typed payload. The escrow releases only the exact asset, amount, payee, project, and obligation identified by that payload.
 
-The MVP backend policy signer remains a trusted component with authority up to the remaining funded project budget. This is an explicit MVP trust assumption, not a claim of trustlessness. Production designs must reduce that authority with client-signed permits or on-chain enforceable limits before the system is presented as non-custodial or trust-minimized.
+The MVP policy signer and resolver are explicitly trusted platform components. This is a disclosed centralization assumption. The service must not be described as trustless or fully non-custodial while those roles can affect settlement.
 
-## Roles
+## Roles and limits
 
-| Role | Authority |
-| --- | --- |
-| Client | Creates and funds a project, accepts policy versions, manages project payees, resolves HOLD requests, pauses or closes the project, and withdraws refundable funds |
-| Contractor | Submits expense requests and evidence; cannot release escrowed funds |
-| LLM parser | Produces an untrusted structured extraction; has no signing key and no direct contract access |
-| Policy engine | Applies deterministic rules to validated input and produces a decision trace; has no custody key |
-| Policy signer | Signs a validated decision envelope after schema and policy checks; cannot alter fields after signing |
-| Transaction relayer | Submits signed envelopes and pays gas; cannot change the signed payment intent |
-| Escrow contract | Enforces signer authority, intent integrity, replay protection, project state, expiry, and available balance before transfer |
+| Role | May | Must not |
+| --- | --- | --- |
+| Client | Fund a project, jointly accept policy versions and change orders, pause new commitments, review HOLDs, initiate close, receive refundable funds | Rewrite or revoke an accepted commitment, redirect a payment, or withhold indefinitely |
+| Contractor | Jointly accept policy versions, request commitments, submit evidence, cancel an unused reservation, open a dispute, and initiate project close | Release funds, increase a commitment, or change its payee |
+| LLM parser | Propose structured fields and classifications | Sign, approve, release, or decide a dispute |
+| Policy engine | Apply versioned deterministic rules and generate a decision trace | Override a deterministic rule with model output |
+| Policy signer | Sign schema-valid commitment and settlement envelopes produced by approved policy-engine code | Change payload fields after evaluation or act as administrator |
+| Relayer | Submit signed payloads and pay gas | Change a signed payload or create authority by itself |
+| Resolver | Decide only the disputed amount and reason codes within an existing obligation | Redirect the payee, exceed the disputed cap, edit policy, or take project funds |
+| Administrator | Rotate compromised service signers and activate a bounded security freeze | Spend project funds, cancel obligations, or resolve commercial disputes |
+| Escrow contract | Enforce signatures, exact payloads, state, deadlines, replay protection, reservations, and balance | Interpret natural language or evidence |
 
-The policy signer and contract administrator use different keys. The administrator can rotate a compromised signer but cannot silently rewrite an existing decision.
+The policy signer, resolver, and administrator use separate keys. The administrator is a multisig before any non-demo deployment. Key rotation never changes or revives an existing obligation.
 
-## Payment intent
+## Typed authorization payloads
 
-A decision must commit to at least the following fields:
+The system uses two financial payloads defined in [ADR 0005](0005-purchase-commitments-and-settlement.md):
+
+- `PurchaseCommitment`: reserves budget before the contractor spends.
+- `SettlementIntent`: pays an eligible amount against that commitment.
+
+Both payloads are domain-separated by `chainId` and `escrowContract` and bind at least:
 
 ```text
-PaymentIntent
-- chainId
-- escrowContract
 - projectId
-- requestId
-- evidenceManifestHash
-- policyHash
-- policyVersion
+- obligationId
+- policyHash and policyVersion
+- evidenceManifestHash, when evidence exists
 - asset
 - payee
-- amountBaseUnits
-- decision: APPROVE | HOLD | BLOCK
-- reasonCodes[]
+- amountBaseUnits or maximumAmountBaseUnits
 - nonce
 - validUntil
 ```
 
-The canonical intent digest is domain-separated by chain and escrow contract. A request ID is unique within a project, and a nonce or consumed digest prevents replay.
+The payee and settlement asset are fixed before authorization. For direct vendor payment, the payee is the vendor address registered in the commitment. For reimbursement, the payee is the contractor wallet registered by the accepted project policy. A relayer cannot substitute either value.
 
-The asset and payee are fixed before policy evaluation. A relayer cannot provide a different payee during release. For direct vendor payments, the payee must be registered in the active policy or project payee registry. For reimbursements, the payee must be the contractor wallet registered for that project. The MVP must support one payment mode per project; mixed direct-payment and reimbursement behavior is out of scope until the accounting rules are specified.
+## Bilateral authority rules
 
-## Decision behavior
+- A policy or change order activates only after client and contractor signatures.
+- Once a purchase commitment is accepted, the client cannot revoke it unilaterally.
+- Pausing the project stops new commitments but does not stop eligible settlement of existing commitments.
+- A global security freeze may temporarily delay execution under [ADR 0004](0004-project-lifecycle-and-refunds.md), but it preserves the obligation and extends its deadlines.
+- HOLD resolution is scoped to an exact obligation digest. Client approval cannot modify amount, asset, or payee.
+- Client rejection of a committed settlement is an objection that opens resolver review; it is not a unilateral terminal rejection.
+- Resolver decisions are bounded by the existing commitment and cannot create a larger payment.
+- BLOCK and REJECTED obligations are never payable.
 
-- `APPROVE` may be released automatically while the decision is valid and the project is active.
-- `HOLD` is never releasable until the client explicitly approves the exact decision digest. Client approval cannot modify the amount, asset, or payee.
-- `BLOCK` is never releasable.
-- Parser failure, model failure, schema failure, missing evidence, policy mismatch, or signer uncertainty results in HOLD or no decision, never APPROVE.
-- A released, rejected, expired, or superseded decision cannot be reused.
-
-## Key controls
+## Key and service controls
 
 For the MVP:
 
-- The policy signer key is stored only in the backend secret store and is never exposed to the LLM process or browser.
-- Signer rotation is recorded on-chain.
-- All signing attempts, including rejected attempts, are logged with a request ID.
-- The relayer accepts only a complete, schema-valid, signed envelope.
-- The UI labels the backend signer as a trusted MVP component.
+- Keys are held in the backend secret store and are never exposed to the LLM process, uploaded documents, prompts, or browser.
+- The signing service accepts only a versioned, schema-valid evaluation result from the policy engine.
+- The relayer accepts only a complete signed envelope and verifies it locally before submission.
+- Every signing, rejection, rotation, and resolver action is audit-logged by obligation ID.
+- The UI identifies the policy signer and resolver as trusted MVP components.
 
 Before production use:
 
-- Prefer per-payment client permits, a constrained smart account, or on-chain caps and payee allowlists.
-- Use a multisig for administrator authority.
-- Apply rate limits and per-project circuit breakers to reduce loss from signer compromise.
+- Use an HSM or managed signing service for online keys.
+- Put administrator authority behind a multisig and a bounded emergency procedure.
+- Apply per-project and global value-rate circuit breakers.
+- Prefer constrained smart accounts, client-signed permits, or on-chain payee and amount caps to reduce signer authority.
 
 ## Consequences
 
 ### Positive
 
-- The product claim "AI interprets, code authorizes" becomes testable.
 - Payment destination substitution is prevented.
-- HOLD approval is scoped to one exact payment rather than a mutable request.
-- The centralization that remains in the MVP is documented instead of hidden.
+- Neither AI nor the relayer has financial authority.
+- Client emergency controls cannot silently erase contractor commitments.
+- Remaining MVP centralization is explicit and testable.
 
 ### Negative
 
-- The decision schema and contract interface are larger.
-- Payee registration and payment-mode selection add onboarding steps.
-- The current `PaymentDecision` and `release` interface do not satisfy this ADR and will require a later contract change.
+- The current `PaymentDecision` and `release` interface do not satisfy this ADR.
+- Multiple keys and bounded roles increase operational complexity.
+- Production trust minimization requires more on-chain enforcement than the initial contract provides.
 
 ## Rejected alternatives
 
 ### Let the agent choose the payee during release
 
-Rejected because the recorded approval would not authorize the actual destination of funds.
+Rejected because the recorded approval would not authorize the actual destination.
 
 ### Give the LLM a wallet or transaction tool
 
-Rejected because prompt injection, parsing errors, and model behavior would become direct financial authority.
+Rejected because prompt injection and interpretation errors would become direct financial authority.
 
-### Require manual client approval for every expense
+### Give the client unilateral cancellation authority
 
-Rejected as the default because it removes the automatic release value proposition. It remains a valid project-level safety mode.
+Rejected because a contractor could rely on a commitment, spend funds, and then lose the promised reimbursement.
+
+### Require manual client approval for every settlement
+
+Rejected as the default because client silence would recreate the payment-delay problem. Projects may opt into manual approval only if the timeout fallback remains explicit.
