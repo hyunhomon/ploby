@@ -14,6 +14,15 @@
 | (여유 있으면) | 터미널 `python3 harness/tamper.py` | "로그의 금액 한 줄을 고치면 감사 도구가 그 줄을 지목합니다. 데모 키로 다시 서명해도, 체인에 박힌 로그 헤드와 지급액이 달라 잡힙니다. 체인이 기록의 진위를 보증하는 부분입니다." |
 | 2:40–3:00 | [`efficiency.md`](efficiency.md) 표 | "돈을 움직이는 결정에는 LLM 호출이 0번입니다. 규칙은 프로젝트당 한 번 컴파일하고, 문서마다 한 번 읽고, 캐시합니다. 흐름별 토큰과 에너지 추정은 이 표에 있습니다. AI는 해석만, 돈은 규칙과 컨트랙트가 움직입니다." |
 
+## 발표 전 체크리스트
+
+1. `git pull`, `.env`에 `KILN_API_KEY`·`DEPLOYER_KEY`·`RELAYER_KEY`(체인 키는 web3 담당에게).
+2. `python3 -m escrow.server` 시작 줄에 `Kiln on`과 `chain Monad testnet 0x0c54…`가 보이는지 확인.
+3. `cd frontend && npm run dev`, 그리고 `python3 harness/demo_setup.py`가 출력한 클라이언트·작업자 링크를 두 창에 엽니다 (`&as=`가 창마다 역할을 고정).
+4. 기본 작업 문장과 견적 7개로 한 번 리허설해 캐시를 만듭니다. 운영자 가스는 `python3 -c "from escrow import chain; print(chain.Rail(write=False).gas('operator'))"`로 확인(0.3 MON 아래면 워커가 자동 보충).
+5. 탐색기 탭에 PlobyEscrow 주소를 열어 둡니다.
+6. 네트워크가 안 되면: 화면 대신 [`evidence.md`](evidence.md)의 표와 tx 링크, README의 화면 캡처, `python3 harness/tamper.py --offline`으로 설명합니다. 결과는 같습니다.
+
 ## 예상 질문
 
 - **운영자 키가 털리면?** 정책 밖 판정을 기록할 수는 있어도 작업자 외 주소로 보내거나 예치금보다 많이 움직일 수 없습니다. 클라이언트는 언제든 온체인에서 멈출 수 있습니다. 판정까지 온체인에서 강제하는 것(EIP-712, 프로젝트별 ProjectEscrow)은 목표 설계입니다.
