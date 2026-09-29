@@ -364,7 +364,7 @@ export function AuditCard({ view }: { view: ProjectView }) {
               {p.payments.map((x) => (
                 <div key={`${x.line}-${x.unit ?? ""}`} className="small">
                   #{x.line} {x.unit ? `${x.unit} ` : ""}
-                  {won(x.amount)} — {x.how}
+                  {won(x.amount)} — {t(`audit.how.${x.op}`, { defaultValue: x.how })}
                 </div>
               ))}
             </div>
