@@ -1,5 +1,6 @@
 """The pipeline's model stages, and which model runs each — one place to route a stage to
-another model or to switch its reasoning, then measure the change with harness/gate.py.
+another model or to switch its reasoning, then measure the change: python3 harness/check.py, a cached
+evidence run (harness/evidence.py) and python3 harness/usage_report.py for tokens, cost and energy per flow.
 
     write    words -> the six expressions (compiler.py)
     read     words -> the form, blind to the writer (compiler.py)

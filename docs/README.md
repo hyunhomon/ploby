@@ -13,6 +13,10 @@ Ploby is a bilateral project escrow. It protects clients from unauthorized spend
 | [Terminology](terminology.md) | Everyone | Canonical meaning of product and state-machine terms |
 | [Architecture decisions](adr/README.md) | Engineering and reviewers | Normative decisions and rejected alternatives |
 | [Kiln API notes](kiln-notes.md) | Backend engineering | Current model-provider integration notes |
+| [Ploby on chain](chain.md) | Reviewers and engineering | PlobyEscrow on Monad testnet: what the contract enforces, how each log line becomes a call, what the engine reads, writes and settles |
+| [Challenge B evidence](evidence.md) | Reviewers | Six purchase-agent runs, five pushed outside the line, each with its log line, decision and transaction, re-checkable with the auditor |
+| [Demo script](demo.md) | Presenters (Korean) | The three-minute demo and expected questions |
+| [Kiln usage and efficiency](efficiency.md) | Reviewers and engineering | Kiln token use and cost per flow, energy estimates with their sources, and how the design avoids unnecessary inference |
 | [Ploby API](api.md) | Frontend and backend engineering | The contract between the engine (`escrow/`) and the web app (`frontend/`) |
 
 ## Document authority

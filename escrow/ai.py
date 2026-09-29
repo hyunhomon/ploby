@@ -3,7 +3,6 @@ document -> a proposal. The model reads; code decides.
 
     compile_policy   the client's expense words -> two blind readings (pcp compiler), both readbacks
     read_quote       one quote or invoice -> {merchant, category, item, amount, fee, units}
-    usage_by_flow    the Kiln calls of a run -> tokens, cost and an energy bound per flow
 
 read_quote never lets the document choose who is paid: the model copies what the document says
 (who issued it, the amounts as written), and code maps the issuer to a registry id, takes the
@@ -199,46 +198,6 @@ def read_quote(text, sample=0):
     proposal, fields, problems = proposal_of(answer, text)
     return {'ok': proposal is not None, 'proposal': proposal, 'fields': fields, 'problems': problems,
             'digest': digest, 'calls': calls}
-
-
-# -- what it cost
-
-WATTS = 180  # one FuriosaAI RNGD card's published TDP (an assumption: Kiln does not publish its hardware)
-
-
-def usage_by_flow(calls, recorded=False):
-    """Kiln calls -> [{flow, model, calls, live_calls, cached_calls, prompt_tokens, cached_tokens,
-    completion_tokens, cost_usd, seconds, energy_wh}], one row per (flow, model).
-
-    Tokens, cost, seconds and energy count live calls only: a cached replay is free and draws
-    nothing. energy_wh is an ESTIMATE, not a bound: 180 W (one RNGD card, published TDP) x
-    measured latency, the whole card attributed to one call, network time included. The hardware
-    behind the endpoint is not published : N cards per request -> N x,
-    batching across requests -> less. cached_tokens: prompt tokens the prefix cache served.
-    recorded=True: count a cached replay at the usage recorded when it ran live (a replayed demo
-    shows what the flow cost; cached_calls still says these were replays, free now)."""
-    rows = {}
-    for c in calls:
-        flow = c.get('stage') or '?'
-        row = rows.setdefault((flow, c.get('model')), {
-            'flow': flow, 'model': c.get('model'), 'calls': 0, 'live_calls': 0, 'cached_calls': 0, 'prompt_tokens': 0,
-            'cached_tokens': 0, 'completion_tokens': 0, 'cost_usd': 0.0, 'seconds': 0.0, 'energy_wh': 0.0})
-        row['calls'] += 1
-        if c.get('cached'):
-            row['cached_calls'] += 1
-            if not recorded:
-                continue
-        u = c.get('usage') or {}
-        row['live_calls'] += not c.get('cached')
-        row['prompt_tokens'] += u.get('prompt_tokens') or 0
-        row['cached_tokens'] += (u.get('prompt_tokens_details') or {}).get('cached_tokens') or 0
-        row['completion_tokens'] += u.get('completion_tokens') or 0
-        row['cost_usd'] += u.get('cost') or 0
-        row['seconds'] += (c.get('latency_ms') or 0) / 1000
-    for row in rows.values():
-        row['energy_wh'] = round(row['seconds'] * WATTS / 3600, 4)
-        row['seconds'], row['cost_usd'] = round(row['seconds'], 2), round(row['cost_usd'], 6)
-    return list(rows.values())
 
 
 # -- what the engine keeps (PROJECT_OVERVIEW §9: validated inputs and outputs, versions, usage — never the
