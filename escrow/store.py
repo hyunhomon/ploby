@@ -290,7 +290,7 @@ class Store:
         with self.lock:
             self.keeper(pid)
             P = self.get(pid)
-            now = self.now()
+            now = max(self.now(), P.at)  # a demo clock set back never dates a line before the last one
             if action == 'sign_policy':
                 inputs['signature'] = pol.sign(role, P.version(params.get('version'))['hash'])
             if 'manifest_docs' in inputs:
@@ -323,7 +323,7 @@ class Store:
             P = self.get(pid)
             offers = [{'id': d['id'], 'name': d['name']} for d in docs]
             P, _ = self.commit(P, self.line('contractor', 'agent_task', {'task': task, 'offers': offers},
-                                            {'plan': found, 'ai': meta}, self.now()))
+                                            {'plan': found, 'ai': meta}, max(self.now(), P.at)))
             tid = P.agent_tasks[-1]['id']
         tried, stopped = [], None
         for need in found['needs']:
