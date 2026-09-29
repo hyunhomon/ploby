@@ -1,327 +1,334 @@
-import { useEffect, useState } from "react"
-import { api, basescanTx, type Decision, type Health, type Hold, type Metrics, type Spending } from "./api"
+// Shell: top bar with the role switcher (stands in for wallet login), the demo clock
+// toolbar, a tiny hash router (#/, #/new, #/p/{id}), toasts and the 구현 범위 panel.
 
-const STORAGE_KEY = "smartescrow.projectId"
-const CASES = [
-  { label: "Case 1 · $200 AWS", text: "Request $200 for AWS server costs." },
-  { label: "Case 2 · gaming console", text: "Gaming console $300" },
-  { label: "Case 3 · $500 over limit", text: "Request $500 for AWS server costs." },
-  { label: "Case 4 · invoice #1023", text: "Invoice #1023 for AWS server costs $200" },
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+import { api, errorText, FIXTURE } from "./api"
+import { Home } from "./components/Home"
+import { NewProject } from "./components/NewProject"
+import { ProjectPage } from "./components/ProjectPage"
+import { AppContext, DocViewer, Modal, type AppCtx, type ToastKind } from "./components/ui"
+import { kst } from "./format"
+import { LANGUAGES, tr, type AppLanguage } from "./i18n"
+import { ROLE_KO, ROLE_NAME, ROLES, label } from "./labels"
+import type { Clock, DocRef, Meta, Role } from "./types"
+
+const ROLE_KEY = "ploby.role"
+
+function loadRole(): Role {
+  try {
+    const r = window.localStorage.getItem(ROLE_KEY)
+    if (r === "client" || r === "contractor" || r === "resolver") return r
+  } catch {
+    /* storage unavailable */
+  }
+  return "client"
+}
+
+function saveRole(r: Role) {
+  try {
+    window.localStorage.setItem(ROLE_KEY, r)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+type Route = { page: "home" } | { page: "new" } | { page: "project"; id: string }
+
+function parseHash(): Route {
+  const h = window.location.hash.replace(/^#/, "")
+  const m = h.match(/^\/p\/([^?]+)(?:\?.*)?$/)
+  if (m) {
+    try {
+      return { page: "project", id: decodeURIComponent(m[1]) }
+    } catch {
+      return { page: "home" }
+    }
+  }
+  if (h === "/new") return { page: "new" }
+  return { page: "home" }
+}
+
+interface Toast {
+  id: number
+  kind: ToastKind
+  text: string
+}
+
+const STEPS: [string, number][] = [
+  ["app.addHour", 3600],
+  ["app.addDay", 86400],
+  ["app.addThreeDays", 3 * 86400],
+  ["app.addWeek", 7 * 86400],
 ]
 
-const CHECK_LABELS: Record<string, string> = {
-  project_scope: "Project scope",
-  allowed_category: "Allowed category",
-  approved_vendor: "Approved vendor",
-  remaining_budget: "Remaining budget",
-  category_budget: "Category budget",
-  max_transaction: "Transaction limit",
-  deadline: "Deadline",
-  duplicate_evidence: "Duplicate evidence",
+function offsetText(offset: number): string {
+  // The contract gives `offset` without a unit; the demo clock uses milliseconds everywhere.
+  const ms = Math.abs(offset)
+  if (ms < 60_000) return ""
+  const d = Math.floor(ms / 86_400_000)
+  const h = Math.floor((ms % 86_400_000) / 3_600_000)
+  const parts = [d ? tr("common.day", { count: d }) : "", h ? tr("common.hour", { count: h }) : ""]
+    .filter(Boolean)
+    .join(" ")
+  return parts ? `${offset < 0 ? "−" : "+"}${parts}` : ""
 }
 
 export function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [metrics, setMetrics] = useState<Metrics | null>(null)
-  const [name, setName] = useState("Website Development")
-  const [clientAddress, setClientAddress] = useState("0x1111111111111111111111111111111111111111")
-  const [payeeAddress, setPayeeAddress] = useState("0x2222222222222222222222222222222222222222")
-  const [policyText, setPolicyText] = useState("")
-  const [projectId, setProjectId] = useState<string | null>(null)
-  const [projectStatus, setProjectStatus] = useState<string>("")
-  const [text, setText] = useState(CASES[0].text)
-  const [file, setFile] = useState<File | null>(null)
-  const [decision, setDecision] = useState<Decision | null>(null)
-  const [holds, setHolds] = useState<Hold[]>([])
-  const [spending, setSpending] = useState<Spending | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { t, i18n } = useTranslation()
+  const [role, setRoleState] = useState<Role>(loadRole)
+  const [route, setRoute] = useState<Route>(parseHash)
+  const [meta, setMeta] = useState<Meta | null>(null)
+  const [clock, setClock] = useState<Clock | null>(null)
+  const [viewNow, setViewNow] = useState<number | null>(null)
+  const [tick, setTick] = useState(0)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [doc, setDoc] = useState<DocRef | null>(null)
+  const [clockBusy, setClockBusy] = useState(false)
+  const [implOpen, setImplOpen] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
+  const [clockSlot, setClockSlot] = useState<HTMLElement | null>(null)
+  const toastId = useRef(0)
 
-  useEffect(() => {
-    api.health().then(setHealth).catch((err: Error) => setError(err.message))
-    api.demoPolicy().then((policy) => setPolicyText(JSON.stringify(policy, null, 2))).catch(() => undefined)
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) void loadProject(saved)
+  const notify = useCallback((kind: ToastKind, text: string) => {
+    const id = ++toastId.current
+    setToasts((t) => [...t.slice(-3), { id, kind, text }])
+    window.setTimeout(
+      () => setToasts((t) => t.filter((x) => x.id !== id)),
+      kind === "error" ? 9000 : kind === "info" ? 7000 : 3500,
+    )
   }, [])
 
   useEffect(() => {
-    if (!projectId) return
-    const source = new EventSource(`/api/projects/${projectId}/events`)
-    source.onmessage = () => {
-      void refresh(projectId)
+    const on = () => {
+      setRoute(parseHash())
+      window.scrollTo(0, 0)
     }
-    return () => source.close()
-  }, [projectId])
+    window.addEventListener("hashchange", on)
+    return () => window.removeEventListener("hashchange", on)
+  }, [])
 
-  async function loadProject(id: string) {
-    try {
-      const project = await api.project(id)
-      setProjectId(project.id)
-      setProjectStatus(project.status)
-      setName(project.name)
-      localStorage.setItem(STORAGE_KEY, project.id)
-      await refresh(project.id)
-    } catch {
-      localStorage.removeItem(STORAGE_KEY)
-      setProjectId(null)
-    }
+  useEffect(() => {
+    api
+      .meta()
+      .then(setMeta)
+      .catch(() => setMeta(null))
+    api
+      .clock()
+      .then(setClock)
+      .catch(() => setClock(null))
+  }, [])
+
+  const setRole = (r: Role) => {
+    setRoleState(r)
+    saveRole(r)
   }
 
-  async function refresh(id: string) {
-    const [nextHolds, nextSpending, nextMetrics, project] = await Promise.all([
-      api.holds(id),
-      api.spending(id),
-      api.metrics(),
-      api.project(id),
-    ])
-    setHolds(nextHolds)
-    setSpending(nextSpending)
-    setMetrics(nextMetrics)
-    setProjectStatus(project.status)
-  }
+  const navigate = useCallback((hash: string) => {
+    if (window.location.hash === hash) setRoute(parseHash())
+    else window.location.hash = hash
+  }, [])
 
-  async function createProject(event: React.FormEvent) {
-    event.preventDefault()
-    setError(null)
-    setBusy(true)
+  const moveClock = async (body: { advance: number } | { reset: true }) => {
+    setClockBusy(true)
     try {
-      const policy = JSON.parse(policyText) as unknown
-      const created = await api.createProject({ name, clientAddress, payeeAddress, policy })
-      setDecision(null)
-      await loadProject(created.id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "could not create project")
+      const c = await api.moveClock(body)
+      setClock(c)
+      setViewNow(null)
+      setTick((t) => t + 1)
+    } catch (e) {
+      notify("error", errorText(e))
     } finally {
-      setBusy(false)
+      setClockBusy(false)
     }
   }
 
-  async function submitExpense(event: React.FormEvent) {
-    event.preventDefault()
-    if (!projectId) return
-    setError(null)
-    setBusy(true)
-    try {
-      const next = await api.submit(projectId, text, file)
-      setDecision(next)
-      await refresh(projectId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "could not submit expense")
-    } finally {
-      setBusy(false)
-    }
-  }
+  const onNow = useCallback((now: number) => setViewNow(now), [])
+  const now = viewNow ?? clock?.now ?? Date.now()
 
-  async function resolveHold(holdId: string, action: "approve" | "reject") {
-    if (!projectId) return
-    setError(null)
-    setBusy(true)
-    try {
-      if (action === "approve") await api.approve(holdId)
-      else await api.reject(holdId)
-      await refresh(projectId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "could not update hold")
-    } finally {
-      setBusy(false)
-    }
-  }
+  const nameOf = useCallback((r: Role) => meta?.roles?.find((p) => p.role === r)?.name ?? ROLE_NAME[r], [meta])
 
-  async function stopAgent() {
-    if (!projectId) return
-    setError(null)
-    setBusy(true)
-    try {
-      await api.stop(projectId)
-      await refresh(projectId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "could not stop the agent")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const stopped = projectStatus === "stopped"
+  const ctx = useMemo<AppCtx>(
+    () => ({ role, meta, now, notify, navigate, openDoc: setDoc, nameOf, clockSlot }),
+    [role, meta, now, notify, navigate, nameOf, clockSlot],
+  )
 
   return (
-    <main>
-      <header>
-        <div>
-          <p className="eyebrow">Outsourcing expense escrow</p>
-          <h1>Release only compliant expenses.</h1>
-        </div>
-        <p className="status">
-          {health ? `Model ${health.kiln === "mock" ? "mock" : "Kiln"} · chain ${health.chain ? "on" : "skipped"}` : "API unreachable"}
-        </p>
-      </header>
-
-      {error && <p className="banner error">{error}</p>}
-      {stopped && <p className="banner">Agent stopped. New requests are blocked.</p>}
-
-      <section>
-        <h2>Submit an expense</h2>
-        <form onSubmit={submitExpense}>
-          <div className="cases">
-            {CASES.map((item) => (
-              <button key={item.label} type="button" onClick={() => setText(item.text)}>{item.label}</button>
-            ))}
-          </div>
-          <label>
-            Request
-            <textarea value={text} onChange={(event) => setText(event.target.value)} rows={4} required />
-          </label>
-          <label>
-            Invoice or receipt
-            <input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-          </label>
-          <button type="submit" disabled={!projectId || busy}>{busy ? "Working…" : "Submit"}</button>
-          {!projectId && <p className="hint">Create the project below before submitting.</p>}
-        </form>
-      </section>
-
-      <section>
-        <h2>Decision</h2>
-        {decision ? <DecisionView decision={decision} /> : <p className="hint">No expense submitted yet.</p>}
-      </section>
-
-      <section>
-        <h2>HOLD queue</h2>
-        {holds.length === 0 && <p className="hint">No held expenses.</p>}
-        <ul className="holds">
-          {holds.map((hold) => (
-            <li key={hold.id}>
-              <div>
-                <strong>{hold.vendor}</strong> · {hold.category} · ${hold.amount_usd}
-                <p>{hold.reason}</p>
-                <p className="hint">{hold.text}</p>
+    <AppContext.Provider value={ctx}>
+      <div className="app" data-role={role}>
+        <a
+          className="skip-link"
+          href="#main-content"
+          onClick={(e) => {
+            e.preventDefault()
+            document.getElementById("main-content")?.focus()
+          }}
+        >
+          {t("app.skip")}
+        </a>
+        <header className="topbar">
+          <div className="topbar-inner">
+            <a className="brand" href="#/" aria-label={t("app.home")}>
+              <span className="brand-mark" aria-hidden="true">
+                p
+              </span>
+              <span className="brand-name">
+                ploby<span className="brand-period">.</span>
+              </span>
+            </a>
+            <nav className="global-nav" aria-label={t("app.mainMenu")}>
+              <a href="#/" aria-current={route.page !== "new" ? "page" : undefined}>
+                {t("app.projects")}
+              </a>
+            </nav>
+            <div className="account-tools">
+              <button
+                type="button"
+                className="demo-toggle"
+                aria-expanded={demoOpen}
+                aria-controls="demo-tools"
+                onClick={() => setDemoOpen(!demoOpen)}
+              >
+                <span className="demo-dot" />
+                <span className="desktop-only">{t("app.demoTools")}</span>
+                <span className="mobile-only">Demo</span>
+              </button>
+              <label className="language-select">
+                <span className="sr-only">{t("common.language")}</span>
+                <select
+                  value={(i18n.resolvedLanguage ?? i18n.language).startsWith("en") ? "en" : "ko"}
+                  onChange={(e) => void i18n.changeLanguage(e.target.value as AppLanguage)}
+                  aria-label={t("common.language")}
+                >
+                  {LANGUAGES.map((language) => (
+                    <option key={language} value={language}>
+                      {language === "ko" ? t("common.korean") : t("common.english")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="account">
+                <span className="avatar" aria-hidden="true">
+                  {nameOf(role).slice(0, 1)}
+                </span>
+                <label className="role-select">
+                  <span className="account-name">{nameOf(role)}</span>
+                  <span className="sr-only">{t("app.demoRole")}</span>
+                  <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                    {ROLES.map((r) => (
+                      <option value={r} key={r}>
+                        {label(ROLE_KO, r)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              {hold.status === "pending" && !stopped ? (
-                <div className="row">
-                  <button type="button" onClick={() => resolveHold(hold.id, "approve")} disabled={busy}>Approve and release</button>
-                  <button type="button" className="secondary" onClick={() => resolveHold(hold.id, "reject")} disabled={busy}>Reject</button>
-                </div>
-              ) : <span className={`pill ${hold.status}`}>{hold.status}</span>}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </div>
+          </div>
+        </header>
 
-      <section>
-        <h2>Project and policy</h2>
-        <form onSubmit={createProject}>
-          <label>Name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-          <label>Client address<input value={clientAddress} onChange={(event) => setClientAddress(event.target.value)} required /></label>
-          <label>Payee address<input value={payeeAddress} onChange={(event) => setPayeeAddress(event.target.value)} required /></label>
-          <label>Policy JSON<textarea value={policyText} onChange={(event) => setPolicyText(event.target.value)} rows={12} required /></label>
-          <button type="submit" disabled={busy}>{projectId ? "Create another project" : "Create project"}</button>
-          {projectId && <p className="hint">Current project {projectId} · {projectStatus || "active"}</p>}
-        </form>
-      </section>
-
-      <section>
-        <div className="section-head">
-          <h2>Spending</h2>
-          <button type="button" className="danger" onClick={stopAgent} disabled={!projectId || stopped || busy}>Stop agent</button>
-        </div>
-        {spending ? (
-          <>
-            <dl className="stats">
-              <div><dt>Budget</dt><dd>${spending.budget}</dd></div>
-              <div><dt>Released</dt><dd>${spending.released}</dd></div>
-              <div><dt>Pending holds</dt><dd>${spending.pendingHolds}</dd></div>
-              <div><dt>Remaining</dt><dd>${spending.remaining}</dd></div>
-            </dl>
-            {spending.settlements.length > 0 && (
-              <ul className="settlements">
-                {spending.settlements.map((item, index) => (
-                  <li key={`${item.tx_hash ?? "local"}-${index}`}>
-                    ${item.amount_usd} to {short(item.payee)} · <TxHash hash={item.tx_hash} />
-                  </li>
-                ))}
-              </ul>
+        <div className="democlock" id="demo-tools" hidden={!demoOpen} role="region" aria-label={t("app.demoClock")}>
+          <div className="democlock-inner">
+            <span className="demo-tag">{t("app.demoOnly")}</span>
+            <span className="democlock-label">{t("app.demoClock")}</span>
+            <strong className="democlock-now">{clock ? kst(clock.now) : viewNow ? kst(viewNow) : "—"}</strong>
+            {clock && offsetText(clock.offset) && (
+              <span className="democlock-offset">({offsetText(clock.offset)})</span>
             )}
-          </>
-        ) : <p className="hint">Spending appears after a project exists.</p>}
-      </section>
+            <span className="democlock-btns">
+              {STEPS.map(([key, s]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="clock-btn"
+                  disabled={clockBusy}
+                  onClick={() => moveClock({ advance: s })}
+                >
+                  {t(key)}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="clock-btn clock-reset"
+                disabled={clockBusy}
+                onClick={() => moveClock({ reset: true })}
+              >
+                {t("app.reset")}
+              </button>
+            </span>
+            <span className="democlock-extra" ref={setClockSlot} />
+            {FIXTURE && <span className="demo-tag demo-fixture">{t("app.fixture")}</span>}
+          </div>
+        </div>
 
-      <section>
-        <h2>Token metrics</h2>
-        <MetricsView metrics={metrics} />
-      </section>
-    </main>
+        <main className="main" id="main-content" tabIndex={-1}>
+          {route.page === "home" && <Home key={role} refreshKey={tick} />}
+          {route.page === "new" && <NewProject />}
+          {route.page === "project" && (
+            <ProjectPage key={`${route.id}-${role}`} id={route.id} refreshKey={tick} onNow={onNow} />
+          )}
+        </main>
+
+        <footer className="footer">
+          <button type="button" className="linkish" onClick={() => setImplOpen(true)}>
+            {t("app.serviceInfo")}
+          </button>
+          <span className="muted small">{t("app.demoNotice")}</span>
+        </footer>
+
+        <div className="toasts" aria-live="polite">
+          {toasts.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`toast toast-${t.kind}`}
+              onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}
+              role={t.kind === "error" ? "alert" : "status"}
+            >
+              {t.text}
+            </button>
+          ))}
+        </div>
+
+        {doc && <DocViewer doc={doc} onClose={() => setDoc(null)} />}
+        {implOpen && <ImplementationPanel meta={meta} onClose={() => setImplOpen(false)} />}
+      </div>
+    </AppContext.Provider>
   )
 }
 
-function DecisionView({ decision }: { decision: Decision }) {
+function ImplementationPanel({ meta, onClose }: { meta: Meta | null; onClose: () => void }) {
+  const { t } = useTranslation()
+  const impl = meta?.implementation
   return (
-    <div>
-      <p className={`pill ${decision.outcome.toLowerCase()}`}>{decision.outcome}</p>
-      <p className="reason">{decision.reason}</p>
-      {decision.fallback && <p className="hint">The model output failed validation. This hold is the safe fallback.</p>}
-      <dl className="expense">
-        <div><dt>Vendor</dt><dd>{decision.expense.vendor}</dd></div>
-        <div><dt>Category</dt><dd>{decision.expense.category}</dd></div>
-        <div><dt>Amount</dt><dd>{decision.expense.currency} {decision.expense.amount}</dd></div>
-        <div><dt>Purpose</dt><dd>{decision.expense.purpose}</dd></div>
-        <div><dt>Relevance</dt><dd>{decision.expense.project_relevance}</dd></div>
-        <div><dt>Document</dt><dd>{decision.expense.document_type}</dd></div>
-      </dl>
-      <p className="hint">{decision.expense.rationale}</p>
-      {decision.expense.anomaly_flags.length > 0 && <p>Flags: {decision.expense.anomaly_flags.join(", ")}</p>}
-      {decision.checks.length > 0 && (
-        <table>
-          <thead><tr><th>Check</th><th>Result</th><th>Reason</th></tr></thead>
-          <tbody>
-            {decision.checks.map((check) => (
-              <tr key={check.id}>
-                <td>{CHECK_LABELS[check.id] ?? check.id}</td>
-                <td>{check.pass ? "Pass" : "Fail"}</td>
-                <td>{check.reason ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <Modal title={t("app.implementationTitle")} onClose={onClose} wide>
+      <p className="muted small">{t("app.implementationDescription")}</p>
+      {!impl ? (
+        <p className="muted">{t("app.implementationUnavailable")}</p>
+      ) : (
+        <div className="impl">
+          <section>
+            <h3>
+              <span className="impl-dot impl-current" aria-hidden /> {t("app.currentImplementation")}
+            </h3>
+            <ul>
+              {impl.current.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h3>
+              <span className="impl-dot impl-target" aria-hidden /> {t("app.targetDesign")}
+            </h3>
+            <ul>
+              {impl.target.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
       )}
-      <p>Record <TxHash hash={decision.chain.recordTx} /> · Release <TxHash hash={decision.chain.releaseTx} /> · {decision.chain.status}</p>
-      {decision.chain.error && <p className="hint">{decision.chain.error}</p>}
-      <p className="hint">
-        Tokens ({decision.llm.source === "mock" ? "mock, not Kiln evidence" : "Kiln"}): {decision.llm.calls.map((call) => `${call.flow} ${call.prompt_tokens}+${call.completion_tokens}`).join(" · ") || "none"}
-      </p>
-    </div>
+    </Modal>
   )
-}
-
-function TxHash({ hash }: { hash: string | null }) {
-  if (!hash) return <span>none</span>
-  const href = basescanTx(hash)
-  if (!href) return <span>{hash}</span>
-  return <a href={href} target="_blank" rel="noreferrer">{hash}</a>
-}
-
-function MetricsView({ metrics }: { metrics: Metrics | null }) {
-  if (!metrics) return <p className="hint">No model calls yet.</p>
-  return (
-    <div className="metrics">
-      <MetricBlock title="Kiln" group={metrics.kiln} />
-      <MetricBlock title="Mock" group={metrics.mock} note="Not Kiln evidence." />
-    </div>
-  )
-}
-
-function MetricBlock({ title, group, note }: { title: string; group: Metrics["kiln"]; note?: string }) {
-  const flows = Object.entries(group.byFlow)
-  return (
-    <div>
-      <h3>{title}</h3>
-      {note && <p className="hint">{note}</p>}
-      {flows.length === 0 && <p className="hint">No calls.</p>}
-      {flows.map(([flow, totals]) => (
-        <p key={flow}>{flow}: {totals.calls} calls, prompt {totals.prompt_tokens}, completion {totals.completion_tokens}, total {totals.total_tokens}</p>
-      ))}
-    </div>
-  )
-}
-
-function short(value: string): string {
-  return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value
 }

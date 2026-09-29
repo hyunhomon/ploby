@@ -76,13 +76,13 @@ IDENTIFIED -> ACTIVE -> HANDOVER_REQUESTED -> EVIDENCE_SUBMITTED
 
 Unlike a capped expense claim, a handover claim does not auto-release solely because the notice bitmap is complete while the attestation service is unavailable. External control transfer cannot be inferred from the claimant's slot assertion. Protocol v1 therefore requires client acceptance, resolver acceptance, or a qualifying handover attestation; resolver silence without one rejects the holdback. This stricter fallback is fixed and cannot be weakened by project policy.
 
-If no `SubmissionNotice` exists at `handoverDeadline`, any account may trigger `NON_HANDOVER` and start the resolver period. The contractor may submit a first notice and late evidence during that period, but the notice does not start or reset client review and only the resolver may accept it. If the resolver deadline passes without qualifying evidence, the contract records `REJECTED_BY_TIMEOUT`, releases the holdback reservation, and moves the asset to terminal `UNRESOLVED_NON_HANDOVER`. That immutable audit flag allows the project to close; it does not transfer the external asset or decide legal ownership outside SmartEscrow.
+If no `SubmissionNotice` exists at `handoverDeadline`, any account may trigger `NON_HANDOVER` and start the resolver period. The contractor may submit a first notice and late evidence during that period, but the notice does not start or reset client review and only the resolver may accept it. If the resolver deadline passes without qualifying evidence, the contract records `REJECTED_BY_TIMEOUT`, releases the holdback reservation, and moves the asset to terminal `UNRESOLVED_NON_HANDOVER`. That immutable audit flag allows the project to close; it does not transfer the external asset or decide legal ownership outside Ploby.
 
 A rejection cannot demand evidence that was not in the accepted checklist. The resolver cannot redirect the holdback or increase it.
 
 ## Payment coupling
 
-The external asset transfer and blockchain payment are not technically atomic. SmartEscrow provides conditional settlement:
+The external asset transfer and blockchain payment are not technically atomic. Ploby provides conditional settlement:
 
 - External control transfer occurs first.
 - A client or resolver attestation confirms that the agreed evidence was supplied.

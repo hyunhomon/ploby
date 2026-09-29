@@ -1,97 +1,133 @@
-export type Check = { id: string; pass: boolean; reason: string | null }
+// The one JSON API (docs/api.md). With `?fixture=1` in the URL every call is answered by
+// src/dev/fixture.ts instead, so the UI can be checked without the server.
 
-export type Expense = {
-  vendor: string
-  category: string
-  amount: number
-  currency: string
-  purpose: string
-  project_relevance: string
-  document_type: string
-  anomaly_flags: string[]
-  rationale: string
-}
+import { tr } from "./i18n"
+import type {
+  ActionOk,
+  Clock,
+  Doc,
+  DocRef,
+  Meta,
+  NewProject,
+  ProjectSummary,
+  ProjectView,
+  Role,
+  RulesCandidate,
+  Sample,
+} from "./types"
 
-export type Decision = {
-  expenseRequestId: string
-  decisionId: string
-  holdId: string | null
-  outcome: "APPROVE" | "HOLD" | "BLOCK"
-  reason: string
-  expense: Expense
-  checks: Check[]
-  fallback: boolean
-  chain: { status: string; recordTx: string | null; releaseTx: string | null; error: string | null }
-  llm: {
-    source: "kiln" | "mock"
-    calls: Array<{ flow: string; prompt_tokens: number; completion_tokens: number; total_tokens: number; latency_ms: number }>
+export class ApiError extends Error {
+  code: string
+  status: number
+  constructor(message: string, code: string, status: number) {
+    super(message)
+    this.code = code
+    this.status = status
   }
 }
 
-export type Hold = {
-  id: string
-  status: "pending" | "approved" | "rejected"
-  amount_usd: number
-  reason: string
-  vendor: string
-  category: string
-  purpose: string
-  text: string
+export type ActionParams = Record<string, unknown>
+
+export interface Backend {
+  meta(): Promise<Meta>
+  clock(): Promise<Clock>
+  moveClock(body: { advance: number } | { reset: true }): Promise<Clock>
+  samples(): Promise<Sample[]>
+  uploadDocument(name: string, text: string): Promise<DocRef>
+  document(id: string): Promise<Doc>
+  compileRules(words: string): Promise<RulesCandidate>
+  projects(as: Role): Promise<ProjectSummary[]>
+  createProject(project: NewProject): Promise<ProjectView>
+  project(id: string, as: Role): Promise<ProjectView>
+  act(id: string, as: Role, action: string, params: ActionParams): Promise<ActionOk>
 }
 
-export type Spending = {
-  budget: number
-  released: number
-  pendingHolds: number
-  remaining: number
-  settlements: Array<{ tx_hash: string | null; amount_usd: number; payee: string }>
+async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError(tr("api.network"), "network", 0)
+  }
+  const text = await res.text()
+  let data: unknown = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = null
+  }
+  if (!res.ok) {
+    const err = data as { error?: unknown; code?: unknown } | null
+    const message =
+      err && typeof err.error === "string"
+        ? err.error
+        : res.status === 502 || res.status === 504
+          ? tr("api.network")
+          : tr("api.server", { status: res.status })
+    const code = err && typeof err.code === "string" ? err.code : `http_${res.status}`
+    throw new ApiError(message, code, res.status)
+  }
+  if (data === null && text !== "") throw new ApiError(tr("api.parse"), "parse", res.status)
+  return data as T
 }
 
-export type Health = { ok: boolean; kiln: "kiln" | "mock"; chain: boolean }
+const q = (role: Role) => `as=${encodeURIComponent(role)}`
 
-export type Metrics = {
-  kiln: MetricGroup
-  mock: MetricGroup
+const http: Backend = {
+  meta: () => call("GET", "/api/meta"),
+  clock: () => call("GET", "/api/clock"),
+  moveClock: (body) => call("POST", "/api/clock", body),
+  samples: () => call("GET", "/api/samples"),
+  uploadDocument: (name, text) => call("POST", "/api/documents", { name, text }),
+  document: (id) => call("GET", `/api/documents/${encodeURIComponent(id)}`),
+  compileRules: (words) => call("POST", "/api/rules/compile", { words }),
+  projects: (as) => call("GET", `/api/projects?${q(as)}`),
+  createProject: (project) => call("POST", "/api/projects", { as: "client", ...project }),
+  project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
+  act: (id, as, action, params) =>
+    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action }),
 }
 
-type MetricGroup = {
-  calls: Array<{ flow: string; prompt_tokens: number; completion_tokens: number; total_tokens: number; latency_ms: number }>
-  byFlow: Record<string, { calls: number; prompt_tokens: number; completion_tokens: number; total_tokens: number }>
+function fixtureWanted(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("fixture") === "1"
+  } catch {
+    return false
+  }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
-  const text = await response.text()
-  const body = (text ? JSON.parse(text) : {}) as T & { error?: string }
-  if (!response.ok) throw new Error(body.error || `request failed (${response.status})`)
-  return body as T
+export const FIXTURE = fixtureWanted()
+
+let backend: Backend = http
+
+/** Resolve the backend once: the fixture module is loaded only in fixture mode. */
+export async function initBackend(): Promise<void> {
+  if (FIXTURE) {
+    const mod = await import("./dev/fixture")
+    backend = mod.fixtureBackend
+  }
 }
 
-export const api = {
-  health: () => request<Health>("/api/health"),
-  demoPolicy: () => request<unknown>("/api/demo-policy"),
-  metrics: () => request<Metrics>("/api/metrics"),
-  createProject: (body: { name: string; clientAddress: string; payeeAddress: string; policy: unknown }) =>
-    request<{ id: string; policyHash: string; chain: boolean }>("/api/projects", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  project: (id: string) => request<{ id: string; name: string; status: string; policy_hash: string; budget_usd: number }>(`/api/projects/${id}`),
-  submit: (id: string, text: string, file: File | null) => {
-    const form = new FormData()
-    form.set("text", text)
-    if (file) form.set("file", file)
-    return request<Decision>(`/api/projects/${id}/expenses`, { method: "POST", body: form })
-  },
-  holds: (id: string) => request<Hold[]>(`/api/projects/${id}/holds`),
-  approve: (holdId: string) => request<{ holdId: string; releaseTx: string | null; chainStatus: string }>(`/api/holds/${holdId}/approve`, { method: "POST" }),
-  reject: (holdId: string) => request<{ holdId: string }>(`/api/holds/${holdId}/reject`, { method: "POST" }),
-  stop: (id: string) => request<{ projectId: string; tx: string | null }>(`/api/projects/${id}/stop`, { method: "POST" }),
-  spending: (id: string) => request<Spending>(`/api/projects/${id}/spending`),
+export const api: Backend = {
+  meta: () => backend.meta(),
+  clock: () => backend.clock(),
+  moveClock: (b) => backend.moveClock(b),
+  samples: () => backend.samples(),
+  uploadDocument: (n, t) => backend.uploadDocument(n, t),
+  document: (id) => backend.document(id),
+  compileRules: (w) => backend.compileRules(w),
+  projects: (as) => backend.projects(as),
+  createProject: (p) => backend.createProject(p),
+  project: (id, as) => backend.project(id, as),
+  act: (id, as, a, p) => backend.act(id, as, a, p),
 }
 
-export function basescanTx(hash: string | null): string | null {
-  if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) return null
-  return `https://sepolia.basescan.org/tx/${hash}`
+export function errorText(e: unknown): string {
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return String(e)
 }

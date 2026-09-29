@@ -1,12 +1,12 @@
 # Architecture Decision Records
 
-This directory records the target product and system architecture for SmartEscrow.
+This directory records the target product and system architecture for Ploby.
 
 An ADR marked **Accepted - implementation pending** is binding for future design work but is not a claim that the current contracts or services implement it. The initial contracts predate several decisions below. Product copy and demos must distinguish current behavior from this target architecture.
 
 ## Product principle
 
-SmartEscrow is a bilateral commitment system, not a client surveillance tool.
+Ploby is a bilateral commitment system, not a client surveillance tool.
 
 It protects the client from unauthorized spending and unverified delivery. It protects the contractor from pre-financing, unpaid milestones, silent payment delay, retroactive policy changes, and unpaid scope expansion. Neither party may unilaterally rewrite an accepted commitment.
 

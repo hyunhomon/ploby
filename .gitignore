@@ -19,3 +19,16 @@ out/
 node_modules/
 backend/data/*.db
 backend/data/*.db-*
+
+# PCP escrow: local Kiln cache/usage, Python caches
+harness/runs/
+__pycache__/
+
+# Ploby API data (projects, evidence store, demo clock) and local editor config
+var/
+.claude/
+frontend/dist/
+
+# Local browser QA artifacts
+.playwright-mcp/
+output/playwright/

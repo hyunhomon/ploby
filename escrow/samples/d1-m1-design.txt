@@ -1,0 +1,13 @@
+[제출 통지] M1 디자인 시안 — 한결웹스튜디오 → 카페 온담
+
+1. 메인 시안: Figma 파일 "Ondam Renewal / Main" — 데스크톱(1440) 1종, 모바일(390) 1종
+   https://www.figma.com/file/ondam-renewal-main (보기 권한 공유 완료)
+2. 서브 페이지 시안: 메뉴 페이지, 매장 안내 페이지 (데스크톱·모바일)
+   https://www.figma.com/file/ondam-renewal-sub
+
+체크리스트
+- [x] 데스크톱·모바일 시안 각 1종
+- [x] 메뉴·매장 안내 페이지 포함
+- [x] 브랜드 컬러·폰트 가이드 반영
+
+제출일: 2026-10-09 18:00
