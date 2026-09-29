@@ -18,6 +18,20 @@
 | Blockchain integration | Monad testnet(10143) [PlobyEscrow `0x0c54…1762`](https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762) + [tKRW `0xE73a…af58`](https://testnet.monadvision.com/address/0xE73a03D814434987f33f5E2b6b51c1dD8A44af58). 엔진은 판정 전에 컨트랙트의 **일시정지 여부와 가용 잔액을 읽고**, 판정을 **기록하고**(decide), 돈을 **정산**(settle·refund)합니다. 모든 호출에 그 로그 줄의 해시 체인 헤드가 실리고, tx 해시는 로그에 되써집니다 | [`docs/chain.md`](docs/chain.md), [`src/PlobyEscrow.sol`](src/PlobyEscrow.sol), [`evidence/`](evidence) |
 | Approval & evidence | 클라이언트가 예산 부여(정책 서명 + 예치 tx), 지출 추적(에이전트 작업·판정·tx 링크, 온체인 잔액 대 원장), 에이전트 정지(일시정지 tx → 다음 요청 BLOCK 기록), 영수증(정산 기록 + 검증 탭). 제3자는 기록만으로 재구성: `python3 -m escrow.audit` | [`escrow/audit.py`](escrow/audit.py), 화면의 **검증** 탭, [`evidence/audit.txt`](evidence/audit.txt) |
 
+```mermaid
+flowchart LR
+  C[클라이언트<br/>예산 부여 · 정지 · 영수증] -->|정책 서명 + 예치| E
+  W[작업자] -->|일을 맡김| A[구매 에이전트<br/>Kiln qwen3-32b<br/>계획 1회]
+  A -->|요청만 가능<br/>공급자 문서 첨부| E[Ploby 엔진<br/>§6 규칙 = 코드<br/>APPROVE · HOLD · BLOCK]
+  K[Kiln 판독<br/>견적서 · 영수증] -->|구조화 필드| E
+  E -->|서명된 한 줄| L[(해시 체인 로그)]
+  L -->|줄마다 호출 + 로그 헤드| X[PlobyEscrow<br/>Monad testnet]
+  X -->|일시정지 · 가용 잔액| E
+  X -->|tx 해시| L
+  L --> V[감사 도구<br/>기록만으로 재구성]
+  X --> V
+```
+
 증거를 직접 다시 확인하려면 (키 없이, 공개 RPC만 사용):
 
 ```bash

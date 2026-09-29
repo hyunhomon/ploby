@@ -75,12 +75,20 @@ def plan(task, offers, context, sample=0):
     user, params = ask(task, keyed)
     msgs = [{'role': 'system', 'content': prompt(context['name'], context['contractor'])},
             {'role': 'user', 'content': user}]
-    try:
-        reply = kiln.chat(msgs, 'agent', model=stage['model'], sample=sample, max_tokens=1200, **params)
-    except (Exception, SystemExit) as e:  # network, rate limit, budget guard: no plan, nothing filed
-        return None, {'ok': False, 'problems': [f'계획 서비스 오류: {type(e).__name__}'], 'usage': {}}
-    answer = compiler.answer_in({**reply, 'content': re.sub(r'<think>.*?</think>', '', reply['content'], flags=re.S)},
-                                ('needs',))
-    found = shape(answer, {o['key']: o['id'] for o in keyed})
+    calls, found = [], None
+    for attempt in range(2):  # one re-ask when the reply is not one JSON object, as for a reading
+        try:
+            reply = kiln.chat(msgs, 'agent', model=stage['model'], sample=sample, tag=f'agent:{attempt}',
+                              max_tokens=1200, **params)
+        except (Exception, SystemExit) as e:  # network, rate limit, budget guard: no plan, nothing filed
+            return None, {'ok': False, 'problems': [f'계획 서비스 오류: {type(e).__name__}'], 'usage': usage_of(calls)}
+        calls.append(reply)
+        answer = compiler.answer_in({**reply, 'content': re.sub(r'<think>.*?</think>', '', reply['content'], flags=re.S)},
+                                    ('needs',))
+        found = shape(answer, {o['key']: o['id'] for o in keyed})
+        if found:
+            break
+        msgs = msgs + [{'role': 'assistant', 'content': reply['content']},
+                       {'role': 'user', 'content': 'Your reply was not the JSON object asked for. Reply with it only.'}]
     return found, {'ok': found is not None, 'problems': [] if found else ['계획이 JSON이 아니거나 비어 있음'],
-                   'usage': usage_of([reply]), 'model': stage['model'], 'generation_ids': [reply.get('generation_id')]}
+                   'usage': usage_of(calls), 'model': stage['model'], 'generation_ids': [c.get('generation_id') for c in calls]}
