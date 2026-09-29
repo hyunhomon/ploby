@@ -47,6 +47,9 @@ jobs:
       - name: Run harness/check.py
         run: python3 harness/check.py
 
+      - name: Random projects against the chain mirror
+        run: python3 harness/fuzz.py 100
+
       - name: Re-check the committed evidence from its records alone (offline)
         run: python3 -m escrow.audit evidence/projects/*/log.jsonl --data evidence --offline
 

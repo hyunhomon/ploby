@@ -81,7 +81,8 @@ cd frontend && npm ci && npm run dev        # 화면: http://localhost:5173  (/a
 ## 검증
 
 ```shell
-python3 harness/check.py        # 오프라인 검사 60개: 모델·네트워크 없이 PROJECT_OVERVIEW 원칙, 에이전트, 감사, 컨트랙트 규칙(파이썬 모델) 확인
+python3 harness/check.py        # 오프라인 검사 61개: 모델·네트워크 없이 PROJECT_OVERVIEW 원칙, 에이전트, 감사, 컨트랙트 규칙(파이썬 모델) 확인
+python3 harness/fuzz.py         # 무작위 프로젝트 200개: 모든 동작을 섞어도 체인 호출이 컨트랙트 규칙을 통과하고 원장과 일치
 forge test                      # PlobyEscrow 12개 + 레거시 컨트랙트 테스트
 cd frontend && npm run build    # 타입 검사 + 프로덕션 빌드
 python3 harness/evidence.py     # Kiln + Monad testnet으로 챌린지 증거 실행 (docs/evidence.md, evidence/)

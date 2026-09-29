@@ -443,6 +443,28 @@ class StubRail:
         return f'https://testnet.monadvision.com/tx/{tx}' if tx else None
 
 
+def rare_paths(tmp):
+    """Money paths the scenarios above do not reach, for the chain checks below: an overage paid by a signed change
+    order, and an expense the resolver pays after an evidence defect."""
+    w = World(tmp, 'g')
+    w.activate()
+    w.act('contractor', 'request_commitment', document=w.doc('q-figma'))
+    w.act('contractor', 'report_spend', expense='E1')
+    w.act('contractor', 'submit_receipt', expense='E1', document=w.doc('r-figma-over'), claimed=99000)
+    w.act('client', 'draft_change_order', text='초과분 정산', covers_excess='E1')
+    w.act('client', 'propose_change_order', change_order='C1')
+    w.act('client', 'sign_policy', version=2)
+    w.act('contractor', 'sign_policy', version=2)
+    w.act('contractor', 'request_commitment', document=w.doc('q-vercel'))
+    w.act('contractor', 'report_spend', expense='E2')
+    w.act('contractor', 'submit_receipt', expense='E2', document=w.doc('r-blurry'), claimed=33000)
+    w.act('client', 'escalate_settlement', expense='E2', reason='판독 불가')
+    w.act('resolver', 'resolve_expense', expense='E2', accept=True, reason='원본 확인')
+    check('a covered overage and a resolver-paid defect settle within the signed amounts (for the chain checks)',
+          w.e('E1')['excess_paid'] == 9900 and w.e('E1')['status'] == 'SETTLED' and w.e('E2')['paid'] == 33000
+          and conserved(w.P), str((w.e('E1')['status'], w.e('E1')['excess_paid'], w.e('E2')['status'])))
+
+
 def onchain(tmp):
     """The chain mirror (escrow/chain.py, src/PlobyEscrow.sol), from every scenario above; no network."""
     from escrow import chain
@@ -503,6 +525,7 @@ def main():
         categories(tmp)
         purchase_agent(tmp)
         auditor(tmp)
+        rare_paths(tmp)
         onchain(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
