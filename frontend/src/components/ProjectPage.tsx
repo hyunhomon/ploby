@@ -38,6 +38,12 @@ const NAV = [
   ["audit", "project.tabs.audit"],
   ["manage", "project.tabs.manage"],
 ] as const
+/** Keep a window pinned to its role (`?as=`) when it moves between tabs. */
+function pinnedRole() {
+  const as = new URLSearchParams(window.location.hash.split("?")[1]).get("as")
+  return as ? `&as=${encodeURIComponent(as)}` : ""
+}
+
 function currentTab() {
   const tab = new URLSearchParams(window.location.hash.split("?")[1]).get("tab")
   return NAV.some(([key]) => key === tab) ? tab! : "overview"
@@ -177,7 +183,7 @@ export function ProjectPage({
             <a
               key={key}
               className="nav-chip"
-              href={`#/p/${encodeURIComponent(id)}?tab=${key}`}
+              href={`#/p/${encodeURIComponent(id)}?tab=${key}${pinnedRole()}`}
               aria-current={tab === key ? "page" : undefined}
             >
               {t(text)}
@@ -217,10 +223,10 @@ export function ProjectPage({
               <TodoCard view={view} />
               <ChainCard view={view} />
               <div className="overview-links">
-                <a href={`#/p/${encodeURIComponent(id)}?tab=work`}>
+                <a href={`#/p/${encodeURIComponent(id)}?tab=work${pinnedRole()}`}>
                   {t("project.viewWork")} <Icon name="arrow" size={16} />
                 </a>
-                <a href={`#/p/${encodeURIComponent(id)}?tab=activity`}>
+                <a href={`#/p/${encodeURIComponent(id)}?tab=activity${pinnedRole()}`}>
                   {t("project.deadlinesAndLog")} <Icon name="arrow" size={16} />
                 </a>
               </div>

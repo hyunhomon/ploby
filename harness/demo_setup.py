@@ -40,8 +40,8 @@ def main():
         print(f'{role:10} {r["result"][:90]}')
     chain = v.get('chain') or {}
     print(f"\nproject {pid}: {v['status']}, chain {'on, ' + str(chain.get('pending', 0)) + ' calls on the way' if chain.get('enabled') else 'off'}")
-    print(f"client      {a.web}/#/p/{pid}?tab=overview   (switch the role at the top right)")
-    print(f"contractor  {a.web}/#/p/{pid}?tab=expenses   → 구매 에이전트에게 맡기기")
+    print(f"client      {a.web}/#/p/{pid}?tab=overview&as=client")
+    print(f"contractor  {a.web}/#/p/{pid}?tab=expenses&as=contractor   → 구매 에이전트에게 맡기기")
     print(f"auditor     python3 -m escrow.audit {pid}")
 
 

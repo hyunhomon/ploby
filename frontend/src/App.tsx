@@ -15,7 +15,15 @@ import type { Clock, DocRef, Meta, Role } from "./types"
 
 const ROLE_KEY = "ploby.role"
 
+/** `#/p/…?as=contractor` pins a window to a role (two windows side by side share localStorage). */
+function roleInUrl(): Role | null {
+  const r = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("as")
+  return r === "client" || r === "contractor" || r === "resolver" ? r : null
+}
+
 function loadRole(): Role {
+  const pinned = roleInUrl()
+  if (pinned) return pinned
   try {
     const r = window.localStorage.getItem(ROLE_KEY)
     if (r === "client" || r === "contractor" || r === "resolver") return r
@@ -122,6 +130,12 @@ export function App() {
   const setRole = (r: Role) => {
     setRoleState(r)
     saveRole(r)
+    if (roleInUrl()) {
+      const [path, query = ""] = window.location.hash.split("?")
+      const q = new URLSearchParams(query)
+      q.set("as", r)
+      window.history.replaceState(null, "", `${path}?${q.toString()}`)
+    }
   }
 
   const navigate = useCallback((hash: string) => {
