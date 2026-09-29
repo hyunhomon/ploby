@@ -71,16 +71,19 @@ class Expenses:
     def risk(self):
         return self.doc.get('riskRules') or {}
 
-    def evaluate(self, prop, evidence_ok, doc_id, at):
-        """[Rule] in §6 order, the first mandatory failure (or None), the risk signals raised."""
+    def evaluate(self, prop, evidence_ok, doc_id, at, onchain=None):
+        """[Rule] in §6 order, the first mandatory failure (or None), the risk signals raised. `onchain` (the
+        contract's pause flag and available balance, when read) can only make the state and funds rules stricter."""
         rules = []
 
         def rule(name, ok, detail=''):
             rules.append({'rule': name, 'label': LABEL[name], 'ok': ok, 'detail': detail, 'kind': KIND[name]})
         prior = self.documents.get(doc_id)
         rule('allocation', prior is None, f'이미 {prior}에 100% 배분된 문서' if prior else '')
-        state_ok = self.status == 'ACTIVE' and not self.paused
-        rule('state', state_ok, '' if state_ok else ('새 약정 일시정지 중' if self.paused else f'프로젝트 {self.status}'))
+        chain = onchain or {}  # the escrow contract's state, read before the line (store.onchain)
+        why = (f'프로젝트 {self.status}' if self.status != 'ACTIVE' else '새 약정 일시정지 중' if self.paused else
+               '클라이언트가 온체인에서 일시정지함' if chain.get('paused') else '')
+        rule('state', not why, why)
         m, d = self.mandate(), self.doc
         in_window = m.ok('window_ok', float(at)) and d['startsAt'] <= at <= d['endsAt']
         rule('window', in_window, '' if in_window else '정책 기간 밖')
@@ -99,7 +102,8 @@ class Expenses:
             left = None if cap is None else cap - self.category_used(prop['category'])
             rule('category_budget', left is None or total <= left,
                  '카테고리 예산 없음' if left is None else f"{domain().category_name(prop['category'])} 잔여 {won(left)}")
-            rule('funds', total <= self.available, f'가용 {won(self.available)}')
+            avail = min(self.available, chain['available']) if 'available' in chain else self.available
+            rule('funds', total <= avail, f'가용 {won(avail)}' + (' (온체인 잔액 기준)' if avail < self.available else ''))
         rule('evidence', evidence_ok, 'E1 업로드 문서, 판독 일치' if evidence_ok else '판독 결과를 신뢰할 수 없음')
         signals = self.signals(prop, at) if prop else {}
         for name in ('probable_duplicate', 'split_pattern', 'price_anomaly'):
@@ -185,7 +189,7 @@ class Expenses:
     def request(self, line, i, retro):
         reading, document, at = i.get('reading') or {}, i.get('document'), line['at']
         prop, evidence_ok, cls, why = fields_of(reading, i.get('manual'))
-        rules, failed, signals = self.evaluate(prop, evidence_ok, document and document['id'], at)
+        rules, failed, signals = self.evaluate(prop, evidence_ok, document and document['id'], at, i.get('chain'))
         e = self.new_expense('RETROACTIVE' if retro else 'COMMITMENT', prop, reading, document, i.get('manifest'), at)
         name = domain().name_of(e['vendor']) if e['vendor'] else '알 수 없는 공급자'
         if failed:

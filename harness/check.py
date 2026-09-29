@@ -30,6 +30,7 @@ FIX = {'q-gabia': ('gabia', 'domain', 22000, 2200), 'q-figma': ('figma', 'softwa
        'r-figma-over': ('figma', 'software', 99000, 9900), 'r-aws': ('aws', 'hosting', 163637, 16363)}
 DOWN = set()  # sample ids whose reading fails as if Kiln were unreachable
 RESULTS = []
+WORLDS = []  # every scenario's store, for the chain checks
 
 
 def reader(text):
@@ -78,6 +79,7 @@ class World:
         if caps:
             sp['rules']['form']['category_budgets'] = caps
         self.pid = self.st.create('client', sp)['id']
+        WORLDS.append(self)
 
     def act(self, role, action, **p):
         return self.st.act(self.pid, role, action, p)
@@ -320,6 +322,118 @@ def categories(tmp):
           w.P.expenses['E1']['status'] == 'RESERVED' and w.P.expenses['E2']['decision']['reason'] == 'category_budget')
 
 
+class Escrow:
+    """src/PlobyEscrow.sol's rules in Python: every call a scenario's log implies must pass them."""
+
+    def __init__(self):
+        self.p, self.held, self.applied = {}, {}, set()
+
+    def apply(self, c):
+        a, pid, call = c['args'], c['pid'], c['call']
+        if call == 'open':
+            if pid in self.p:
+                return 'ProjectExists'
+            self.p[pid] = {'contractor': a['contractor'], 'policy': a['policy'], 'budget': a['budget'], 'funded': 0,
+                           'reserved': 0, 'paid': 0, 'refunded': 0, 'paused': False}
+            return None
+        p, key = self.p.get(pid), (pid, c['head'], c['n'])
+        if p is None:
+            return 'NoProject'
+        if key in self.applied:
+            return 'AlreadyApplied'
+        avail = p['funded'] - p['reserved'] - p['paid'] - p['refunded']
+        if call == 'fund':
+            if p['funded'] + a['amount'] > p['budget']:
+                return 'OverBudget'
+            p['funded'] += a['amount']
+        elif call == 'accept':
+            if a['budget'] < p['funded']:
+                return 'OverBudget'
+            p['policy'], p['budget'] = a['policy'], a['budget']
+        elif call == 'pause':
+            p['paused'] = a['paused']
+        elif call == 'decide':
+            if a['policy'] != p['policy']:
+                return 'PolicyMismatch'
+            if a['decision'] == 'APPROVE':
+                if p['paused']:
+                    return 'ProjectPaused'
+                if a['amount'] > avail or a['amount'] < 1:
+                    return 'InsufficientFunds'
+                p['reserved'] += a['amount']
+                self.held[(pid, a['ref'])] = self.held.get((pid, a['ref']), 0) + a['amount']
+        elif call == 'settle':
+            h = self.held.get((pid, a['ref']), 0)
+            if a['pay'] + a['returned'] == 0 or a['pay'] + a['returned'] > h:
+                return 'OverReserved'
+            self.held[(pid, a['ref'])] = h - a['pay'] - a['returned']
+            p['reserved'] -= a['pay'] + a['returned']
+            p['paid'] += a['pay']
+        elif call == 'refund':
+            if a['amount'] > avail or a['amount'] < 1:
+                return 'InsufficientFunds'
+            p['refunded'] += a['amount']
+        self.applied.add(key)
+        return None
+
+
+class StubRail:
+    escrow, chain_id = '0x' + '00' * 20, 10143
+
+    def tx_url(self, tx):
+        return f'https://testnet.monadvision.com/tx/{tx}' if tx else None
+
+
+def onchain(tmp):
+    """The chain mirror (escrow/chain.py, src/PlobyEscrow.sol), from every scenario above; no network."""
+    from escrow import chain
+    from escrow.engine import Project
+    refused, mismatched, every = [], [], []
+    for world in WORLDS:  # one contract per scenario (their project ids may coincide)
+        model = Escrow()
+        P, todo, _ = chain.plan(world.pid, world.st.lines(world.pid), Project)
+        for c in todo:
+            err = model.apply(c)
+            if err:
+                refused.append(f"{world.pid[:6]} #{c['line']} {c['call']} {c['args'].get('ref', '')}: {err}")
+        every += todo
+        p, L = model.p.get(world.pid), P.ledger()
+        want = {'funded': L['funded'], 'reserved': L['expense_reserved'] + L['milestone_reserved'], 'paid': L['released'],
+                'refunded': L['refunded']}
+        if (p and {k: p[k] for k in want} != want) or (not p and L['funded']):
+            mismatched.append(f"{world.pid[:6]} {p} != {want}")
+        held = {ref: r for ref, (r, _) in chain.money(P)['refs'].items() if r}
+        if {ref: model.held.get((world.pid, ref), 0) for ref in held} != held:
+            mismatched.append(f"{world.pid[:6]} per-ref reservations differ")
+    check('every money change in every scenario is a contract call PlobyEscrow accepts (its rules, in Python)',
+          not refused and every, '; '.join(refused[:3]))
+    check('after those calls the contract holds exactly the engine ledger (funded, reserved per ref, paid, refunded)',
+          not mismatched, '; '.join(mismatched[:2]))
+    kinds = {(c['call'], c['args'].get('decision')) for c in every}
+    check('a stop is recorded on chain, never silent: BLOCK and HOLD decisions and the client pause are calls',
+          {('decide', 'BLOCK'), ('decide', 'HOLD'), ('pause', None)} <= kinds, str(sorted(kinds, key=str)))
+    opens = [c for c in every if c['call'] == 'open']
+    check('the contract is opened with the signed policy hash and can pay only the contractor fixed in it',
+          opens and all(c['args']['contractor'] == pol.address('contractor') and c['args']['policy'].startswith('0x')
+                        for c in opens))
+    w = WORLDS[0]
+    c = next(c for c in chain.plan(w.pid, w.st.lines(w.pid), Project)[1] if c['call'] == 'decide')
+    before, tx = w.P.ledger(), '0x' + 'ab' * 32
+    w.st.rail = StubRail()
+    w.st.chain_result(c, {'tx': tx, 'ok': True, 'error': None, 'block': 1})
+    R = w.st.replay(w.pid)
+    check("a relayer's chain line names its log line, replays, and moves no money",
+          R.head == w.P.head and R.ledger() == before and R.log[c['line']]['chain'][0]['tx'] == tx
+          and (c['line'], c['n']) in chain.plan(w.pid, w.st.lines(w.pid), Project)[2])
+    w5 = World(tmp, 'e')
+    w5.activate()
+    prop = {'merchant': 'gabia', 'category': 'domain', 'item': 'x', 'amount': 22000, 'fee': 2200, 'units': 1}
+    paused = w5.P.evaluate(prop, True, None, w5.P.at, {'paused': True})[1]
+    poor = w5.P.evaluate(prop, True, None, w5.P.at, {'paused': False, 'available': 1000})[1]
+    check('a pause or a shortfall the contract shows stops a request even if the engine missed it (state, funds)',
+          paused and paused['rule'] == 'state' and poor and poor['rule'] == 'funds')
+
+
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -328,6 +442,7 @@ def main():
     try:
         run(tmp)
         categories(tmp)
+        onchain(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     failed = [n for n, ok in RESULTS if not ok]

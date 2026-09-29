@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, policy as pol
+from . import ai, chain, policy as pol
 from .core import Refused
 from .pcp_bridge import domain
 from .store import Store
@@ -47,7 +47,18 @@ def meta():
                          'category_ko': d.category_name(r['category'])} for r in d.registry],
             'categories': [{'id': c, 'name_ko': d.category_name(c)} for c in d.categories],
             'defaults': dict(pol.DEFAULT_PERIODS), 'ai': {'enabled': ai.enabled(), 'model': 'qwen3-32b'},
-            'implementation': IMPLEMENTATION}
+            'chain': chain_meta(), 'implementation': IMPLEMENTATION}
+
+
+def chain_meta():
+    dep = chain.deployment()
+    if not dep:
+        return {'enabled': False}
+    base = dep['explorer']
+    return {'enabled': chain.enabled(), 'network': 'Monad testnet', 'chain_id': dep['chain_id'],
+            'escrow': dep['escrow']['address'], 'escrow_url': f"{base}address/{dep['escrow']['address']}",
+            'token': dep['token']['address'], 'token_url': f"{base}address/{dep['token']['address']}",
+            'client_wallet': dep['roles']['client'], 'operator': dep['roles']['operator'], 'explorer': base}
 
 
 def samples():
@@ -86,6 +97,8 @@ def route(store, method, path, query, body):
         return store.listing(role or 'client')
     if len(parts) == 2 and parts[0] == 'projects' and method == 'GET':
         return store.view(parts[1], role or 'client')
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'chain' and method == 'GET':
+        return store.onchain_state(parts[1])
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'actions' and method == 'POST':
         text, view = store.act(parts[1], body.get('as'), body.get('action'), body)
         return {'ok': True, 'result': text, 'view': view}
@@ -152,8 +165,16 @@ def main():
     except OSError as e:
         raise SystemExit(f'포트 {a.port}을(를) 열 수 없습니다 ({e.strerror}). 이미 실행 중인 서버를 끄거나 '
                          f'--port 3011 처럼 다른 포트를 쓰세요 (그 경우 frontend/vite.config.ts의 프록시도 맞춰야 함).')
+    rail = None
+    if chain.enabled():
+        try:
+            rail = chain.Rail()
+            store.start_chain(rail)
+        except (RuntimeError, OSError, KeyError) as e:
+            print(f'chain off: {type(e).__name__}', flush=True)
     print(f'Ploby API on http://127.0.0.1:{a.port}/api  data {a.data}  ({len(store.projects)} projects)  '
-          f"Kiln {'on' if ai.enabled() else 'off (readings are HOLD)'}", flush=True)
+          f"Kiln {'on' if ai.enabled() else 'off (readings are HOLD)'}  "
+          f"chain {'Monad testnet ' + rail.escrow if rail else 'off (no deployment or keys; PLOBY_CHAIN=off)'}", flush=True)
     server.serve_forever()
 
 

@@ -3,8 +3,12 @@ evidence text, off chain and out of the log: the log keeps its hash), <root>/clo
 offset). Loading a project replays its log; nothing else is stored.
 
 An action goes: the keeper applies elapsed deadlines -> the inputs are prepared outside the lock (the model's
-reading of a document, a change-order draft) -> the line is signed by the acting role's demo key, applied to a
-copy of the state, and only then appended. A refused line changes nothing.
+reading of a document, a change-order draft, the escrow contract's state) -> the line is signed by the acting
+role's demo key, applied to a copy of the state, and only then appended. A refused line changes nothing.
+
+With a rail (escrow/chain.py), every appended line's money change becomes contract calls, sent in order by one
+worker; each result comes back as a relayer-signed 'chain' line. On start, calls the log implies but has no
+result for are sent again (the contract refuses a call applied twice).
 """
 import copy
 import hashlib
@@ -14,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import ai, policy as pol
+from . import ai, chain, policy as pol
 from .core import Refused, raw
 from .engine import Project
 
@@ -37,7 +41,7 @@ def _write_json(path, value):
 
 
 class Store:
-    def __init__(self, root, reader=None, drafter=None, compiler=None):
+    def __init__(self, root, reader=None, drafter=None, compiler=None, rail=None):
         self.root = Path(root)
         (self.root / 'projects').mkdir(parents=True, exist_ok=True)
         (self.root / 'docs').mkdir(parents=True, exist_ok=True)
@@ -52,6 +56,16 @@ class Store:
         for d in sorted((self.root / 'projects').iterdir()):
             if (d / 'log.jsonl').exists():
                 self.projects[d.name] = self.replay(d.name)
+        self.rail, self.worker = None, None
+        if rail:
+            self.start_chain(rail)
+
+    def start_chain(self, rail):
+        """Mirror every project on chain from now on, first sending what the logs imply but never got a result."""
+        self.rail, self.worker = rail, chain.Worker(rail, self.chain_result)
+        for pid in self.projects:
+            self.worker.submit(self.unsent(pid))
+        self.worker.start()
 
     # -- clock
     def now(self):
@@ -86,12 +100,69 @@ class Store:
             f.flush()
             os.fsync(f.fileno())
         self.projects[P.id] = Q
+        if self.worker and line['op'] != 'chain':
+            self.worker.submit(chain.calls(P.id, len(Q.log) - 1, Q.head, chain.money(P), chain.money(Q), Q))
         return Q, text
+
+    # -- the chain
+    def lines(self, pid):
+        return [json.loads(t) for t in self.path(pid).read_text(encoding='utf-8').splitlines()]
+
+    def unsent(self, pid):
+        """The calls the log implies that have no result in it yet."""
+        _, todo, done = chain.plan(pid, self.lines(pid), Project)
+        return [c for c in todo if (c['line'], c['n']) not in done]
+
+    def chain_result(self, c, r):
+        params = {'line': c['line'], 'n': c['n'], 'call': c['call'], 'args': c['args'], 'tx': r['tx'],
+                  'url': self.rail.tx_url(r['tx']), 'ok': r['ok'] or r['error'] in ('AlreadyApplied', 'ProjectExists'),
+                  'error': r['error'], 'block': r['block']}
+        with self.lock:
+            P = self.get(c['pid'])
+            self.commit(P, self.line('relayer', 'chain', params, {}, max(self.now(), P.at)))
+
+    def onchain(self, pid):
+        """What the contract says before a request is decided: its pause flag and available balance. Read only when
+        no call of this project is still on its way (otherwise the engine's own state is the newer one)."""
+        if not self.rail:
+            return None
+        waiting = len(self.worker.pending(pid))
+        if waiting:
+            return {'skipped': f'{waiting} calls pending'}
+        try:
+            p = self.rail.project(pid)
+        except (RuntimeError, OSError):
+            return {'skipped': 'chain unreachable'}
+        if p is None:
+            return {'skipped': 'not opened'}
+        return {'paused': p['paused'], 'available': p['available'], 'contract': self.rail.escrow}
+
+    def chain_status(self, pid):
+        if not self.rail:
+            return {'enabled': False}
+        P = self.get(pid)
+        return {'enabled': True, 'network': 'Monad testnet', 'chain_id': self.rail.chain_id,
+                'contract': self.rail.escrow, 'contract_url': self.rail.address_url(self.rail.escrow),
+                'token': self.rail.token, 'pending': len(self.worker.pending(pid)),
+                'sent': sum(1 for r in P.chain if r['tx']), 'refused': sum(1 for r in P.chain if not r['ok'])}
+
+    def onchain_state(self, pid):
+        """The contract's view of the project next to the engine's ledger (for the screen and the auditor)."""
+        with self.lock:
+            P = self.get(pid)
+            ledger, status = P.ledger(), self.chain_status(pid)
+        if not self.rail:
+            return {'chain': status}
+        p = self.rail.project(pid)
+        mirror = {'funded': ledger['funded'], 'reserved': ledger['expense_reserved'] + ledger['milestone_reserved'],
+                  'paid': ledger['released'], 'refunded': ledger['refunded'], 'available': ledger['available']}
+        return {'chain': status, 'onchain': p, 'engine': mirror,
+                'match': bool(p) and all(p[k] == v for k, v in mirror.items()) and not status['pending']}
 
     @staticmethod
     def line(by, op, params, inputs, at):
         line = {'op': op, 'at': at, 'by': by, 'params': params, 'inputs': inputs}
-        if by in pol.ROLES:
+        if by in pol.SIGNED:
             line['sig'] = pol.sign(by, raw(line))
         return line
 
@@ -147,7 +218,7 @@ class Store:
     def view(self, pid, role):
         with self.lock:
             self.keeper(pid)
-            return self.get(pid).view(role, self.now())
+            return {**self.get(pid).view(role, self.now()), 'chain': self.chain_status(pid)}
 
     def listing(self, role):
         with self.lock:
@@ -224,7 +295,7 @@ class Store:
             if 'manifest_docs' in inputs:
                 inputs['manifest'] = self.manifest(pid, action, inputs.pop('manifest_docs'), role, now, params.get('note', ''))
             P, text = self.commit(P, self.line(role, action, clean(params), inputs, now))
-            return text, P.view(role, now)
+            return text, {**P.view(role, now), 'chain': self.chain_status(pid)}
 
     def prepare(self, pid, role, action, params, context):
         """The inputs a line carries: what came from outside the rules, fixed before the rules run."""
@@ -235,6 +306,8 @@ class Store:
             out = {'reading': reading, 'document': {'id': d['id'], 'name': d['name']}, 'manifest_docs': [d]}
             if params.get('manual'):
                 out['manual'] = params['manual']
+            if action in ('request_commitment', 'retroactive_request') and self.rail:
+                out['chain'] = self.onchain(pid)
             return out
         if action == 'submit_delivery':
             docs = [self.doc_text(x) for x in params.get('documents') or []]

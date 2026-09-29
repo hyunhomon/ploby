@@ -1,7 +1,7 @@
 """The project's state and its ledger, changed only by applying log lines.
 
-A line is {op, at, by, params, inputs, sig}. `by` is a role (client / contractor / resolver) or 'keeper'
-(a deadline's pre-agreed fallback). A party's line carries its demo signature over the rest of the line.
+A line is {op, at, by, params, inputs, sig}. `by` is a role (client / contractor / resolver), 'keeper'
+(a deadline's pre-agreed fallback) or 'relayer' (a chain result written back, escrow/chain.py). A party's line carries its demo signature over the rest of the line.
 `inputs` holds what came from outside the rules (the model's readings, a signature over a policy hash), so
 a replay never calls a model. Each op_<name> method validates and changes the state, and returns the
 Korean sentence the log shows.
@@ -51,6 +51,7 @@ class Core:
         self.milestones, self.expenses, self.change_orders = {}, {}, {}
         self.documents = {}  # document id -> the expense that used it (a document backs one request)
         self.log, self.head, self.at, self.seq = [], ZERO, 0, {'E': 0, 'C': 0}
+        self.chain = []  # results of the contract calls that mirror this log (op_chain)
 
     # -- policy
     def version(self, n):
@@ -125,10 +126,10 @@ class Core:
         at, by = line.get('at'), line.get('by')
         if isinstance(at, bool) or not isinstance(at, int) or at < self.at:
             raise Refused('로그 시간은 거꾸로 갈 수 없습니다', 'invalid')
-        if by in pol.ROLES:
+        if by in pol.SIGNED:
             body = {k: v for k, v in line.items() if k != 'sig'}
             if not pol.verify(by, raw(body), line.get('sig')):
-                raise Refused(f'{pol.NAMES[by]}의 서명이 맞지 않습니다', 'forbidden')
+                raise Refused(f'{pol.NAMES.get(by, by)}의 서명이 맞지 않습니다', 'forbidden')
         elif by != 'keeper':
             raise Refused(f'알 수 없는 행위자 {by!r}', 'forbidden')
         fn = getattr(self, 'op_' + str(line.get('op')), None)
