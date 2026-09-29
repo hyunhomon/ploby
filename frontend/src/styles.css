@@ -100,6 +100,12 @@ textarea {
   font-size: 0.9em;
   color: var(--text-2);
 }
+html[lang="en"] .money .unit {
+  margin-left: 4px;
+}
+html[lang="en"] .money-input input {
+  padding-right: 46px;
+}
 
 /* ---------------------------------------------------------------- shell */
 [hidden] {
@@ -227,8 +233,26 @@ summary:active {
 .account-tools {
   margin-left: auto;
   display: flex;
-  gap: 24px;
+  gap: 16px;
   align-items: center;
+}
+.mobile-only {
+  display: none;
+}
+.language-select select {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 6px 28px 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.language-select select:hover,
+.language-select select:focus-visible {
+  border-color: var(--text-3);
 }
 .demo-toggle {
   display: flex;
@@ -2859,6 +2883,15 @@ summary:active {
   }
   .account-tools {
     gap: 12px;
+  }
+  .mobile-only {
+    display: inline;
+  }
+  .language-select select {
+    min-height: 40px;
+    width: 80px;
+    padding-left: 7px;
+    padding-right: 18px;
   }
   .account-name,
   .avatar,

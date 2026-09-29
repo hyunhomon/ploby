@@ -14,6 +14,12 @@ import time
 from . import compiler, domain as domains, form, kiln, lang, readback, stages
 
 
+def configure_output():
+    """Keep Korean readbacks and policy punctuation intact on Windows consoles and pipes."""
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
+
 def compile_cmd(a):
     d = domains.load_all()[a.domain]
     now = (int(dt.datetime.fromisoformat(a.now).replace(tzinfo=dt.timezone(dt.timedelta(minutes=d.tz))).timestamp()
@@ -60,6 +66,7 @@ def pack_cmd(a):
 
 
 def main():
+    configure_output()
     p = argparse.ArgumentParser(prog='python3 -m pcp', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest='cmd', required=True)
     c = sub.add_parser('compile', help='words -> mandate')

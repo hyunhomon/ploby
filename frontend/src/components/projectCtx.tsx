@@ -3,7 +3,8 @@
 
 import { createContext, useContext, type ReactNode } from "react"
 import type { ActionParams } from "../api"
-import { ACTION_KO, label } from "../labels"
+import { tr } from "../i18n"
+import { ACTION_KO, TARGET_KO, label } from "../labels"
 import type { Action, Deadline, ProjectView, Target, TargetKind } from "../types"
 
 /** Values a dialog can be opened with (e.g. an out-of-scope item for a change-order draft). */
@@ -46,7 +47,7 @@ export function actionsFor(view: ProjectView, target: TargetRef): Action[] {
 }
 
 export function actionLabel(a: Action): string {
-  return a.label || label(ACTION_KO, a.action)
+  return ACTION_KO[a.action] ? label(ACTION_KO, a.action) : a.label || a.action
 }
 
 /** The params that name an action's target (docs/api.md, "Actions"). */
@@ -118,23 +119,27 @@ export function Act({
 
 /** Target description for an action or deadline: "마일스톤 · 디자인 시안". */
 export function describeTarget(view: ProjectView, t: Target | null): string {
-  if (!t || t.kind === "project") return "프로젝트"
+  if (!t || t.kind === "project") return label(TARGET_KO, "project")
   const id = String(t.id)
   switch (t.kind) {
     case "milestone": {
       const m = view.milestones.find((x) => x.id === id)
-      return `마일스톤 · ${m ? m.title : id}`
+      return tr("project.target.milestone", { name: m ? m.title : id })
     }
     case "expense": {
       const e = view.expenses.find((x) => x.id === id)
-      return `경비 · ${e ? [e.vendor_name ?? e.vendor, e.item].filter(Boolean).join(" ") || id : id}`
+      return tr("project.target.expense", {
+        name: e ? [e.vendor_name ?? e.vendor, e.item].filter(Boolean).join(" ") || id : id,
+      })
     }
     case "change_order": {
       const c = view.change_orders.find((x) => x.id === id)
-      return `변경 주문 · ${c?.draft?.title || (c?.draft?.covers_excess ? `초과분 ${c.draft.covers_excess}` : id)}`
+      return tr("project.target.changeOrder", {
+        name: c?.draft?.title || (c?.draft?.covers_excess ? tr("project.target.excess", { id: c.draft.covers_excess }) : id),
+      })
     }
     case "policy":
-      return `정책 v${id}`
+      return tr("project.target.policy", { version: id })
     default:
       return id
   }

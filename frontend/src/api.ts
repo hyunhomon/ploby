@@ -1,6 +1,7 @@
 // The one JSON API (docs/api.md). With `?fixture=1` in the URL every call is answered by
 // src/dev/fixture.ts instead, so the UI can be checked without the server.
 
+import { tr } from "./i18n"
 import type {
   ActionOk,
   Clock,
@@ -50,7 +51,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
-    throw new ApiError("서버에 연결할 수 없습니다. 백엔드(127.0.0.1:3010)가 실행 중인지 확인하세요.", "network", 0)
+    throw new ApiError(tr("api.network"), "network", 0)
   }
   const text = await res.text()
   let data: unknown = null
@@ -65,12 +66,12 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
       err && typeof err.error === "string"
         ? err.error
         : res.status === 502 || res.status === 504
-          ? "서버에 연결할 수 없습니다. 백엔드(127.0.0.1:3010)가 실행 중인지 확인하세요."
-          : `서버 오류 (HTTP ${res.status})`
+          ? tr("api.network")
+          : tr("api.server", { status: res.status })
     const code = err && typeof err.code === "string" ? err.code : `http_${res.status}`
     throw new ApiError(message, code, res.status)
   }
-  if (data === null && text !== "") throw new ApiError("서버 응답을 읽을 수 없습니다.", "parse", res.status)
+  if (data === null && text !== "") throw new ApiError(tr("api.parse"), "parse", res.status)
   return data as T
 }
 

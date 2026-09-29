@@ -2,13 +2,15 @@
 // toolbar, a tiny hash router (#/, #/new, #/p/{id}), toasts and the 구현 범위 panel.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { api, errorText, FIXTURE } from "./api"
 import { Home } from "./components/Home"
 import { NewProject } from "./components/NewProject"
 import { ProjectPage } from "./components/ProjectPage"
 import { AppContext, DocViewer, Modal, type AppCtx, type ToastKind } from "./components/ui"
 import { kst } from "./format"
-import { ROLE_KO, ROLE_NAME, ROLES } from "./labels"
+import { LANGUAGES, tr, type AppLanguage } from "./i18n"
+import { ROLE_KO, ROLE_NAME, ROLES, label } from "./labels"
 import type { Clock, DocRef, Meta, Role } from "./types"
 
 const ROLE_KEY = "ploby.role"
@@ -54,10 +56,10 @@ interface Toast {
 }
 
 const STEPS: [string, number][] = [
-  ["+1시간", 3600],
-  ["+1일", 86400],
-  ["+3일", 3 * 86400],
-  ["+7일", 7 * 86400],
+  ["app.addHour", 3600],
+  ["app.addDay", 86400],
+  ["app.addThreeDays", 3 * 86400],
+  ["app.addWeek", 7 * 86400],
 ]
 
 function offsetText(offset: number): string {
@@ -66,11 +68,14 @@ function offsetText(offset: number): string {
   if (ms < 60_000) return ""
   const d = Math.floor(ms / 86_400_000)
   const h = Math.floor((ms % 86_400_000) / 3_600_000)
-  const parts = [d ? `${d}일` : "", h ? `${h}시간` : ""].filter(Boolean).join(" ")
+  const parts = [d ? tr("common.day", { count: d }) : "", h ? tr("common.hour", { count: h }) : ""]
+    .filter(Boolean)
+    .join(" ")
   return parts ? `${offset < 0 ? "−" : "+"}${parts}` : ""
 }
 
 export function App() {
+  const { t, i18n } = useTranslation()
   const [role, setRoleState] = useState<Role>(loadRole)
   const [route, setRoute] = useState<Route>(parseHash)
   const [meta, setMeta] = useState<Meta | null>(null)
@@ -159,11 +164,11 @@ export function App() {
             document.getElementById("main-content")?.focus()
           }}
         >
-          본문으로 이동
+          {t("app.skip")}
         </a>
         <header className="topbar">
           <div className="topbar-inner">
-            <a className="brand" href="#/" aria-label="Ploby 홈">
+            <a className="brand" href="#/" aria-label={t("app.home")}>
               <span className="brand-mark" aria-hidden="true">
                 p
               </span>
@@ -171,9 +176,9 @@ export function App() {
                 ploby<span className="brand-period">.</span>
               </span>
             </a>
-            <nav className="global-nav" aria-label="주 메뉴">
+            <nav className="global-nav" aria-label={t("app.mainMenu")}>
               <a href="#/" aria-current={route.page !== "new" ? "page" : undefined}>
-                프로젝트
+                {t("app.projects")}
               </a>
             </nav>
             <div className="account-tools">
@@ -185,19 +190,34 @@ export function App() {
                 onClick={() => setDemoOpen(!demoOpen)}
               >
                 <span className="demo-dot" />
-                데모<span className="desktop-only"> 도구</span>
+                <span className="desktop-only">{t("app.demoTools")}</span>
+                <span className="mobile-only">Demo</span>
               </button>
+              <label className="language-select">
+                <span className="sr-only">{t("common.language")}</span>
+                <select
+                  value={(i18n.resolvedLanguage ?? i18n.language).startsWith("en") ? "en" : "ko"}
+                  onChange={(e) => void i18n.changeLanguage(e.target.value as AppLanguage)}
+                  aria-label={t("common.language")}
+                >
+                  {LANGUAGES.map((language) => (
+                    <option key={language} value={language}>
+                      {language === "ko" ? t("common.korean") : t("common.english")}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="account">
                 <span className="avatar" aria-hidden="true">
                   {nameOf(role).slice(0, 1)}
                 </span>
                 <label className="role-select">
                   <span className="account-name">{nameOf(role)}</span>
-                  <span className="sr-only">데모 역할 전환</span>
+                  <span className="sr-only">{t("app.demoRole")}</span>
                   <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
                     {ROLES.map((r) => (
                       <option value={r} key={r}>
-                        {ROLE_KO[r]}
+                        {label(ROLE_KO, r)}
                       </option>
                     ))}
                   </select>
@@ -207,24 +227,24 @@ export function App() {
           </div>
         </header>
 
-        <div className="democlock" id="demo-tools" hidden={!demoOpen} role="region" aria-label="데모 시계">
+        <div className="democlock" id="demo-tools" hidden={!demoOpen} role="region" aria-label={t("app.demoClock")}>
           <div className="democlock-inner">
-            <span className="demo-tag">데모 전용</span>
-            <span className="democlock-label">데모 시계</span>
+            <span className="demo-tag">{t("app.demoOnly")}</span>
+            <span className="democlock-label">{t("app.demoClock")}</span>
             <strong className="democlock-now">{clock ? kst(clock.now) : viewNow ? kst(viewNow) : "—"}</strong>
             {clock && offsetText(clock.offset) && (
               <span className="democlock-offset">({offsetText(clock.offset)})</span>
             )}
             <span className="democlock-btns">
-              {STEPS.map(([t, s]) => (
+              {STEPS.map(([key, s]) => (
                 <button
-                  key={t}
+                  key={key}
                   type="button"
                   className="clock-btn"
                   disabled={clockBusy}
                   onClick={() => moveClock({ advance: s })}
                 >
-                  {t}
+                  {t(key)}
                 </button>
               ))}
               <button
@@ -233,11 +253,11 @@ export function App() {
                 disabled={clockBusy}
                 onClick={() => moveClock({ reset: true })}
               >
-                초기화
+                {t("app.reset")}
               </button>
             </span>
             <span className="democlock-extra" ref={setClockSlot} />
-            {FIXTURE && <span className="demo-tag demo-fixture">픽스처 모드 · 서버 호출 없음</span>}
+            {FIXTURE && <span className="demo-tag demo-fixture">{t("app.fixture")}</span>}
           </div>
         </div>
 
@@ -251,9 +271,9 @@ export function App() {
 
         <footer className="footer">
           <button type="button" className="linkish" onClick={() => setImplOpen(true)}>
-            서비스 안내
+            {t("app.serviceInfo")}
           </button>
-          <span className="muted small">데모 환경 · 실제 자금이 사용되지 않아요</span>
+          <span className="muted small">{t("app.demoNotice")}</span>
         </footer>
 
         <div className="toasts" aria-live="polite">
@@ -278,19 +298,18 @@ export function App() {
 }
 
 function ImplementationPanel({ meta, onClose }: { meta: Meta | null; onClose: () => void }) {
+  const { t } = useTranslation()
   const impl = meta?.implementation
   return (
-    <Modal title="구현 범위" onClose={onClose} wide>
-      <p className="muted small">
-        현재 구현과 목표 설계를 섞지 않습니다. 목록은 서버(/api/meta)가 알려준 그대로입니다.
-      </p>
+    <Modal title={t("app.implementationTitle")} onClose={onClose} wide>
+      <p className="muted small">{t("app.implementationDescription")}</p>
       {!impl ? (
-        <p className="muted">서버가 구현 범위를 알려주지 않았습니다.</p>
+        <p className="muted">{t("app.implementationUnavailable")}</p>
       ) : (
         <div className="impl">
           <section>
             <h3>
-              <span className="impl-dot impl-current" aria-hidden /> 현재 구현
+              <span className="impl-dot impl-current" aria-hidden /> {t("app.currentImplementation")}
             </h3>
             <ul>
               {impl.current.map((x, i) => (
@@ -300,7 +319,7 @@ function ImplementationPanel({ meta, onClose }: { meta: Meta | null; onClose: ()
           </section>
           <section>
             <h3>
-              <span className="impl-dot impl-target" aria-hidden /> 목표 설계 (미구현)
+              <span className="impl-dot impl-target" aria-hidden /> {t("app.targetDesign")}
             </h3>
             <ul>
               {impl.target.map((x, i) => (

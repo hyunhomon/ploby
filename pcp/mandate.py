@@ -179,4 +179,5 @@ class State:
 
 
 def state_hash(snapshot):
-    return hashlib.sha256(json.dumps(snapshot, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    encoded = json.dumps(snapshot, sort_keys=True, ensure_ascii=False).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()

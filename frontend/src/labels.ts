@@ -4,12 +4,14 @@
 // from the server is still visible, never hidden.
 
 import type { Actor, Role } from "./types"
+import i18n from "./i18n"
 
 export type Tone = "ok" | "warn" | "bad" | "info" | "muted" | "accent"
 
 export function label(map: Record<string, string>, code: string | null | undefined): string {
   if (code === null || code === undefined || code === "") return "—"
-  return map[code] ?? code
+  const source = map[code]
+  return source ? String(i18n.t(source, { ns: "codes", defaultValue: source })) : code
 }
 
 export function toneOf(map: Record<string, Tone>, code: string | null | undefined): Tone {

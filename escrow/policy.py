@@ -30,7 +30,7 @@ ROLES = ('client', 'contractor', 'resolver')
 SIGNERS = ('client', 'contractor')
 NAMES = {'client': '카페 온담', 'contractor': '한결웹스튜디오', 'resolver': 'Ploby 분쟁 해결자'}
 ROLE_KO = {'client': '클라이언트', 'contractor': '작업자', 'resolver': '분쟁 해결자'}
-DEMO_KEYS = {r: f'ploby-demo-key:{r}'.encode() for r in ROLES}
+DEMO_KEYS = {r: f'ploby-demo-key:{r}'.encode('utf-8') for r in ROLES}
 KST = dt.timezone(dt.timedelta(hours=9))
 HOUR, DAY = 3600, 86400
 DEFAULT_PERIODS = {'client_review_hours': 72, 'resolver_review_days': 7, 'evidence_days': 7, 'reservation_days': 7}
@@ -43,7 +43,7 @@ class PolicyError(ValueError):
 
 
 def address(role):
-    return '0x' + hashlib.sha256(f'ploby-demo:{role}'.encode()).hexdigest()[:40]
+    return '0x' + hashlib.sha256(f'ploby-demo:{role}'.encode('utf-8')).hexdigest()[:40]
 
 
 def parties():
@@ -51,7 +51,7 @@ def parties():
 
 
 def canonical(obj):
-    return json.dumps(obj, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+    return json.dumps(obj, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
 
 def policy_hash(doc):
@@ -60,7 +60,7 @@ def policy_hash(doc):
 
 def sign(role, message):
     """role's demo signature over a policy hash or a canonical action string."""
-    return '0x' + hmac.new(DEMO_KEYS[role], str(message).encode(), hashlib.sha256).hexdigest()
+    return '0x' + hmac.new(DEMO_KEYS[role], str(message).encode('utf-8'), hashlib.sha256).hexdigest()
 
 
 def verify(role, message, signature):

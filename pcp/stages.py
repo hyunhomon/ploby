@@ -30,7 +30,7 @@ def stage(name):
     s = dict(DEFAULTS[name])
     config = ROOT / 'pipeline.json'
     if config.exists():
-        s.update(json.loads(config.read_text()).get(name, {}))  # keys starting with _ are notes
+        s.update(json.loads(config.read_text(encoding='utf-8')).get(name, {}))  # keys starting with _ are notes
     env = os.environ.get(f'PCP_STAGE_{name.upper()}')
     if env:
         model, _, mode = env.partition(':')

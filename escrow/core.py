@@ -29,7 +29,7 @@ def won(n):
 
 
 def step(head, raw):
-    return hashlib.sha256((head + '\n' + raw).encode()).hexdigest()
+    return hashlib.sha256((head + '\n' + raw).encode('utf-8')).hexdigest()
 
 
 def whole(v, what, minimum=1):

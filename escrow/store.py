@@ -26,6 +26,16 @@ ACTIONS = {'sign_policy', 'deposit', 'cancel_project', 'pause', 'resume', 'begin
 READS = {'request_commitment', 'retroactive_request', 'submit_receipt', 'supplement_evidence'}
 
 
+def _read_json(path):
+    """Read one of Ploby's persisted JSON files with a platform-independent encoding."""
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def _write_json(path, value):
+    """Write compact UTF-8 JSON; callers decide when an fsync is required."""
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+
+
 class Store:
     def __init__(self, root, reader=None, drafter=None, compiler=None):
         self.root = Path(root)
@@ -37,7 +47,7 @@ class Store:
         self.lock = threading.RLock()
         self.candidates = {}
         clock = self.root / 'clock.json'
-        self.offset = json.loads(clock.read_text())['offset'] if clock.exists() else 0
+        self.offset = _read_json(clock)['offset'] if clock.exists() else 0
         self.projects = {}
         for d in sorted((self.root / 'projects').iterdir()):
             if (d / 'log.jsonl').exists():
@@ -50,7 +60,7 @@ class Store:
     def advance(self, seconds=None, reset=False):
         with self.lock:
             self.offset = 0 if reset else self.offset + int(seconds) * 1000
-            (self.root / 'clock.json').write_text(json.dumps({'offset': self.offset}))
+            _write_json(self.root / 'clock.json', {'offset': self.offset})
             self.keeper()
             return {'now': self.now(), 'offset': self.offset}
 
@@ -61,7 +71,7 @@ class Store:
     def replay(self, pid):
         """Rebuild a project from its log alone (the auditor's path): every line applied again, heads recomputed."""
         P = Project(pid)
-        for n, text in enumerate(self.path(pid).read_text().splitlines()):
+        for text in self.path(pid).read_text(encoding='utf-8').splitlines():
             P.apply(json.loads(text))
         return P
 
@@ -71,7 +81,7 @@ class Store:
         text = Q.apply(line)
         path = self.path(P.id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open('a') as f:
+        with path.open('a', encoding='utf-8', newline='\n') as f:
             f.write(raw(line) + '\n')
             f.flush()
             os.fsync(f.fileno())
@@ -105,25 +115,26 @@ class Store:
             raise Refused('빈 문서입니다', 'invalid')
         if len(text) > 200_000:
             raise Refused('문서가 너무 깁니다 (텍스트 200KB 이내)', 'invalid')
-        sha = hashlib.sha256(text.encode()).hexdigest()
+        sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
         path = self.root / 'docs' / f'{sha}.json'
         if not path.exists():
-            path.write_text(json.dumps({'id': sha, 'name': str(name or '문서')[:120], 'text': text}, ensure_ascii=False))
-        return {'id': sha, 'name': json.loads(path.read_text())['name']}
+            _write_json(path, {'id': sha, 'name': str(name or '문서')[:120], 'text': text})
+        document = _read_json(path)
+        return {'id': sha, 'name': document['name']}
 
     def doc_text(self, doc_id):
         path = self.root / 'docs' / f'{str(doc_id)}.json'
         if not str(doc_id).isalnum() or not path.exists():
             raise Refused('등록되지 않은 문서입니다 (먼저 업로드)', 'invalid')
-        return json.loads(path.read_text())
+        return _read_json(path)
 
     def manifest(self, pid, kind, docs, by, at, note=''):
         """The evidence manifest (ADR 0003): canonical list of the submitted files; its hash goes into the line."""
         m = {'schemaVersion': 'ploby.manifest/1', 'projectId': pid, 'kind': kind, 'submittedBy': pol.parties()[by]['address'],
              'submittedAt': at, 'files': [{'fileId': d['id'], 'sha256': d['id'], 'mediaType': 'text/plain',
-                                           'sizeBytes': len(self.doc_text(d['id'])['text'].encode()),
+                                           'sizeBytes': len(self.doc_text(d['id'])['text'].encode('utf-8')),
                                            'claimedAssuranceLevel': 'E1'} for d in docs],
-             'requestTextSha256': hashlib.sha256(str(note).encode()).hexdigest()}
+             'requestTextSha256': hashlib.sha256(str(note).encode('utf-8')).hexdigest()}
         return '0x' + hashlib.sha256(pol.canonical(m)).hexdigest()
 
     # -- reads
@@ -155,7 +166,7 @@ class Store:
             c = self.compiler(words, now)
         except (Exception, SystemExit) as e:
             raise Refused(f'판독 서비스 오류 ({type(e).__name__}) — 양식으로 작성하세요', 'state') from None
-        cid = 'c' + hashlib.sha256(f'{words}:{now}'.encode()).hexdigest()[:10]
+        cid = 'c' + hashlib.sha256(f'{words}:{now}'.encode('utf-8')).hexdigest()[:10]
         self.candidates[cid] = {'words': words, 'now': now - now % 60000, 'options': c['options']}
         return {'candidate': cid, 'agree': c['agree'], 'same': c['same'], 'problems': c['problems'],
                 'differences': c['differences'], 'contrast': c['contrast'],
@@ -170,7 +181,7 @@ class Store:
         with self.lock:
             now = self.now()
             pid = 'p' + hashlib.sha256(f"{pol.address('client')}:{pol.address('contractor')}:{now}:{len(self.projects)}"
-                                       .encode()).hexdigest()[:12]
+                                       .encode('utf-8')).hexdigest()[:12]
             try:
                 rules = spec.get('rules') or {}
                 if rules.get('mode') == 'words':

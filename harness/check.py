@@ -272,7 +272,7 @@ def run(tmp):
               R.head == world.P.head and R.ledger() == world.P.ledger()
               and json.dumps(R.view('client', 0), sort_keys=True, default=str) ==
               json.dumps(world.P.view('client', 0), sort_keys=True, default=str))
-    log = w.st.path(w.pid).read_text()
+    log = w.st.path(w.pid).read_text(encoding='utf-8')
     check('the log keeps document hashes, never document text', all(SAMPLES[k]['text'][:40] not in log for k in SAMPLES))
     lines = log.splitlines()
     forged = json.loads(lines[5])
@@ -321,6 +321,8 @@ def categories(tmp):
 
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     began = time.perf_counter()
     tmp = tempfile.mkdtemp(prefix='ploby-check-')
     try:

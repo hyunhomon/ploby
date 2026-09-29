@@ -54,10 +54,11 @@ def samples():
     if not SAMPLES.exists():
         return []
     out = []
-    for s in json.loads(SAMPLES.read_text()):
+    for s in json.loads(SAMPLES.read_text(encoding='utf-8')):
         path = HERE / s['file']
         if path.exists():
-            out.append({'id': s['id'], 'name': s['name'], 'kind': s['kind'], 'text': path.read_text()})
+            out.append({'id': s['id'], 'name': s['name'], 'kind': s['kind'],
+                        'text': path.read_text(encoding='utf-8')})
     return out
 
 
@@ -96,7 +97,7 @@ def handler(store):
         protocol_version = 'HTTP/1.1'
 
         def send(self, code, obj):
-            data = json.dumps(obj, ensure_ascii=False).encode()
+            data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.send_header('Content-Length', str(len(data)))
@@ -119,6 +120,8 @@ def handler(store):
                     body = json.loads(self.rfile.read(n) or b'{}') if n else {}
                 except json.JSONDecodeError:
                     return self.send(400, {'ok': False, 'error': 'JSON 본문이 아닙니다', 'code': 'invalid'})
+                if not isinstance(body, dict):
+                    return self.send(400, {'ok': False, 'error': 'JSON 본문은 객체여야 합니다', 'code': 'invalid'})
             try:
                 self.send(200, route(store, method, url.path, parse_qs(url.query), body))
             except Refused as e:

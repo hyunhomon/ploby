@@ -1,6 +1,7 @@
 // Shared UI pieces: app context, chips, money, times, cards, dialogs, document picker.
 
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import { api, errorText } from "../api"
 import { Icon } from "./Icon"
 import { num, parseAmount, shortHash, timeLeft, kst, urgency } from "../format"
@@ -47,10 +48,11 @@ export function Chip({ tone = "muted", children, title }: { tone?: Tone; childre
 }
 
 export function Money({ n, className }: { n: number | null | undefined; className?: string }) {
+  const { t } = useTranslation()
   return (
     <span className={`money ${className ?? ""}`}>
       {n === null || n === undefined ? "—" : num(n)}
-      <span className="unit">원</span>
+      <span className="unit">{t("common.won")}</span>
     </span>
   )
 }
@@ -133,18 +135,19 @@ export function CopyHash({
   head?: number
   tail?: number
 }) {
+  const { t } = useTranslation()
   const { notify } = useApp()
   if (!hash) return <span className="muted">—</span>
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(hash)
-      notify("ok", "해시를 복사했습니다")
+      notify("ok", t("ui.copiedHash"))
     } catch {
       notify("info", hash)
     }
   }
   return (
-    <button type="button" className="hash" onClick={copy} title={`${hash} (눌러서 복사)`}>
+    <button type="button" className="hash" onClick={copy} title={t("ui.copyHash", { hash })}>
       {shortHash(hash, head, tail)}
       <Icon name="copy" size={12} />
     </button>
@@ -152,8 +155,9 @@ export function CopyHash({
 }
 
 export function DocLink({ doc }: { doc: DocRef | null | undefined }) {
+  const { t } = useTranslation()
   const { openDoc } = useApp()
-  if (!doc) return <span className="muted">문서 없음</span>
+  if (!doc) return <span className="muted">{t("ui.noDocument")}</span>
   return (
     <button type="button" className="doclink" onClick={() => openDoc(doc)} title={doc.id}>
       <Icon name="document" size={16} /> {doc.name || shortHash(doc.id)}
@@ -198,6 +202,7 @@ export function MoneyInput({
   id?: string
   autoFocus?: boolean
 }) {
+  const { t } = useTranslation()
   const [text, setText] = useState(value === null ? "" : num(value))
   const last = useRef(value)
   useEffect(() => {
@@ -224,7 +229,7 @@ export function MoneyInput({
           if (value !== null) setText(num(value))
         }}
       />
-      <span className="money-input-unit">원</span>
+      <span className="money-input-unit">{t("common.won")}</span>
     </span>
   )
 }
@@ -293,6 +298,7 @@ export function Modal({
   footer?: ReactNode
   wide?: boolean
 }) {
+  const { t } = useTranslation()
   const titleId = useId()
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
@@ -358,7 +364,7 @@ export function Modal({
       >
         <header className="modal-head">
           <h2 id={titleId}>{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="닫기">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("common.close")}>
             <Icon name="close" />
           </button>
         </header>
@@ -406,6 +412,7 @@ export function DocPicker({
   onAttach: (doc: DocRef) => void
   cta?: string
 }) {
+  const { t } = useTranslation()
   const { notify } = useApp()
   const samples = useSamples().filter((s) => kinds.includes(s.kind))
   const [sampleId, setSampleId] = useState("")
@@ -426,7 +433,7 @@ export function DocPicker({
     if (!text.trim()) return
     setBusy(true)
     try {
-      const doc = await api.uploadDocument(name.trim() || "붙여넣은 문서", text)
+      const doc = await api.uploadDocument(name.trim() || t("ui.pastedDocument"), text)
       onAttach(doc)
       setSampleId("")
       setName("")
@@ -441,9 +448,9 @@ export function DocPicker({
   return (
     <div className="docpicker">
       {samples.length > 0 && (
-        <Field label="샘플 문서에서 고르기">
+        <Field label={t("ui.sample")}>
           <select value={sampleId} onChange={(e) => pick(e.target.value)}>
-            <option value="">— 직접 붙여넣기 —</option>
+            <option value="">{t("ui.pasteDirectly")}</option>
             {samples.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -452,18 +459,18 @@ export function DocPicker({
           </select>
         </Field>
       )}
-      <Field label="문서 이름">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 가비아 도메인 견적서" />
+      <Field label={t("ui.documentName")}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("ui.documentNamePlaceholder")} />
       </Field>
       <Field
-        label="문서 내용 (텍스트)"
-        hint="견적서·영수증·납품 설명을 텍스트로 붙여넣습니다. 첨부하면 내용의 해시가 기록됩니다."
+        label={t("ui.documentContent")}
+        hint={t("ui.documentHint")}
       >
         <textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} className="mono-area" />
       </Field>
       <div className="row-end">
         <button type="button" className="btn" onClick={attach} disabled={busy || !text.trim()}>
-          {busy ? "첨부 중…" : cta}
+          {busy ? t("ui.attaching") : cta === "문서 첨부" ? t("ui.attach") : cta}
         </button>
       </div>
     </div>
@@ -471,6 +478,7 @@ export function DocPicker({
 }
 
 export function AttachedDocs({ docs, onRemove }: { docs: DocRef[]; onRemove?: (id: string) => void }) {
+  const { t } = useTranslation()
   if (docs.length === 0) return null
   return (
     <ul className="attached">
@@ -479,7 +487,7 @@ export function AttachedDocs({ docs, onRemove }: { docs: DocRef[]; onRemove?: (i
           <DocLink doc={d} />
           <code className="tiny">{shortHash(d.id, 10, 4)}</code>
           {onRemove && (
-            <button type="button" className="icon-btn" onClick={() => onRemove(d.id)} aria-label="첨부 빼기">
+            <button type="button" className="icon-btn" onClick={() => onRemove(d.id)} aria-label={t("ui.removeAttachment")}>
               <Icon name="close" size={16} />
             </button>
           )}
@@ -490,6 +498,7 @@ export function AttachedDocs({ docs, onRemove }: { docs: DocRef[]; onRemove?: (i
 }
 
 export function DocViewer({ doc, onClose }: { doc: DocRef; onClose: () => void }) {
+  const { t } = useTranslation()
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -503,12 +512,12 @@ export function DocViewer({ doc, onClose }: { doc: DocRef; onClose: () => void }
     }
   }, [doc.id])
   return (
-    <Modal title={doc.name || "문서"} onClose={onClose} wide>
+    <Modal title={doc.name || t("ui.document")} onClose={onClose} wide>
       <p className="muted small">
-        문서 ID(sha256) <code className="tiny break">{doc.id}</code>
+        {t("ui.documentId")} <code className="tiny break">{doc.id}</code>
       </p>
       {error && <Banner tone="bad">{error}</Banner>}
-      {text === null && !error && <p className="muted">불러오는 중…</p>}
+      {text === null && !error && <p className="muted">{t("common.loading")}</p>}
       {text !== null && <pre className="doc-text">{text}</pre>}
     </Modal>
   )

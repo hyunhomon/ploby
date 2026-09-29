@@ -517,7 +517,7 @@ def digest(module):
 
 
 def canonical(module):
-    return json.dumps(module, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+    return json.dumps(module, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
 
 def _check_dates(entry, tree, calls):

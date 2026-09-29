@@ -37,7 +37,7 @@ def _key():
     key = os.environ.get('KILN_API_KEY')
     if key:
         return key
-    for line in (ROOT / '.env').read_text().splitlines():
+    for line in (ROOT / '.env').read_text(encoding='utf-8').splitlines():
         name, _, value = line.partition('=')
         if name.strip() in ('API_KEY', 'KILN_API_KEY'):
             return value.strip().strip('"\'')
@@ -66,7 +66,7 @@ def _pace():
 
 
 def _request(method, path, body=None, timeout=100):
-    data = None if body is None else json.dumps(body).encode()
+    data = None if body is None else json.dumps(body).encode('utf-8')
     # Cloudflare in front of the API refuses Python's default User-Agent (error 1010).
     req = urllib.request.Request(BASE + path, data=data, method=method, headers={
         'Authorization': f'Bearer {_key()}', 'Content-Type': 'application/json', 'User-Agent': 'pcp/0.2'})
@@ -113,7 +113,8 @@ def logged_spend():
     """What every real call logged here cost, from harness/runs/usage.jsonl."""
     if not USAGE.exists():
         return 0.0
-    return sum(json.loads(line).get('cost_usd') or 0 for line in USAGE.read_text().splitlines() if line)
+    return sum(json.loads(line).get('cost_usd') or 0
+               for line in USAGE.read_text(encoding='utf-8').splitlines() if line)
 
 
 def key_spend():
@@ -147,7 +148,8 @@ def _spent(cost):
 
 def _digest(messages, sample, params, model=None):
     body = {'model': model or MODEL, 'messages': messages, **params}
-    return body, hashlib.sha256(json.dumps([body, sample], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    encoded = json.dumps([body, sample], sort_keys=True, ensure_ascii=False).encode('utf-8')
+    return body, hashlib.sha256(encoded).hexdigest()
 
 
 def is_cached(messages, sample=0, model=None, **params):
@@ -156,7 +158,7 @@ def is_cached(messages, sample=0, model=None, **params):
 
 def mean_cost(flow, default=0.0005, model=None):
     """The average cost of a real call for flow on this model, from the log (for estimates)."""
-    rows = [json.loads(line) for line in USAGE.read_text().splitlines()] if USAGE.exists() else []
+    rows = [json.loads(line) for line in USAGE.read_text(encoding='utf-8').splitlines()] if USAGE.exists() else []
     costs = [r['cost_usd'] for r in rows if not r['cache_hit'] and r.get('flow') == flow
              and r.get('model') == (model or MODEL) and r.get('cost_usd')]
     return sum(costs) / len(costs) if costs else default
@@ -169,7 +171,7 @@ def spend_report():
 
 def _log(record):
     RUNS.mkdir(parents=True, exist_ok=True)
-    with _log_lock, USAGE.open('a') as f:
+    with _log_lock, USAGE.open('a', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
 
@@ -189,7 +191,7 @@ def chat(messages, flow, *, model=None, cache=True, sample=0, tag=None, **params
     body, digest = _digest(messages, sample, params, model)
     path = CACHE / f'{digest}.json'
     if cache and path.exists():
-        out = json.loads(path.read_text())
+        out = json.loads(path.read_text(encoding='utf-8'))
         out['cached'], out['stage'] = True, flow
         _log({'t': time.time(), 'flow': flow, 'tag': tag, 'request': digest[:16], 'cache_hit': True,
               'generation_id': out['generation_id']})
@@ -213,7 +215,7 @@ def chat(messages, flow, *, model=None, cache=True, sample=0, tag=None, **params
         'stage': flow,
     }
     CACHE.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(out, ensure_ascii=False))
+    path.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
     _log({'t': time.time(), 'flow': flow, 'tag': tag, 'request': digest[:16], 'cache_hit': False,
           'model': out['model'], 'finish': out['finish'], 'latency_ms': out['latency_ms'],
           'prompt_tokens': usage.get('prompt_tokens'), 'completion_tokens': usage.get('completion_tokens'),

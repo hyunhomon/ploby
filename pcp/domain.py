@@ -45,7 +45,8 @@ class Domain:
     def __init__(self, pack):
         pack = dict(pack)
         if 'registry_file' in pack:
-            pack['registry'] = json.loads((ROOT / pack['registry_file']).read_text())['merchants']
+            registry = (ROOT / pack['registry_file']).read_text(encoding='utf-8')
+            pack['registry'] = json.loads(registry)['merchants']
         for key in ('id', 'title', 'registry'):
             if key not in pack:
                 raise ValueError(f'a domain pack needs {key!r}')
@@ -81,7 +82,7 @@ class Domain:
 
     @classmethod
     def load(cls, path):
-        return cls(json.loads(Path(path).read_text()))
+        return cls(json.loads(Path(path).read_text(encoding='utf-8')))
 
     def __getattr__(self, name):  # the pack's words: domain.currency, domain.unit_ko, …
         if name != 'pack' and name in self.pack:

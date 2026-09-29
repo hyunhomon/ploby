@@ -2,22 +2,28 @@
 // relative times are measured against the view's demo-clock `now`, never Date.now().
 
 import type { DateStr, Ms } from "./types"
+import { language, tr } from "./i18n"
 
 const KST_OFFSET = 9 * 3600 * 1000
 const DAY = 86400 * 1000
 const HOUR = 3600 * 1000
 const MINUTE = 60 * 1000
-const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"]
-const NUM = new Intl.NumberFormat("ko-KR")
+const WEEKDAY = {
+  ko: ["일", "월", "화", "수", "목", "금", "토"],
+  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+}
+
+const numberFormat = () => new Intl.NumberFormat(language() === "en" ? "en-US" : "ko-KR")
 
 export function won(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—"
-  return `${NUM.format(n)}원`
+  const formatted = numberFormat().format(n)
+  return language() === "en" ? `₩${formatted}` : `${formatted}원`
 }
 
 export function num(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—"
-  return NUM.format(n)
+  return numberFormat().format(n)
 }
 
 /** Parse "1,500,000" / "150만" / "1억 2천만원" into an integer, or null. */
@@ -52,7 +58,7 @@ function parts(ms: Ms): KstParts {
     y: t.getUTCFullYear(),
     mo: t.getUTCMonth() + 1,
     d: t.getUTCDate(),
-    wd: WEEKDAY[t.getUTCDay()],
+    wd: WEEKDAY[language()][t.getUTCDay()],
     h: t.getUTCHours(),
     mi: t.getUTCMinutes(),
   }
@@ -60,23 +66,35 @@ function parts(ms: Ms): KstParts {
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
-function yearPrefix(y: number, ref?: Ms): string {
+function sameYear(y: number, ref?: Ms): boolean {
   const refYear = ref === undefined ? 2026 : parts(ref).y
-  return y === refYear ? "" : `${y}년 `
+  return y === refYear
 }
 
 /** "10월 13일 (화) 17:00" (with the year when it differs from `ref`'s). */
 export function kst(ms: Ms | null | undefined, ref?: Ms): string {
   if (ms === null || ms === undefined) return "—"
   const p = parts(ms)
-  return `${yearPrefix(p.y, ref)}${p.mo}월 ${p.d}일 (${p.wd}) ${pad(p.h)}:${pad(p.mi)}`
+  if (language() === "en") {
+    const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(
+      new Date(Date.UTC(2026, p.mo - 1, 1)),
+    )
+    return `${month} ${p.d}${sameYear(p.y, ref) ? "" : `, ${p.y}`} (${p.wd}) ${pad(p.h)}:${pad(p.mi)}`
+  }
+  return `${sameYear(p.y, ref) ? "" : `${p.y}년 `}${p.mo}월 ${p.d}일 (${p.wd}) ${pad(p.h)}:${pad(p.mi)}`
 }
 
 /** "10월 13일 (화)" */
 export function kstDate(ms: Ms | null | undefined, ref?: Ms): string {
   if (ms === null || ms === undefined) return "—"
   const p = parts(ms)
-  return `${yearPrefix(p.y, ref)}${p.mo}월 ${p.d}일 (${p.wd})`
+  if (language() === "en") {
+    const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(
+      new Date(Date.UTC(2026, p.mo - 1, 1)),
+    )
+    return `${month} ${p.d}${sameYear(p.y, ref) ? "" : `, ${p.y}`} (${p.wd})`
+  }
+  return `${sameYear(p.y, ref) ? "" : `${p.y}년 `}${p.mo}월 ${p.d}일 (${p.wd})`
 }
 
 /** Milliseconds (KST) for a 'YYYY-MM-DD' string at 00:00, or null. */
@@ -97,7 +115,7 @@ export function when(v: Ms | DateStr | null | undefined, ref?: Ms): string {
   if (v === null || v === undefined || v === "") return "—"
   if (typeof v === "number") return kst(v, ref)
   const ms = dateStrToMs(v)
-  return ms === null ? v : `${kstDate(ms, ref)} 까지`
+  return ms === null ? v : tr("common.until", { date: kstDate(ms, ref) })
 }
 
 /** Date-input value for a date-or-time value (days in KST). */
@@ -111,25 +129,25 @@ function span(ms: number): string {
   const d = Math.floor(ms / DAY)
   const h = Math.floor((ms % DAY) / HOUR)
   const mi = Math.floor((ms % HOUR) / MINUTE)
-  if (d > 0) return h > 0 ? `${d}일 ${h}시간` : `${d}일`
-  if (h > 0) return mi > 0 ? `${h}시간 ${mi}분` : `${h}시간`
-  if (mi > 0) return `${mi}분`
-  return "1분 미만"
+  if (d > 0) return h > 0 ? `${tr("common.day", { count: d })} ${tr("common.hour", { count: h })}` : tr("common.day", { count: d })
+  if (h > 0) return mi > 0 ? `${tr("common.hour", { count: h })} ${tr("common.minute", { count: mi })}` : tr("common.hour", { count: h })
+  if (mi > 0) return tr("common.minute", { count: mi })
+  return tr("common.lessThanMinute")
 }
 
 /** "2일 5시간 남음" / "기한 지남" */
 export function timeLeft(at: Ms | null | undefined, now: Ms): string {
   if (at === null || at === undefined) return ""
   const diff = at - now
-  if (diff <= 0) return "기한 지남"
-  return `${span(diff)} 남음`
+  if (diff <= 0) return tr("common.overdue")
+  return tr("common.remaining", { span: span(diff) })
 }
 
 /** "3시간 전" / "방금" */
 export function ago(at: Ms, now: Ms): string {
   const diff = now - at
-  if (diff < MINUTE) return diff < 0 ? `${span(-diff)} 후` : "방금"
-  return `${span(diff)} 전`
+  if (diff < MINUTE) return diff < 0 ? tr("common.later", { span: span(-diff) }) : tr("common.justNow")
+  return tr("common.ago", { span: span(diff) })
 }
 
 /** Urgency for a deadline: overdue, within a day, or later. */
@@ -144,8 +162,8 @@ export function urgency(at: Ms | null | undefined, now: Ms): "over" | "soon" | "
 /** A policy period in seconds: "72시간", "7일". */
 export function duration(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return "—"
-  if (seconds % 86400 === 0 && seconds >= 86400 * 2) return `${seconds / 86400}일`
-  if (seconds % 3600 === 0) return `${seconds / 3600}시간`
+  if (seconds % 86400 === 0 && seconds >= 86400 * 2) return tr("common.day", { count: seconds / 86400 })
+  if (seconds % 3600 === 0) return tr("common.hour", { count: seconds / 3600 })
   return span(seconds * 1000)
 }
 

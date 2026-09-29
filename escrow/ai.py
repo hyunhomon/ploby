@@ -181,7 +181,7 @@ def read_quote(text, sample=0):
     stage = routing.stage('quote')
     user, params = ask(text)
     conversation = [{'role': 'system', 'content': quote_prompt()}, {'role': 'user', 'content': user}]
-    digest = '0x' + hashlib.sha256(text.encode()).hexdigest()
+    digest = '0x' + hashlib.sha256(text.encode('utf-8')).hexdigest()
     calls, answer = [], None
     for attempt in range(2):
         reply = kiln.chat(conversation, 'quote', model=stage['model'], sample=sample,
