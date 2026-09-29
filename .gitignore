@@ -19,3 +19,7 @@ out/
 node_modules/
 backend/data/*.db
 backend/data/*.db-*
+
+# PCP escrow: local Kiln cache/usage, Python caches
+harness/runs/
+__pycache__/
