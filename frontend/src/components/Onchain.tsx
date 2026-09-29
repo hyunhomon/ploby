@@ -7,9 +7,9 @@ import { useTranslation } from "react-i18next"
 import { api, errorText } from "../api"
 import { shortHash, won } from "../format"
 import { DECISION_TONE, ROLE_KO, RULE_KO, label, toneOf } from "../labels"
-import type { AgentRun, AgentTask, AuditReport, ChainResult, OnchainState, ProjectView } from "../types"
+import type { AgentRun, AgentTask, AuditReport, ChainResult, Expense, OnchainState, ProjectView } from "../types"
 import { useProject } from "./projectCtx"
-import { Banner, Card, Chip, Empty, Field, Money, useApp, useSamples } from "./ui"
+import { Banner, Card, Chip, CopyHash, Empty, Field, KV, Modal, Money, useApp, useSamples } from "./ui"
 
 /** The tx (or the contract's refusal) of each call that mirrors a line or an item. */
 export function ChainLinks({ results }: { results?: ChainResult[] | null }) {
@@ -405,5 +405,74 @@ export function AuditCard({ view }: { view: ProjectView }) {
         </div>
       )}
     </Card>
+  )
+}
+
+/** The payment receipt the client receives: who was paid, how much, under which signed policy and rules, with the
+ * evidence hashes, the log lines and the transactions that anyone can re-check. */
+export function ReceiptButton({ e, view }: { e: Expense; view: ProjectView }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  if (!e.paid) return null
+  const v = view.versions.find((x) => x.version === e.version) ?? view.policy
+  const calls = e.chain ?? []
+  const decided = calls.find((r) => r.call === "decide")
+  const settled = calls.filter((r) => r.call === "settle")
+  const rules = e.decision?.rules ?? []
+  const mandatory = rules.filter((r) => r.kind === "mandatory")
+  const approval = e.resolution
+    ? t(`receipt.by.${e.resolution.by}`, { reason: e.resolution.reason || "—" })
+    : e.timeout === "RELEASED_BY_TIMEOUT"
+      ? t("receipt.by.timeout")
+      : t("receipt.by.rules")
+  const line = (i: number | undefined) =>
+    i === undefined ? "—" : `#${i} ${shortHash(view.log[i]?.head, 10, 4)}`
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+        {t("receipt.open")}
+      </button>
+      {open && (
+        <Modal title={t("receipt.title", { id: e.id })} onClose={() => setOpen(false)}>
+          <KV
+            items={[
+              [t("receipt.amount"), <Money key="a" n={e.paid} />],
+              [
+                t("receipt.payee"),
+                <span key="p">
+                  {view.parties.contractor.name} <CopyHash hash={e.payee ?? ""} head={6} tail={4} />{" "}
+                  <span className="muted small">{t("receipt.payeeNote")}</span>
+                </span>,
+              ],
+              [t("receipt.what"), [e.vendor_name ?? e.vendor, e.item, e.category_ko].filter(Boolean).join(" · ")],
+              [
+                t("receipt.policy"),
+                <span key="v">
+                  v{v?.version} <CopyHash hash={v?.hash ?? ""} head={10} tail={6} /> · {t("receipt.signedBoth")}
+                </span>,
+              ],
+              [
+                t("receipt.decision"),
+                `${e.decision?.result ?? "—"} · ${t("receipt.rulesPassed", {
+                  passed: mandatory.filter((r) => r.ok).length,
+                  total: mandatory.length,
+                })}${e.via ? ` · ${t("agent.via", { need: e.via.need })}` : ""}`,
+              ],
+              [t("receipt.approval"), approval],
+              [
+                t("receipt.evidence"),
+                <span key="d">
+                  {t("receipt.quote")} <code>{shortHash(e.quote?.document?.id, 8, 4)}</code> · {t("receipt.receipt")}{" "}
+                  <code>{shortHash(e.receipt?.document?.id, 8, 4)}</code>
+                </span>,
+              ],
+              [t("receipt.record"), `${t("receipt.request")} ${line(decided?.line)} · ${t("receipt.payment")} ${line(settled[settled.length - 1]?.line)}`],
+              [t("receipt.onchain"), <ChainLinks key="c" results={[...(decided ? [decided] : []), ...settled]} />],
+            ]}
+          />
+          <p className="muted small">{t("receipt.note", { id: view.id })}</p>
+        </Modal>
+      )}
+    </>
   )
 }

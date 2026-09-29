@@ -95,6 +95,18 @@ export function ProjectPage({
 
   useEffect(() => setDialog(null), [role])
 
+  // Another party may act meanwhile (side-by-side client and contractor windows): refresh quietly.
+  useEffect(() => {
+    const h = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || dialog || busy) return
+      api
+        .project(id, role)
+        .then((v) => setView(v))
+        .catch(() => undefined)
+    }, 10000)
+    return () => window.clearInterval(h)
+  }, [id, role, dialog, busy])
+
   // Chain results come back a few seconds after an action: refresh until none is pending.
   useEffect(() => {
     if (!view?.chain?.pending) return

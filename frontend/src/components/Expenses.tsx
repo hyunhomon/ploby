@@ -31,7 +31,7 @@ import {
 } from "../labels"
 import type { DocRef, Expense, ProjectView, Reading, RuleKind, RuleResult } from "../types"
 import { Clock } from "./Milestones"
-import { AgentPanel, ChainLinks } from "./Onchain"
+import { AgentPanel, ChainLinks, ReceiptButton } from "./Onchain"
 import { Act, actionLabel, deadlinesFor, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, DocLink, Empty, Money } from "./ui"
 
@@ -311,7 +311,8 @@ function ExpenseCard({ e, view }: { e: Expense; view: ProjectView }) {
         {e.settlement && (
           <div className="settlement small">
             <span className="muted">정산</span> <Money n={e.settlement.amount} /> {e.settlement.asset} → 수취인{" "}
-            <CopyHash hash={e.settlement.payee} head={6} /> · {kst(e.settlement.at, now)}
+            <CopyHash hash={e.settlement.payee} head={6} /> · {kst(e.settlement.at, now)}{" "}
+            <ReceiptButton e={e} view={view} />
           </div>
         )}
 
