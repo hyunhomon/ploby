@@ -43,15 +43,34 @@ contract PlobyEscrow {
     mapping(bytes32 => mapping(bytes32 => uint256)) public reservedFor; // project => ref (E1, M2) => amount
     mapping(bytes32 => bool) public applied; // keccak256(project, logHead, n) of every call made
 
-    event Opened(bytes32 indexed projectId, address indexed client, address indexed contractor, bytes32 policyHash,
-        uint256 budget, bytes32 logHead);
+    event Opened(
+        bytes32 indexed projectId,
+        address indexed client,
+        address indexed contractor,
+        bytes32 policyHash,
+        uint256 budget,
+        bytes32 logHead
+    );
     event Funded(bytes32 indexed projectId, uint256 amount, uint256 funded, bytes32 logHead);
     event PolicyAccepted(bytes32 indexed projectId, bytes32 policyHash, uint256 budget, bytes32 logHead);
     event PauseSet(bytes32 indexed projectId, bool paused, bytes32 logHead);
-    event Decided(bytes32 indexed projectId, bytes32 indexed ref, uint8 decision, bytes32 rule, uint256 amount,
-        bytes32 policyHash, bytes32 logHead);
-    event Settled(bytes32 indexed projectId, bytes32 indexed ref, address indexed payee, uint256 paid,
-        uint256 returned, bytes32 logHead);
+    event Decided(
+        bytes32 indexed projectId,
+        bytes32 indexed ref,
+        uint8 decision,
+        bytes32 rule,
+        uint256 amount,
+        bytes32 policyHash,
+        bytes32 logHead
+    );
+    event Settled(
+        bytes32 indexed projectId,
+        bytes32 indexed ref,
+        address indexed payee,
+        uint256 paid,
+        uint256 returned,
+        bytes32 logHead
+    );
     event Refunded(bytes32 indexed projectId, address indexed client, uint256 amount, bytes32 logHead);
 
     error ZeroAddress();
@@ -128,8 +147,16 @@ contract PlobyEscrow {
 
     /// @notice Records a decision. APPROVE reserves `amount` for `ref` (an expense commitment or a milestone);
     /// HOLD and BLOCK move no money and are recorded so that a stop is never silent.
-    function decide(bytes32 id, bytes32 ref, uint8 decision, bytes32 rule, uint256 amount, bytes32 policyHash,
-        bytes32 logHead, uint8 n) external {
+    function decide(
+        bytes32 id,
+        bytes32 ref,
+        uint8 decision,
+        bytes32 rule,
+        uint256 amount,
+        bytes32 policyHash,
+        bytes32 logHead,
+        uint8 n
+    ) external {
         Project storage p = _byOperator(id);
         _once(id, logHead, n);
         if (decision < APPROVE || decision > BLOCK) revert BadDecision();
