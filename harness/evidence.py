@@ -209,7 +209,8 @@ def render(r, results, report, drained):
         f"What happened next: run 1's commitment was bought, receipted and approved by the client, and paid on chain "
         f"({e1['paid']:,}원 to the contractor at log #{paid_line} → {txs(paid_line)}). In run 2 the engine's BLOCK "
         'drove the agent\'s next step: it filed the next offer its plan listed, the 10-image pack, which the rules '
-        'approved. In run 3 it had no other offer and stopped; run 4 was held for the client, who never answered, so it expired at its '
+        'approved (nobody bought it in this run, so its reservation went back to the available balance when its validity '
+        'ended, on chain too). In run 3 it had no other offer and stopped; run 4 was held for the client, who never answered, so it expired at its '
         'deadline with nothing reserved (the invoice\'s "pay 빠른결제대행" instruction changed nothing: the payee is fixed '
         f"in the policy and on chain). In run 5 the client paused new commitments first (log #{pause} → {txs(pause)}): "
         "the agent's request was a recorded BLOCK and it stopped the task. Run 6 came after the policy's end date.",
