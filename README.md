@@ -4,6 +4,8 @@
 
 **기능 선언:** Ploby는 클라이언트가 예치한 예산 안에서만 AI 구매 에이전트가 돈을 쓰게 합니다. 에이전트는 구매를 *요청*만 할 수 있고, 양측이 서명한 정책으로 코드가 요청마다 판정하며, Monad testnet 컨트랙트가 돈을 보관·지급하고, 모든 승인과 멈춤이 기록되어 누구든 지급이 허용 범위 안이었는지 재구성할 수 있습니다.
 
+**Reviewers, in two minutes:** [evidence](docs/evidence.md) — six purchase-agent runs on Kiln and Monad testnet, five pushed outside the line, each with its log line, decision and transaction · [chain](docs/chain.md) — what PlobyEscrow enforces and what the engine reads, writes and settles on chain · [efficiency](docs/efficiency.md) — Kiln tokens, cost and energy per flow. Re-check it without any key: `python3 -m escrow.audit evidence/projects/p20951e674af4/log.jsonl --data evidence`, then `python3 harness/tamper.py` and `python3 harness/check.py` (Python 3 standard library only).
+
 > **AI는 정보를 해석하지만 돈을 움직일 권한은 갖지 않습니다.**
 
 외주 프로젝트의 **작업 대금과 프로젝트 경비를 미리 확보하고, 양측이 합의한 조건에 따라 지급하는 양자 간 에스크로**입니다. 사용자는 홈페이지 리뉴얼을 맡긴 작은 카페(클라이언트, 카페 온담)와 이를 맡은 웹 스튜디오(작업자, 한결웹스튜디오)입니다. 도메인·호스팅·디자인 툴 같은 프로젝트 경비는 작업자가 선결제하고 나중에 받지 못하거나, 클라이언트가 카드를 넘겨주고 무엇이 왜 결제됐는지 모르는 문제가 있습니다. 결제 레일은 누가 누구에게 보냈는지만 남기고, 누가 어떤 조건으로 허락했는지는 남기지 않습니다.
