@@ -11,6 +11,18 @@ Current implementation: Ploby's engine decides every request off chain; **PlobyE
 
 Chain id 10143. Deployment record: [`deployments/monad-testnet.json`](../deployments/monad-testnet.json); deploy script: [`script/deploy_ploby.py`](../script/deploy_ploby.py); contract: [`src/PlobyEscrow.sol`](../src/PlobyEscrow.sol) with 12 Foundry tests in [`test/PlobyEscrow.t.sol`](../test/PlobyEscrow.t.sol).
 
+Source verification (optional; it publishes the same source that is in this repository to BlockVision's Sourcify, so MonadVision decodes the calls and events). The source was reformatted with `forge fmt` after deployment, so expect a partial match:
+
+```bash
+forge verify-contract 0x0c54143Ba8480c9C041E27C5FDed6e13B2541762 src/PlobyEscrow.sol:PlobyEscrow --chain 10143 --verifier sourcify --verifier-url https://sourcify-api-monad.blockvision.org/ --constructor-args $(cast abi-encode "constructor(address,address)" 0xE73a03D814434987f33f5E2b6b51c1dD8A44af58 0x90eB1b3A44A86B64181d62A7d73e026f04F15BDC)
+```
+
+```bash
+forge verify-contract 0xE73a03D814434987f33f5E2b6b51c1dD8A44af58 src/TestKRW.sol:TestKRW --chain 10143 --verifier sourcify --verifier-url https://sourcify-api-monad.blockvision.org/
+```
+
+Without it, the explorer still shows every event's topics and data; project ids, refs and rule names are ASCII in `bytes32`, so they read as text (`p20951e674af4`, `E2`, `per_purchase`).
+
 ## What the contract enforces
 
 Even with the operator key, nobody can:
