@@ -12,7 +12,7 @@ Independent clients do not share a database administrator or trust each other wi
 
 ## Decision
 
-SmartEscrow uses a shared on-chain allocation registry. Each normalized invoice receives an opaque `invoiceNullifier`. Active and settled allocation basis points for that nullifier may never exceed 10,000.
+Ploby uses a shared on-chain allocation registry. Each normalized invoice receives an opaque `invoiceNullifier`. Active and settled allocation basis points for that nullifier may never exceed 10,000.
 
 The MVP nullifier is issued by a trusted Evidence Attestation Service. This is an explicit trust assumption. The blockchain provides neutral, atomic capacity enforcement across projects; it does not independently normalize or authenticate invoices.
 
@@ -104,7 +104,7 @@ A project with a RESERVED allocation cannot migrate in protocol v1. It must sett
 
 The registry is useful when multiple independent escrow operators or clients need one atomic allocation limit without appointing one client as database owner. Every participant can verify that the aggregate never exceeded 100 percent, while invoice contents remain off-chain.
 
-A consortium database could provide similar functionality under one operator. SmartEscrow chooses the chain because financial settlement and allocation reservation can share an atomic, independently verifiable state transition. This is a coordination choice, not a claim that blockchain proves invoice truth.
+A consortium database could provide similar functionality under one operator. Ploby chooses the chain because financial settlement and allocation reservation can share an atomic, independently verifiable state transition. This is a coordination choice, not a claim that blockchain proves invoice truth.
 
 ## Future trust reduction
 

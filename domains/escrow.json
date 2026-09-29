@@ -1,0 +1,99 @@
+{
+  "id": "escrow",
+  "title": "Website project escrow — project expenses a contractor buys from a client's escrowed budget",
+  "agent": "a contractor who buys project expenses from the client's escrowed expense budget",
+  "currency": "KRW",
+  "fees": "VAT and fees",
+  "fees_ko": "부가세·수수료",
+  "counterparty": "vendor",
+  "counterparties": "Vendors",
+  "counterparty_ko": "공급자",
+  "units": "licenses, seats or items",
+  "unit": "license, seat or item",
+  "unit_ko": "1개",
+  "timezone": "+09:00",
+  "timezone_name": "Asia/Seoul",
+  "categories_ko": {
+    "hosting": "호스팅",
+    "domain": "도메인",
+    "software": "소프트웨어",
+    "assets": "디자인 소스",
+    "ai-api": "AI API",
+    "general": "일반 쇼핑",
+    "payment-service": "결제 대행"
+  },
+  "registry": [
+    {
+      "id": "aws",
+      "name": "AWS",
+      "category": "hosting",
+      "aliases": [
+        "아마존 웹 서비스",
+        "Amazon Web Services"
+      ]
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "category": "hosting",
+      "aliases": [
+        "버셀"
+      ]
+    },
+    {
+      "id": "gabia",
+      "name": "가비아",
+      "category": "domain",
+      "aliases": [
+        "Gabia"
+      ]
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "category": "software",
+      "aliases": [
+        "피그마"
+      ]
+    },
+    {
+      "id": "adobe-stock",
+      "name": "Adobe Stock",
+      "category": "assets",
+      "aliases": [
+        "어도비 스톡"
+      ]
+    },
+    {
+      "id": "kiln-api",
+      "name": "Kiln API",
+      "category": "ai-api",
+      "aliases": [
+        "Kiln"
+      ]
+    },
+    {
+      "id": "coupang",
+      "name": "쿠팡",
+      "category": "general",
+      "aliases": [
+        "Coupang"
+      ]
+    },
+    {
+      "id": "fastpay-agency",
+      "name": "빠른결제대행",
+      "category": "payment-service",
+      "aliases": []
+    }
+  ],
+  "typical_amounts": {
+    "hosting": 50000,
+    "domain": 30000,
+    "software": 60000,
+    "assets": 100000,
+    "ai-api": 50000,
+    "general": 50000,
+    "payment-service": 50000
+  }
+}

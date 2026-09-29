@@ -1,11 +1,11 @@
-# How SmartEscrow Works
+# How Ploby Works
 
 This document explains the target product flow without requiring contract or ADR knowledge.
 
 ## 1. Start a project
 
 1. Client and contractor choose one settlement asset, their wallet addresses, a resolver, project budget, expense limits, milestone schedule, evidence requirements, review deadlines, and asset-ownership rules.
-2. SmartEscrow creates a canonical policy document.
+2. Ploby creates a canonical policy document.
 3. Both parties sign the same policy hash.
 4. A dedicated immutable project escrow is deployed at the address predicted in the signed policy.
 5. The client deposits the initial required funding.
@@ -15,7 +15,7 @@ This document explains the target product flow without requiring contract or ADR
 sequenceDiagram
     participant C as Client
     participant K as Contractor
-    participant P as SmartEscrow
+    participant P as Ploby
     participant E as Project Escrow
     C->>P: Propose policy and funding
     K->>P: Review and sign same policy

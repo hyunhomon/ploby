@@ -1,0 +1,12 @@
+Vercel Inc. (버셀)
+440 N Barranca Ave #4133, Covina, CA 91723
+Invoice No.: VCL-2026-11-030512
+Invoice date: 2026-11-03
+Bill to: 한결웹스튜디오 (카페 온담 홈페이지 리뉴얼)
+
+Description                          Qty   Amount
+Vercel Pro plan - 1 month (1 seat)    1    30,000
+
+공급가액 (Subtotal)   30,000원
+부가세 (VAT 10%)      3,000원
+합계 (Total due)      33,000원
