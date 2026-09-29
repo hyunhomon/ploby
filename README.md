@@ -1,6 +1,6 @@
 A bilateral Smart Escrow system that pre-funds outsourced work and project expenses, uses AI to interpret supporting documents, and enforces accepted commitments with deterministic rules.
 
-Phase 1 is the Base Sepolia contracts only. The API, UI, and demo evidence table are not built yet.
+Phase 2 adds the policy engine and the decision API. The UI and the on-chain demo evidence table are not built yet.
 
 > **Legacy prototype warning:** the current Solidity contracts implement only the original Phase 1 expense demo. `release` pays the payee stored with the decision and cannot substitute another address. The agent still chooses that payee when it records the decision. The contracts do not provide refunds after `stopProject`, reserve milestone or expense funds, or implement the accepted target architecture. Do not use the current deployment script for real funds or represent it as the target SmartEscrow protocol.
 
@@ -12,7 +12,18 @@ For a human-readable introduction, start with [`docs/README.md`](docs/README.md)
 
 ```shell
 forge test
+cd backend && npm install && npm test
 ```
+
+Run the API with the mock model (no Kiln key, no chain):
+
+```shell
+cd backend && npm run dev
+```
+
+The server reads `../.env` when that file exists. Copy `.env.example` to `.env` and set `KILN_MODE=live` plus `KILN_API_KEY` for Qwen3-32B. Set `ESCROW_ADDRESS`, `USDC_ADDRESS`, `AGENT_PRIVATE_KEY`, and `CLIENT_PRIVATE_KEY` after the contracts are deployed. Until then, decisions are stored in SQLite and `chain.status` is `skipped`.
+
+`GET /demo-policy` returns the section 16 policy: $1,000 budget, $400 max transaction. `POST /projects` then `POST /projects/:id/expenses` with `{ "text": "..." }`. Mock mode labels token totals under `mock` on `GET /metrics`. Do not paste those into the evidence table.
 
 Deploy the legacy prototype to Base Sepolia only when reproducing the original Phase 1 demo. This does not run as part of `forge test`.
 

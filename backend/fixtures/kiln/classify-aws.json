@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-mock-classify-aws",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "qwen3-32b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"project_relevance\":\"high\",\"anomaly_flags\":[],\"rationale\":\"In-scope cloud expense.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 90,
+    "completion_tokens": 30,
+    "total_tokens": 120,
+    "cost": 0,
+    "completion_tokens_details": { "reasoning_tokens": 8 }
+  }
+}

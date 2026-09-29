@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-mock-parse-aws",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "qwen3-32b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"vendor\":\"AWS\",\"category\":\"Cloud\",\"amount\":200,\"currency\":\"USD\",\"purpose\":\"production_server\",\"project_relevance\":\"high\",\"document_type\":\"invoice\",\"anomaly_flags\":[],\"rationale\":\"AWS server cost for the website.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 180,
+    "completion_tokens": 60,
+    "total_tokens": 240,
+    "cost": 0,
+    "completion_tokens_details": { "reasoning_tokens": 15 }
+  }
+}

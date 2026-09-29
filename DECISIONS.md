@@ -2,6 +2,18 @@
 
 Implementation assumptions made where the initial spec is silent. Newest first.
 
+## 2026-09-29 — Phase 2 backend
+
+1. **Duplicate evidence is a HOLD, not a BLOCK.** Spec section 9 and demo case 4 say "possible duplicate invoice". The other seven checks are hard violations and BLOCK. A failed duplicate check, or an anomaly flag, HOLDs.
+2. **Disallowed category uses the reason "outside project scope".** The check id stays `allowed_category`. Demo case 2 needs that reason whether the model marks relevance low or picks a category outside the allowlist.
+3. **Amounts in the policy and the API are US dollars.** The chain uses MockUSDC base units (`dollars * 1_000_000`).
+4. **On-chain `evidenceHash` is `keccak256(documentSha256 + expenseId)`.** The contract rejects a repeated evidence hash, so a duplicate HOLD could not be logged if the hash were only the file hash. The raw document hash and invoice number used by the policy check are stored in SQLite.
+5. **After `stopProject`, the contract reverts `recordDecision`.** The API still returns BLOCK with "Authorization revoked by project owner" and stores it in SQLite. The chain status is `failed` because the contract will not accept the log.
+6. **Demo chain writes use two keys.** `CLIENT_PRIVATE_KEY` creates, funds, stops, and approves or rejects holds. `AGENT_PRIVATE_KEY` records decisions and releases. If those addresses are unset, the API runs with `chain.status: "skipped"`.
+7. **`KILN_MODE=mock` replays fixtures.** Metrics from mock calls are grouped under `mock` and are not Kiln evidence. Reasoning tokens are stored and omitted from `/metrics`.
+8. **An invalid model response is re-asked once, then HOLD** with reason "AI output invalid; held for review". It is never approved.
+9. **"Far above typical" means more than 3× `typical_amount` for that category**, when the policy sets one. That is a HOLD, after hard checks.
+
 ## 2026-09-29 — Payee bound at record time
 
 `recordDecision` takes the payee and stores it on that decision. APPROVE and HOLD require a non-zero payee. BLOCK may record `address(0)` because it cannot be paid. `release` reverts `PayeeMismatch` when the caller passes a different address. `approveHold` and `rejectHold` have no payee argument, so client review cannot redirect the payment.

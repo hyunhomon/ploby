@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-mock-classify-invoice-1023",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "qwen3-32b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"project_relevance\":\"high\",\"anomaly_flags\":[],\"rationale\":\"In-scope invoice 1023.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 94,
+    "completion_tokens": 24,
+    "total_tokens": 118,
+    "cost": 0,
+    "completion_tokens_details": { "reasoning_tokens": 5 }
+  }
+}

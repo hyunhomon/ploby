@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-mock-classify-console",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "qwen3-32b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"project_relevance\":\"low\",\"anomaly_flags\":[],\"rationale\":\"Not a website development expense.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 28,
+    "total_tokens": 116,
+    "cost": 0,
+    "completion_tokens_details": { "reasoning_tokens": 7 }
+  }
+}
