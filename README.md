@@ -106,7 +106,8 @@ python3 -m pcp spend            # Kiln 키 사용액 (팀 공용 예산)
 | `escrow/chain.py`, `src/PlobyEscrow.sol`, `src/TestKRW.sol` | 로그를 컨트랙트 호출로 바꾸는 미러와 Monad testnet 컨트랙트 (`deployments/monad-testnet.json`, `script/deploy_ploby.py`) |
 | `escrow/audit.py` | 기록만으로 하는 감사 |
 | `frontend/` | React 19 + Vite 7 역할별 화면 |
-| `harness/check.py`, `harness/evidence.py` | 오프라인 검증, 챌린지 증거 실행 |
+| `harness/check.py`, `harness/fuzz.py` | 오프라인 검증 61개, 무작위 프로젝트로 체인 미러 검증 |
+| `harness/evidence.py`, `harness/tamper.py`, `harness/demo_setup.py`, `harness/usage_report.py` | 챌린지 증거 실행, 변조 데모, 데모 준비, Kiln 흐름별 사용량 |
 | `evidence/` | 증거 실행의 로그·증빙 파일·감사 결과 |
 | `src/ExpenseEscrow.sol`, `script/Deploy.s.sol` | 레거시 Solidity 프로토타입 (현재 앱과 미연결) |
 | `docs/` | 제품·흐름·아키텍처·용어·ADR·Kiln·API·체인·효율·증거 문서 |
