@@ -1,0 +1,19 @@
+{
+  "_": "Which model runs each model stage (pcp/stages.py). Change a line, then run python3 harness/check.py and a cached demo run; measure a new model on one case first (the Kiln budget is shared).",
+  "write": {
+    "model": "qwen3-32b",
+    "think": false
+  },
+  "read": {
+    "model": "qwen3-32b",
+    "think": false
+  },
+  "reread": {
+    "model": "qwen3-32b",
+    "think": true
+  },
+  "quote": {
+    "model": "qwen3-32b",
+    "think": false
+  }
+}
