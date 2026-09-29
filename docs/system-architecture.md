@@ -1,5 +1,7 @@
 # System Architecture
 
+This document describes the **target** architecture the ADRs accept. What runs today is narrower: an off-chain engine decides, a signed hash-chained log records, and PlobyEscrow on Monad testnet holds and moves the money (see the README's current-implementation table and [chain.md](chain.md)).
+
 ## Architecture at a glance
 
 ```mermaid
