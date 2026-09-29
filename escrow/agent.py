@@ -44,7 +44,8 @@ Rules:
 def ask(task, offers):
     stage = routing.stage('agent')
     suffix, params = kiln.thinking(stage['model'], stage['think'])
-    listed = '\n\n'.join(f"[{o['key']}] {o['name']}\n<<<\n{o['text'].strip()[:1500]}\n>>>" for o in offers)
+    # the document only: a file name someone typed ('… 범위 밖') is not what the vendor offers
+    listed = '\n\n'.join(f"[{o['key']}]\n<<<\n{o['text'].strip()[:1500]}\n>>>" for o in offers)
     return f'Task:\n<<<\n{task.strip()}\n>>>\n\nOffers:\n{listed}{suffix}', params
 
 

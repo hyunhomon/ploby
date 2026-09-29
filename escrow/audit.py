@@ -197,7 +197,11 @@ def audit(target, data=str(ROOT / 'var'), offline=False):
     pid = path.parent.name
     docs = Path(data) / 'docs' if (Path(data) / 'docs').exists() else path.parent.parent.parent / 'docs'
     P, events, refused = replay(pid, lines)
-    report = {'project': pid, 'name': P.name, 'log': str(path), 'lines': len(lines), 'head': P.head,
+    try:
+        shown = str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        shown = str(path)
+    report = {'project': pid, 'name': P.name, 'log': shown, 'lines': len(lines), 'head': P.head,
               'replay': {'ok': refused is None, 'refused': refused, 'status': P.status, 'ledger': P.ledger()},
               'policies': [{'version': v['version'], 'hash': v['hash'], 'status': v['status'],
                             'signed': {r: s and s['at'] for r, s in v['signatures'].items()},
