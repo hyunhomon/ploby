@@ -13,6 +13,7 @@ import {
   toneOf,
 } from "../labels"
 import type { Milestone, ProjectView } from "../types"
+import { MilestoneReceiptButton } from "./Onchain"
 import { Act, deadlinesFor } from "./projectCtx"
 import { Banner, Card, Chip, DocLink, Empty, Money, When } from "./ui"
 
@@ -194,6 +195,7 @@ function MilestoneCard({ m, view }: { m: Milestone; view: ProjectView }) {
             <span>
               예약 반환 <Money n={m.returned} />
             </span>
+            <MilestoneReceiptButton m={m} view={view} />
           </div>
         )}
 

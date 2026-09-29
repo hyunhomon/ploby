@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next"
 import { api, errorText } from "../api"
 import { shortHash, won } from "../format"
 import { DECISION_TONE, ROLE_KO, RULE_KO, label, toneOf } from "../labels"
-import type { AgentRun, AgentTask, AuditReport, ChainResult, Expense, OnchainState, ProjectView } from "../types"
+import type { AgentRun, AgentTask, AuditReport, ChainResult, Expense, Milestone, OnchainState, ProjectView } from "../types"
 import { useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, Empty, Field, KV, Modal, Money, useApp, useSamples } from "./ui"
 
@@ -468,6 +468,63 @@ export function ReceiptButton({ e, view }: { e: Expense; view: ProjectView }) {
               ],
               [t("receipt.record"), `${t("receipt.request")} ${line(decided?.line)} · ${t("receipt.payment")} ${line(settled[settled.length - 1]?.line)}`],
               [t("receipt.onchain"), <ChainLinks key="c" results={[...(decided ? [decided] : []), ...settled]} />],
+            ]}
+          />
+          <p className="muted small">{t("receipt.note", { id: view.id })}</p>
+        </Modal>
+      )}
+    </>
+  )
+}
+
+/** The receipt for a milestone's paid units: which units, under which signed criteria, who accepted them (or which
+ * deadline paid them), the submission's documents and the transactions. */
+export function MilestoneReceiptButton({ m, view }: { m: Milestone; view: ProjectView }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  if (!m.paid) return null
+  const v = view.versions.find((x) => x.version === m.version) ?? view.policy
+  const paid = m.units.filter((u) => u.status === "PAID" || u.status === "RELEASED_BY_TIMEOUT")
+  const calls = (m.chain ?? []).filter((r) => r.call === "decide" || r.call === "settle")
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+        {t("receipt.open")}
+      </button>
+      {open && (
+        <Modal title={t("receipt.title", { id: m.id })} onClose={() => setOpen(false)}>
+          <KV
+            items={[
+              [t("receipt.amount"), <Money key="a" n={m.paid} />],
+              [
+                t("receipt.payee"),
+                <span key="p">
+                  {view.parties.contractor.name} <CopyHash hash={view.parties.contractor.address} head={6} tail={4} />{" "}
+                  <span className="muted small">{t("receipt.payeeNote")}</span>
+                </span>,
+              ],
+              [t("receipt.work"), m.title],
+              [
+                t("receipt.policy"),
+                <span key="v">
+                  v{v?.version} <CopyHash hash={v?.hash ?? ""} head={10} tail={6} /> · {t("receipt.signedBoth")}
+                </span>,
+              ],
+              ...paid.map((u): [string, string] => [
+                `${u.title} · ${won(u.amount)}`,
+                `${u.criteria.join(" · ")} — ${
+                  u.status === "RELEASED_BY_TIMEOUT"
+                    ? t("receipt.by.timeout")
+                    : u.reason?.startsWith("resolver")
+                      ? t("receipt.by.resolver", { reason: u.reason.replace(/^resolver:\s*/, "") })
+                      : t("receipt.by.client", { reason: t("receipt.accepted") })
+                }`,
+              ]),
+              [
+                t("receipt.evidence"),
+                (m.submission?.documents ?? []).map((d) => shortHash(d.id, 8, 4)).join(" · ") || "—",
+              ],
+              [t("receipt.onchain"), <ChainLinks key="c" results={calls} />],
             ]}
           />
           <p className="muted small">{t("receipt.note", { id: view.id })}</p>
