@@ -64,6 +64,8 @@ forge test                      # PlobyEscrow 12개 + 레거시 컨트랙트 테
 cd frontend && npm run build    # 타입 검사 + 프로덕션 빌드
 python3 harness/evidence.py     # Kiln + Monad testnet으로 챌린지 증거 실행 (docs/evidence.md, evidence/)
 python3 -m escrow.audit <프로젝트 id>   # 기록만으로 검증 (var/ 또는 --data)
+python3 harness/tamper.py       # 변조 데모: 고친 줄을 지목하고, 공개 데모 키로 재서명한 위조는 온체인 로그 헤드·금액이 잡아냄
+python3 harness/demo_setup.py   # 실행 중인 서버에 데모 프로젝트 준비 (서명·예치까지)
 python3 -m pcp spend            # Kiln 키 사용액 (팀 공용 예산)
 ```
 

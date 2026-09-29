@@ -142,6 +142,11 @@ def milestone_story(P, m, events):
             'inside': sum(x['amount'] for x in paid) <= m['amount']}
 
 
+def short(v):
+    s = str(v)
+    return s[:10] + '…' if s.startswith('0x') and len(s) > 14 else (f'{v:,}' if isinstance(v, int) and not isinstance(v, bool) else s)
+
+
 def check_chain(pid, P, lines, rail):
     """Each logged tx against the chain, the contract's balances against the ledger, and what is still unsent."""
     _, todo, done = chain.plan(pid, lines, Project)
@@ -174,9 +179,14 @@ def check_chain(pid, P, lines, rail):
             problems.append(f"#{c['line']}.{c['n']} {c['call']}: tx {r['tx']} has no successful receipt")
             continue
         found = [ev for ev in rail.events_of(receipt) if ev['event'] == chain.CALL_EVENT[c['call']]]
-        match = any(all(str(ev['args'].get(k)).lower() == str(v).lower() for k, v in want.items()) for ev in found)
+        diffs = sorted(([k for k, v in want.items() if str(ev['args'].get(k)).lower() != str(v).lower()], ev)
+                       for ev in found) if found else [(list(want), {'args': {}})]
+        diffs.sort(key=lambda d: len(d[0]))
+        match = not diffs[0][0]
         if not match:
-            problems.append(f"#{c['line']}.{c['n']} {c['call']}: tx {r['tx']} does not carry the event its line implies")
+            differ = ', '.join(f"{k} {short(diffs[0][1]['args'].get(k))} on chain vs {short(want[k])} in the log"
+                               for k in diffs[0][0])
+            problems.append(f"#{c['line']}.{c['n']} {c['call']}: tx {r['tx'][:12]}… differs from its line ({differ})")
         checked.append({'line': c['line'], 'n': c['n'], 'call': c['call'], 'tx': r['tx'], 'ok': match,
                         'url': rail.tx_url(r['tx'])})
     onchain = rail.project(pid)
