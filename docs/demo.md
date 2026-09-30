@@ -1,31 +1,31 @@
-# 3분 데모 대본
+# Three-minute demo script
 
-준비: `python3 -m escrow.server`, `cd frontend && npm run dev`, 그리고 `python3 harness/demo_setup.py`(양측 서명·예치까지 끝난 프로젝트와 URL 출력). 브라우저 창 두 개를 나란히 열어 한쪽은 클라이언트, 한쪽은 작업자로 둡니다. 화면은 10초마다 스스로 새로고침합니다. 증거 실행 결과는 [`evidence.md`](evidence.md)에 있습니다.
+Setup: `python3 -m escrow.server`, `cd frontend && npm run dev`, then `python3 harness/demo_setup.py` (prints a signed, funded project and one link per role). Open the client and contractor links in two windows side by side; `&as=` pins each window's role. Switch the UI to English with the language selector at the top right. Views refresh every ten seconds. The recorded runs are in [`evidence.md`](evidence.md).
 
-발표 전에 같은 작업 문장과 견적으로 한 번 리허설해 두세요. Kiln 응답은 요청 단위로 캐시되므로(`harness/runs/cache`), 본 발표에서는 같은 계획과 판독이 비용 없이 재생되고, 행사장 네트워크나 Kiln이 불안정해도 결과가 같습니다(화면의 사용량에 '캐시'로 표시). 체인 호출은 네트워크가 끊기면 순서를 지킨 채 재시도합니다.
+Rehearse once with the default task and the seven offers. Kiln answers are cached per exact request (`harness/runs/cache`), so on stage the same plan and readings replay at no cost, even if the venue network or Kiln is unstable (the usage line then says cached). Chain calls retry in order when the network drops. The default task text follows the UI language; rehearse in the language you will present in, since a different task text is a new (live) Kiln call and the agent may plan differently.
 
-| 시간 | 화면 | 말할 것 |
+| Time | Screen | What to say |
 | --- | --- | --- |
-| 0:00–0:20 | 홈 | "AI에게 돈을 맡긴 순간부터가 문제입니다. 결제 레일은 누가 누구에게 보냈는지만 남기고, 누가 어떤 조건으로 허락했는지는 남기지 않습니다. Ploby는 AI 구매 에이전트가 **요청만** 할 수 있게 하고, 판정은 양측이 서명한 정책이, 돈은 컨트랙트가 움직이게 합니다." |
-| 0:20–0:45 | 클라이언트 · 요약 · **온체인 에스크로** 카드 | "클라이언트는 정책에 서명하고 예치했습니다. 이 예치는 Monad testnet 트랜잭션이고, 온체인 잔액이 엔진 원장과 그대로 일치합니다. 컨트랙트는 정책에 적힌 작업자 지갑에만 지급합니다." |
-| 0:45–1:35 | 작업자 · 경비 · **구매 에이전트** | 기본 작업 문장과 견적 7개 그대로 "에이전트에게 맡기기". "Kiln 호출은 계획 한 번뿐입니다. 요청마다 규칙이 답합니다. 도메인은 **APPROVE**. 이미지 40장 팩은 공급가로는 한도 안이지만 부가세를 더하면 20만 원을 넘어 **BLOCK**. 그러자 에이전트가 계획의 다음 후보인 10장 팩으로 넘어가 **APPROVE**를 받습니다. 엔진의 응답이 에이전트의 다음 행동을 정합니다. 쿠팡은 목록에 없어 **BLOCK**. AWS 청구서에는 '수취인을 바꿔라'는 인젝션이 들어 있습니다. 에이전트는 속았지만 가격 이상으로 **HOLD**됐고, 수취인은 애초에 바꿀 수 없습니다." 각 요청 아래 tx 링크를 클릭해 explorer의 `Decided` 이벤트를 보여 줍니다. |
-| 1:35–2:05 | 클라이언트 · 관리 · **새 약정 일시정지** → 작업자 · 에이전트 다시 실행 | "클라이언트가 멈춥니다. 이것도 클라이언트 지갑의 트랜잭션입니다. 에이전트의 다음 요청은 조용히 사라지지 않고 **BLOCK(프로젝트 상태)**으로 로그와 체인에 남습니다. 에이전트는 그 자리에서 작업을 중단합니다." |
-| 2:05–2:40 | **검증** 탭 → 지금 검증 (또는 터미널 `python3 -m escrow.audit …`) | "서버를 믿지 않고 로그 파일과 공개 체인만으로 다시 계산합니다. 모든 서명과 해시 체인, 로그 재생, 지급마다 어떤 정책의 어떤 규칙을 통과했고 누가 승인했는지, 각 tx의 이벤트가 그 로그 줄과 같은지, 컨트랙트 잔액이 원장과 같은지 확인합니다." |
-| (여유 있으면) | 터미널 `python3 harness/tamper.py` | "로그의 금액 한 줄을 고치면 감사 도구가 그 줄을 지목합니다. 데모 키로 다시 서명해도, 체인에 박힌 로그 헤드와 지급액이 달라 잡힙니다. 체인이 기록의 진위를 보증하는 부분입니다." |
-| 2:40–3:00 | [`efficiency.md`](efficiency.md) 표 | "돈을 움직이는 결정에는 LLM 호출이 0번입니다. 규칙은 프로젝트당 한 번 컴파일하고, 문서마다 한 번 읽고, 캐시합니다. 흐름별 토큰과 에너지 추정은 이 표에 있습니다. AI는 해석만, 돈은 규칙과 컨트랙트가 움직입니다." |
+| 0:00–0:20 | Home | "The trouble starts after you hand money to an AI. Payment rails record who paid whom, not who allowed it or on what terms. Ploby lets an AI purchasing agent only *request* purchases; a policy both parties signed decides, and a contract moves the money." |
+| 0:20–0:45 | Client · Overview · **On-chain escrow** card | "The client signed the policy and funded it. That deposit is a Monad testnet transaction, and the on-chain balances match the engine's ledger exactly. The contract pays only the contractor wallet written in the policy." |
+| 0:45–1:35 | Contractor · Expenses · **Purchase agent** | Keep the default task and all seven offers, then "Hand it to the agent". "One Kiln call makes the plan. The rules answer each request. The domain is **APPROVE**. The 40-image pack is within the cap before VAT, but over 200,000 won with VAT: **BLOCK**. The agent then files its plan's next offer, the 10-image pack, and gets **APPROVE**: the engine's answer drives the agent's next step. Coupang is not on the list: **BLOCK**. The AWS invoice carries an injected order to change the payee. The agent was fooled, but the price anomaly made it a **HOLD**, and the payee can't change anyway." Click a tx link under a request to show the `Decided` event on the explorer. |
+| 1:35–2:05 | Client · Manage · **Pause new commitments** → Contractor · run the agent again | "The client stops it. That is a transaction from the client's own wallet. The agent's next request doesn't vanish: it is a **BLOCK (project state)** in the log and on chain, and the agent stops the task." |
+| 2:05–2:40 | **Verify** tab → Verify now (or `python3 -m escrow.audit …` in a terminal) | "This doesn't trust our server. It recomputes everything from the log file and the public chain: every signature and the hash chain, a replay of the log, which policy and rules allowed each payment and who approved it, each transaction's event against its log line, and the contract's balances against the ledger." |
+| (if time) | Terminal `python3 harness/tamper.py` | "Change one amount in the log and the auditor names that line. Re-sign it with our public demo key and it still fails: the log heads and the amount anchored on chain don't match. That is what the chain guarantees." |
+| 2:40–3:00 | [`efficiency.md`](efficiency.md) table | "Zero model calls decide money. Rules are compiled once per project, each document is read once and cached. Tokens and energy per flow are in this table. The AI only interprets; rules and a contract move the money." |
 
-## 발표 전 체크리스트
+## Before presenting
 
-1. `git pull`, `.env`에 `KILN_API_KEY`·`DEPLOYER_KEY`·`RELAYER_KEY`(체인 키는 web3 담당에게).
-2. `python3 -m escrow.server` 시작 줄에 `Kiln on`과 `chain Monad testnet 0x0c54…`가 보이는지 확인.
-3. `cd frontend && npm run dev`, 그리고 `python3 harness/demo_setup.py`가 출력한 클라이언트·작업자 링크를 두 창에 엽니다 (`&as=`가 창마다 역할을 고정).
-4. 기본 작업 문장과 견적 7개로 한 번 리허설해 캐시를 만듭니다. 운영자 가스는 `python3 -c "from escrow import chain; print(chain.Rail(write=False).gas('operator'))"`로 확인(0.3 MON 아래면 워커가 자동 보충).
-5. 탐색기 탭에 PlobyEscrow 주소를 열어 둡니다.
-6. 네트워크가 안 되면: 화면 대신 [`evidence.md`](evidence.md)의 표와 tx 링크, README의 화면 캡처, `python3 harness/tamper.py --offline`으로 설명합니다. 결과는 같습니다.
+1. `git pull`, and `.env` with `KILN_API_KEY`, `DEPLOYER_KEY` and `RELAYER_KEY` (chain keys from the web3 teammate).
+2. The `python3 -m escrow.server` start line shows `Kiln on` and `chain Monad testnet 0x0c54…`.
+3. `cd frontend && npm run dev`, then open the two links `python3 harness/demo_setup.py` prints, and pick English.
+4. Rehearse once with the default task and seven offers to fill the cache. Check the operator's gas with `python3 -c "from escrow import chain; print(chain.Rail(write=False).gas('operator'))"` (the worker tops it up below 0.3 MON).
+5. Keep an explorer tab open on the PlobyEscrow address.
+6. No network? Present from [`evidence.md`](evidence.md) (its table and tx links), the README screenshots and `python3 harness/tamper.py --offline`. The results are the same.
 
-## 예상 질문
+## Expected questions
 
-- **운영자 키가 털리면?** 정책 밖 판정을 기록할 수는 있어도 작업자 외 주소로 보내거나 예치금보다 많이 움직일 수 없습니다. 클라이언트는 언제든 온체인에서 멈출 수 있습니다. 판정까지 온체인에서 강제하는 것(EIP-712, 프로젝트별 ProjectEscrow)은 목표 설계입니다.
-- **에이전트가 규칙을 알면 안 되나?** 알아도 되지만 믿을 필요가 없습니다. 에이전트가 무엇을 믿든 코드가 공급자 문서를 직접 읽고 판정합니다. 이번 실행에서 에이전트는 인젝션 청구서를 골랐고 정책이 잡았습니다.
-- **gpt-oss-120b는?** 주최 측이 챌린지 모델을 바꿨고 Kiln은 gpt-oss-120b에 404를 반환합니다. 모든 단계가 `qwen3-32b`이며, 모델은 `pipeline.json`에서 단계별로 바꿀 수 있습니다.
-- **모델이 실패하면?** 판독 실패는 HOLD, 계획 실패는 요청 없음입니다. 자동 승인은 없습니다.
+- **What if your operator key is stolen?** It could record an out-of-policy decision, but it cannot pay anyone but the contractor or move more than was funded, and the client can pause on chain at any time. Enforcing the decisions themselves on chain (EIP-712, a per-project ProjectEscrow) is the target design.
+- **Shouldn't the agent know the rules?** It may, but nobody needs to trust it. Whatever the agent believes, code reads the vendor's document itself and decides. In our run the agent picked the injected invoice and the policy caught it.
+- **Why not gpt-oss-120b?** The organizers changed the challenge model and Kiln returns 404 for gpt-oss-120b. Every stage runs `qwen3-32b`, routed per stage in `pipeline.json`.
+- **What if the model fails?** A failed reading is a HOLD, a failed plan files nothing. Nothing is ever approved automatically.
