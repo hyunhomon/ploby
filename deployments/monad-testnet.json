@@ -1,0 +1,27 @@
+{
+  "chain": "monad-testnet",
+  "chain_id": 10143,
+  "rpc_env": "MONAD_RPC",
+  "explorer": "https://testnet.monadvision.com/",
+  "token": {
+    "address": "0xE73a03D814434987f33f5E2b6b51c1dD8A44af58",
+    "tx": "0x8357cdf098683ad07b1d390d50d4140c58da27827febc373945e9619c4c31aa5",
+    "contract": "TestKRW",
+    "symbol": "tKRW"
+  },
+  "escrow": {
+    "address": "0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "tx": "0x96fa46bcfb41bffc4f84265416d50b41bf343136e8c2f1cc98389c9f80e9af79",
+    "contract": "PlobyEscrow",
+    "operator": "0x90eB1b3A44A86B64181d62A7d73e026f04F15BDC",
+    "block": 66722822
+  },
+  "roles": {
+    "client": "0xD51bb0f75beBCb03EE5B40f1f0a04a5BA060F845",
+    "operator": "0x90eB1b3A44A86B64181d62A7d73e026f04F15BDC"
+  },
+  "setup": {
+    "mint": "0x9efd8a9129fa8c470562b0b6d4cc850898e24bf00f760700a32a36dcaa6b2e3a",
+    "approve": "0x8ccc428a7721708a7d284cdc6d8c21dad492cf8f77c745395765fcc418011826"
+  }
+}

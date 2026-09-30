@@ -14,6 +14,7 @@ import { ActionDialog } from "./Dialogs"
 import { ExpensesSection } from "./Expenses"
 import { LedgerCard } from "./Ledger"
 import { MilestonesSection } from "./Milestones"
+import { AuditCard, ChainCard } from "./Onchain"
 import { PolicyCard } from "./Policy"
 import {
   ProjectContext,
@@ -34,8 +35,15 @@ const NAV = [
   ["policy", "project.tabs.policy"],
   ["changes", "project.tabs.changes"],
   ["activity", "project.tabs.activity"],
+  ["audit", "project.tabs.audit"],
   ["manage", "project.tabs.manage"],
 ] as const
+/** Keep a window pinned to its role (`?as=`) when it moves between tabs. */
+function pinnedRole() {
+  const as = new URLSearchParams(window.location.hash.split("?")[1]).get("as")
+  return as ? `&as=${encodeURIComponent(as)}` : ""
+}
+
 function currentTab() {
   const tab = new URLSearchParams(window.location.hash.split("?")[1]).get("tab")
   return NAV.some(([key]) => key === tab) ? tab! : "overview"
@@ -93,19 +101,29 @@ export function ProjectPage({
 
   useEffect(() => setDialog(null), [role])
 
+  // Another party may act meanwhile (side-by-side client and contractor windows): refresh quietly.
   useEffect(() => {
-    if (view?.chain?.status !== "confirming") return
-    const timer = window.setInterval(() => {
+    const h = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || dialog || busy) return
       api
         .project(id, role)
-        .then((v) => {
-          setView(v)
-          onNow(v.now)
-        })
-        .catch(() => {})
-    }, 4000)
-    return () => window.clearInterval(timer)
-  }, [view?.chain?.status, id, role, onNow])
+        .then((v) => setView(v))
+        .catch(() => undefined)
+    }, 10000)
+    return () => window.clearInterval(h)
+  }, [id, role, dialog, busy])
+
+  // Chain results come back a few seconds after an action: refresh until none is pending.
+  useEffect(() => {
+    if (!view?.chain?.pending) return
+    const h = window.setTimeout(() => {
+      api
+        .project(id, role)
+        .then((v) => setView(v))
+        .catch(() => undefined)
+    }, 2500)
+    return () => window.clearTimeout(h)
+  }, [view, id, role])
 
   const run = useCallback(
     async (a: Action, params: ActionParams = {}) => {
@@ -132,7 +150,10 @@ export function ProjectPage({
   )
 
   const ctx = useMemo<ProjectCtx | null>(
-    () => (view ? { view, busy, run, open: (action, preset) => setDialog({ action, preset }) } : null),
+    () =>
+      view
+        ? { view, busy, run, open: (action, preset) => setDialog({ action, preset }), replace: (v) => setView(v) }
+        : null,
     [view, busy, run],
   )
 
@@ -156,20 +177,13 @@ export function ProjectPage({
     <ProjectContext.Provider value={ctx}>
       <div className="page project">
         <ProjectHeader view={view} />
-        <ChainBanner
-          view={view}
-          onView={(v) => {
-            setView(v)
-            onNow(v.now)
-          }}
-        />
         {error && <Banner tone="bad">{error}</Banner>}
         <nav className="section-nav" aria-label={t("project.menu")}>
           {NAV.map(([key, text]) => (
             <a
               key={key}
               className="nav-chip"
-              href={`#/p/${encodeURIComponent(id)}?tab=${key}`}
+              href={`#/p/${encodeURIComponent(id)}?tab=${key}${pinnedRole()}`}
               aria-current={tab === key ? "page" : undefined}
             >
               {t(text)}
@@ -206,13 +220,13 @@ export function ProjectPage({
                   </div>
                 </dl>
               </section>
-              <ChainCard view={view} />
               <TodoCard view={view} />
+              <ChainCard view={view} />
               <div className="overview-links">
-                <a href={`#/p/${encodeURIComponent(id)}?tab=work`}>
+                <a href={`#/p/${encodeURIComponent(id)}?tab=work${pinnedRole()}`}>
                   {t("project.viewWork")} <Icon name="arrow" size={16} />
                 </a>
-                <a href={`#/p/${encodeURIComponent(id)}?tab=activity`}>
+                <a href={`#/p/${encodeURIComponent(id)}?tab=activity${pinnedRole()}`}>
                   {t("project.deadlinesAndLog")} <Icon name="arrow" size={16} />
                 </a>
               </div>
@@ -231,6 +245,7 @@ export function ProjectPage({
               <LogCard view={view} />
             </>
           )}
+          {tab === "audit" && <AuditCard view={view} />}
           {tab === "manage" && (
             <>
               <ControlsCard view={view} />
@@ -285,135 +300,6 @@ function ProjectHeader({ view }: { view: ProjectView }) {
   )
 }
 
-function chainBadge(view: ProjectView, t: (key: string) => string): string {
-  if (!view.chain?.enabled) return t("project.chainOff")
-  if (view.chain.status === "confirming" && !view.chain.depositTx) return t("project.chainConfirming")
-  if (view.chain.status === "confirming") return t("project.chainRecording")
-  if (view.chain.status === "error") return t("project.chainErrorTitle")
-  return t("project.chainTarget")
-}
-
-function ChainBanner({ view, onView }: { view: ProjectView; onView: (view: ProjectView) => void }) {
-  const { t } = useTranslation()
-  const { role } = useApp()
-  const [busy, setBusy] = useState(false)
-  const chain = view.chain
-  if (!chain?.enabled) return null
-  const confirming = chain.status === "confirming"
-  const failed = !confirming && (chain.status === "error" || !!chain.error)
-  if (!confirming && !failed) return null
-  const explorer = chain.explorer || "https://sepolia.basescan.org"
-  const tx = chain.lastTx && /^0x[0-9a-fA-F]{64}$/.test(chain.lastTx) ? chain.lastTx : null
-  const retry = async () => {
-    setBusy(true)
-    try {
-      onView(await api.retryChain(view.id, role))
-    } finally {
-      setBusy(false)
-    }
-  }
-  if (confirming) {
-    return (
-      <Banner tone="info" title={chain.depositTx ? t("project.chainRecording") : t("project.chainConfirming")} />
-    )
-  }
-  return (
-    <Banner tone="warn" title={t("project.chainErrorTitle")}>
-      <p>{chain.error}</p>
-      {tx && (
-        <a href={`${explorer}/tx/${tx}`} target="_blank" rel="noreferrer">
-          {t("project.chainLastTx")} {shortHash(tx, 6, 4)}
-        </a>
-      )}
-      <div>
-        <button type="button" className="btn btn-soft btn-sm" disabled={busy} onClick={() => void retry()}>
-          {busy ? t("dialogs.working") : t("project.chainRetry")}
-        </button>
-      </div>
-    </Banner>
-  )
-}
-
-const TX_HASH = /^0x[0-9a-fA-F]{64}$/
-
-function ChainCard({ view }: { view: ProjectView }) {
-  const { t } = useTranslation()
-  const chain = view.chain
-  if (!chain?.enabled) return null
-  const explorer = chain.explorer || "https://sepolia.basescan.org"
-  const steps: { key: string; label: string; hash: string | null; wait: string }[] = [
-    {
-      key: "mint",
-      label: t("project.chainMint"),
-      hash: chain.mintTx && TX_HASH.test(chain.mintTx) ? chain.mintTx : null,
-      wait: t("project.chainNotSent"),
-    },
-    {
-      key: "approve",
-      label: t("project.chainApprove"),
-      hash: chain.approveTx && TX_HASH.test(chain.approveTx) ? chain.approveTx : null,
-      wait: t("project.chainNotSent"),
-    },
-    {
-      key: "create",
-      label: t("project.chainCreate"),
-      hash: chain.createTx && TX_HASH.test(chain.createTx) ? chain.createTx : null,
-      wait: chain.createTx === "already-created" ? t("project.chainAlready") : t("project.chainWhenStart"),
-    },
-    {
-      key: "deposit",
-      label: t("project.chainDepositStep"),
-      hash: chain.depositTx && TX_HASH.test(chain.depositTx) ? chain.depositTx : null,
-      wait: t("project.chainWhenStart"),
-    },
-  ]
-  for (const [id, rec] of Object.entries(chain.expenses ?? {})) {
-    for (const [label, hash] of [
-      [t("project.chainDecision"), rec.recordTx],
-      [t("project.chainHold"), rec.approveTx],
-      [t("project.chainReject"), rec.rejectTx],
-      [t("project.chainRelease"), rec.releaseTx],
-    ] as const) {
-      if (hash && TX_HASH.test(hash)) steps.push({ key: `${id}-${label}`, label: `${id} · ${label}`, hash, wait: "" })
-    }
-  }
-  const accounts = [
-    [t("project.chainContract"), chain.escrow],
-    [t("project.chainUsdc"), chain.usdc],
-    [t("project.chainClient"), chain.client],
-    [t("project.chainPayee"), chain.payee || chain.payeeWallet || null],
-  ] as const
-  return (
-    <section className="card chain-card">
-      <h2 className="card-title">{t("project.chainCard")}</h2>
-      <p className="muted small">{t("project.chainCardSub")}</p>
-      <ol className="chain-steps">
-        {steps.map((step) => (
-          <li key={step.key}>
-            <span className={step.hash ? "chain-done" : undefined}>{step.label}</span>
-            {step.hash ? (
-              <a href={`${explorer}/tx/${step.hash}`} target="_blank" rel="noreferrer">
-                {t("project.chainViewTx")}
-              </a>
-            ) : (
-              <span className="muted small">{step.wait}</span>
-            )}
-          </li>
-        ))}
-      </ol>
-      <div className="chain-accounts">
-        {accounts.map(([label, address]) =>
-          address ? (
-            <a key={label} href={`${explorer}/address/${address}`} target="_blank" rel="noreferrer">
-              {label}
-            </a>
-          ) : null,
-        )}
-      </div>
-    </section>
-  )
-}
-
 function ProjectDetails({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
   return (
@@ -436,9 +322,15 @@ function ProjectDetails({ view }: { view: ProjectView }) {
         })}
       </div>
       <div className="impl-badges">
-        <span className="impl-badge" title={view.chain?.enabled ? t("project.chainTitle") : t("project.chainOffTitle")}>
-          {chainBadge(view, t)}
-        </span>
+        {view.chain?.enabled ? (
+          <a className="impl-badge" title={t("chain.badgeTitle")} href={view.chain.contract_url} target="_blank" rel="noreferrer">
+            {t("chain.badge")} ↗
+          </a>
+        ) : (
+          <span className="impl-badge" title={t("project.chainTitle")}>
+            {t("project.chainTarget")}
+          </span>
+        )}
         <span className="muted small">
           {t("project.logHead", { id: view.id, head: shortHash(view.head, 8, 4) })}
         </span>

@@ -1,10 +1,12 @@
 // The one JSON API (docs/api.md). With `?fixture=1` in the URL every call is answered by
 // src/dev/fixture.ts instead, so the UI can be checked without the server.
 
-import { tr } from "./i18n"
-import { caption } from "./labels"
+import { language, tr } from "./i18n"
 import type {
   ActionOk,
+  AgentRun,
+  AuditReport,
+  OnchainState,
   Clock,
   Doc,
   DocRef,
@@ -41,7 +43,9 @@ export interface Backend {
   createProject(project: NewProject): Promise<ProjectView>
   project(id: string, as: Role): Promise<ProjectView>
   act(id: string, as: Role, action: string, params: ActionParams): Promise<ActionOk>
-  retryChain(id: string, as: Role): Promise<ProjectView>
+  onchain(id: string): Promise<OnchainState>
+  agentRun(id: string, as: Role, task: string, offers: string[]): Promise<{ ok: true; result: AgentRun; view: ProjectView }>
+  audit(id: string): Promise<AuditReport>
 }
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
@@ -77,10 +81,10 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   return data as T
 }
 
-const q = (role: Role) => `as=${encodeURIComponent(role)}`
+const q = (role: Role) => `as=${encodeURIComponent(role)}&lang=${language()}`
 
 const http: Backend = {
-  meta: () => call("GET", "/api/meta"),
+  meta: () => call("GET", "/api/meta?lang=" + language()),
   clock: () => call("GET", "/api/clock"),
   moveClock: (body) => call("POST", "/api/clock", body),
   samples: () => call("GET", "/api/samples"),
@@ -88,11 +92,13 @@ const http: Backend = {
   document: (id) => call("GET", `/api/documents/${encodeURIComponent(id)}`),
   compileRules: (words) => call("POST", "/api/rules/compile", { words }),
   projects: (as) => call("GET", `/api/projects?${q(as)}`),
-  createProject: (project) => call("POST", "/api/projects", { as: "client", ...project }),
+  createProject: (project) => call("POST", "/api/projects?lang=" + language(), { as: "client", ...project }),
   project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
   act: (id, as, action, params) =>
-    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action }),
-  retryChain: (id, as) => call("POST", `/api/projects/${encodeURIComponent(id)}/chain?${q(as)}`, {}),
+    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action, lang: language() }),
+  onchain: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/chain`),
+  agentRun: (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers, lang: language() }),
+  audit: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/audit`),
 }
 
 function fixtureWanted(): boolean {
@@ -127,10 +133,13 @@ export const api: Backend = {
   createProject: (p) => backend.createProject(p),
   project: (id, as) => backend.project(id, as),
   act: (id, as, a, p) => backend.act(id, as, a, p),
-  retryChain: (id, as) => backend.retryChain(id, as),
+  onchain: (id) => backend.onchain(id),
+  agentRun: (id, as, task, offers) => backend.agentRun(id, as, task, offers),
+  audit: (id) => backend.audit(id),
 }
 
 export function errorText(e: unknown): string {
-  const message = e instanceof ApiError || e instanceof Error ? e.message : String(e)
-  return caption(message)
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return String(e)
 }

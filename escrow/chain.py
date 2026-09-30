@@ -1,413 +1,523 @@
-"""Base Sepolia writes for the legacy ExpenseEscrow already deployed from this repo.
+"""Ploby's on-chain rail: PlobyEscrow + TestKRW on Monad testnet (deployments/monad-testnet.json, docs/chain.md).
 
-The Python engine still decides. This module mirrors expense deposit, BLOCK/HOLD
-recording, and settlement release. Milestone payments stay off chain.
+The engine decides; the chain holds the money and enforces what the engine's operator key can never do (pay
+anyone but the contractor fixed at opening, move more than the client funded, reserve while the client has
+paused, decide under a policy the client did not accept). What goes on chain is derived from the log alone:
+`calls(P0, P1)` compares the money of a project before and after one line and names the contract calls that
+make the chain agree (open, fund, accept, pause from the client's wallet; decide, settle, refund from the
+operator's). Every call carries the log head right after its line and its number in that line, so each event
+names its exact line and the contract refuses a call applied twice.
 
-Uses JSON-RPC (web3) so the same code runs on Vercel without Foundry. Reads chain
-settings from the process environment first, then ``.env`` at the repo root.
+A worker sends the calls in log order and writes each result back as a signed 'chain' line (by 'relayer'):
+the tx hash sits in the log next to the line it anchors. A call the contract would refuse is never sent: its
+estimate names the custom error, and that refusal is logged too. Keys come from .env and are never printed or
+logged; a cast error is reduced to a name.
 """
 import json
 import os
 import re
+import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
+from collections import deque
 from pathlib import Path
 
-from .abis import ESCROW_ABI, USDC_ABI
-from .data import DataRoot, open_data
-from .rpc import Rpc, RpcError
+ROOT = Path(__file__).resolve().parents[1]
+DEPLOYMENT = ROOT / 'deployments' / 'monad-testnet.json'
+CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
+PUBLIC_RPC = 'https://testnet-rpc.monad.xyz'
+HELD = {'RESERVED', 'CLAIMED', 'DISPUTED'}  # milestone units whose amount is still reserved
+PAID = {'PAID', 'RELEASED_BY_TIMEOUT'}
+DECISION = {'APPROVE': 1, 'HOLD': 2, 'BLOCK': 3}
+SIGNATURES = {
+    'open': 'open(bytes32,address,bytes32,uint256,bytes32)',
+    'fund': 'fund(bytes32,uint256,bytes32,uint8)',
+    'accept': 'acceptPolicy(bytes32,bytes32,uint256,bytes32,uint8)',
+    'pause': 'setPaused(bytes32,bool,bytes32,uint8)',
+    'decide': 'decide(bytes32,bytes32,uint8,bytes32,uint256,bytes32,bytes32,uint8)',
+    'settle': 'settle(bytes32,bytes32,uint256,uint256,bytes32,uint8)',
+    'refund': 'refund(bytes32,uint256,bytes32,uint8)',
+}
+WHO = {'open': 'client', 'fund': 'client', 'accept': 'client', 'pause': 'client',
+       'decide': 'operator', 'settle': 'operator', 'refund': 'operator'}
+EVENTS = {  # name -> (indexed [(field, type)], data [(field, type)]), in the Solidity declaration's order
+    'Opened': ([('projectId', 'bytes32'), ('client', 'address'), ('contractor', 'address')],
+               [('policyHash', 'bytes32'), ('budget', 'uint256'), ('logHead', 'bytes32')]),
+    'Funded': ([('projectId', 'bytes32')], [('amount', 'uint256'), ('funded', 'uint256'), ('logHead', 'bytes32')]),
+    'PolicyAccepted': ([('projectId', 'bytes32')], [('policyHash', 'bytes32'), ('budget', 'uint256'), ('logHead', 'bytes32')]),
+    'PauseSet': ([('projectId', 'bytes32')], [('paused', 'bool'), ('logHead', 'bytes32')]),
+    'Decided': ([('projectId', 'bytes32'), ('ref', 'bytes32')],
+                [('decision', 'uint8'), ('rule', 'bytes32'), ('amount', 'uint256'), ('policyHash', 'bytes32'),
+                 ('logHead', 'bytes32')]),
+    'Settled': ([('projectId', 'bytes32'), ('ref', 'bytes32'), ('payee', 'address')],
+                [('paid', 'uint256'), ('returned', 'uint256'), ('logHead', 'bytes32')]),
+    'Refunded': ([('projectId', 'bytes32'), ('client', 'address')], [('amount', 'uint256'), ('logHead', 'bytes32')]),
+}
+TRANSIENT = {'rpc', 'no_receipt', 'nonce', 'send_failed'}  # the network, not the contract: retried, never logged
+CALL_EVENT = {'open': 'Opened', 'fund': 'Funded', 'accept': 'PolicyAccepted', 'pause': 'PauseSet',
+              'decide': 'Decided', 'settle': 'Settled', 'refund': 'Refunded'}
 
-BASE_UNITS = 1_000_000
-CUSHION = 50_000_000 * BASE_UNITS
-MAX_UINT = 2 ** 256 - 1
-EXPLORER = 'https://sepolia.basescan.org'
-WALLET = '_wallet'
-ADDR = re.compile(r'^0x[0-9a-fA-F]{40}$')
-B32 = re.compile(r'^0x[0-9a-fA-F]{64}$')
-KEYS = ('RPC_URL', 'CHAIN_ID', 'ESCROW_ADDRESS', 'USDC_ADDRESS', 'AGENT_PRIVATE_KEY', 'CLIENT_PRIVATE_KEY')
+
+# -- what the chain must do, from the log alone (no network)
+
+def money(P):
+    """The part of a project the chain mirrors."""
+    v = P.active or (P.versions[0] if P.versions else None)
+    refs, decided = {}, {}
+    for m in P.milestones.values():
+        refs[m['id']] = (sum(u['amount'] for u in m['units'] if u['status'] in HELD),
+                         sum(u['amount'] for u in m['units'] if u['status'] in PAID))
+    excess = {}
+    for e in P.expenses.values():
+        refs[e['id']] = (e['reserved'], e['paid'])
+        decided[e['id']] = (e['decision'] or {}).get('result')
+        excess[e['id']] = e['excess_paid']
+    return {'policy': v and v['hash'], 'active': P.active and P.active['hash'],
+            'budget': v['doc']['projectBudget'] if v else 0, 'contractor': v and v['doc']['contractorAddress'],
+            'funded': P.funded, 'refunded': P.refunded, 'paused': P.paused, 'refs': refs, 'decided': decided,
+            'excess': excess}
 
 
-class ChainError(Exception):
-    pass
+def rule_of(e):
+    """The rule a HOLD or BLOCK names on chain: the failed mandatory rule, else the first signal or evidence rule."""
+    d = e['decision'] or {}
+    if d.get('result') == 'BLOCK':
+        return d.get('reason') or 'blocked'
+    if d.get('reason') == 'retroactive':
+        return 'retroactive'
+    return next((r['rule'] for r in d.get('rules') or [] if r['ok'] is False), e.get('hold_class') or 'hold')
 
 
-def load_env(path):
-    found = {}
-    if path.exists():
-        for line in path.read_text(encoding='utf-8').splitlines():
-            text = line.strip()
-            if not text or text.startswith('#') or '=' not in text:
-                continue
-            name, value = text.split('=', 1)
-            value = value.strip().strip('"').strip("'")
-            found[name.strip()] = value
-    out = {}
-    for name in KEYS:
-        out[name] = os.environ.get(name) or found.get(name) or ''
-    if not out['RPC_URL']:
-        out['RPC_URL'] = 'https://sepolia.base.org'
-    if not out['CHAIN_ID']:
-        out['CHAIN_ID'] = '84532'
+def calls(pid, i, head, m0, m1, P):
+    """The contract calls that make the chain agree after log line i (head = the log head after it)."""
+    out = []
+
+    def add(call, **args):
+        out.append({'pid': pid, 'line': i, 'n': len(out), 'head': head, 'call': call, 'args': args})
+    if m1['funded'] > m0['funded']:
+        if m0['funded'] == 0:  # the first deposit opens the project on chain, bound to the policy's contractor
+            add('open', contractor=m1['contractor'], policy=m1['policy'], budget=m1['budget'])
+        add('fund', amount=m1['funded'] - m0['funded'])
+    if m0['active'] and m1['active'] and m1['active'] != m0['active']:  # a change order's version took effect
+        add('accept', policy=m1['active'], budget=m1['budget'])
+    if m1['paused'] != m0['paused']:
+        add('pause', paused=m1['paused'])
+    for ref, (r1, p1) in m1['refs'].items():
+        r0, p0 = m0['refs'].get(ref, (0, 0))
+        paid = p1 - p0
+        need = r1 + paid - r0  # a payment always comes out of a reservation: reserve first what is missing
+        e = P.expenses.get(ref)
+        if need > 0:
+            rule = ('milestone' if ref in P.milestones else 'all_rules_passed' if ref not in m0['refs']
+                    else 'change_order' if m1['excess'].get(ref, 0) > m0['excess'].get(ref, 0)
+                    else 'client_approved' if m0['decided'].get(ref) == 'HOLD' else 'change_order')
+            add('decide', ref=ref, decision='APPROVE', rule=rule, amount=need, policy=m1['active'])
+        elif e and ref not in m0['refs'] and m1['decided'].get(ref) in ('HOLD', 'BLOCK'):
+            add('decide', ref=ref, decision=m1['decided'][ref], rule=rule_of(e), amount=e['maximum'] or 0,
+                policy=m1['active'])
+        back = r0 + max(need, 0) - paid - r1
+        if paid > 0 or back > 0:
+            add('settle', ref=ref, pay=paid, returned=back)
+    if m1['refunded'] > m0['refunded']:
+        add('refund', amount=m1['refunded'] - m0['refunded'])
     return out
 
 
-def next_step(expense, rec):
-    rec = rec or {}
-    if rec.get('releaseTx') or rec.get('rejectTx'):
+def plan(pid, lines, Project):
+    """Replay a log: (the project, every call its lines imply, the (line, n) the log already has results for)."""
+    P, todo, done = Project(pid), [], {}
+    for line in lines:
+        m0 = money(P)
+        P.apply(line)
+        if line['op'] == 'chain':
+            done[(line['params']['line'], line['params']['n'])] = line['params']
+            continue
+        todo += calls(P.id, len(P.log) - 1, P.head, m0, money(P), P)
+    return P, todo, done
+
+
+# -- ABI plumbing
+
+_M = (1 << 64) - 1
+_RC = [0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000, 0x000000000000808B,
+       0x0000000080000001, 0x8000000080008081, 0x8000000000008009, 0x000000000000008A, 0x0000000000000088,
+       0x0000000080008009, 0x000000008000000A, 0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
+       0x8000000000008003, 0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+       0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008]
+_ROT = [[0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61], [28, 55, 25, 21, 56], [27, 20, 39, 8, 14]]
+
+
+def _rol(v, n):
+    return ((v << n) | (v >> (64 - n))) & _M if n else v
+
+
+def keccak256(data):
+    """Ethereum's Keccak-256 (not NIST SHA3-256), standard library only, so reading the chain needs no Foundry."""
+    msg = bytearray(data) + b'\x01'
+    msg += b'\x00' * (-len(msg) % 136)
+    msg[-1] |= 0x80
+    A = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(msg), 136):
+        for i in range(17):
+            A[i % 5][i // 5] ^= int.from_bytes(msg[off + 8 * i:off + 8 * i + 8], 'little')
+        for rc in _RC:
+            C = [A[x][0] ^ A[x][1] ^ A[x][2] ^ A[x][3] ^ A[x][4] for x in range(5)]
+            D = [C[(x - 1) % 5] ^ _rol(C[(x + 1) % 5], 1) for x in range(5)]
+            B = [[0] * 5 for _ in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    B[y][(2 * x + 3 * y) % 5] = _rol(A[x][y] ^ D[x], _ROT[x][y])
+            A = [[B[x][y] ^ (~B[(x + 1) % 5][y] & B[(x + 2) % 5][y]) for y in range(5)] for x in range(5)]
+            A[0][0] ^= rc
+    return b''.join(A[i % 5][i // 5].to_bytes(8, 'little') for i in range(4))
+
+
+def b32(text):
+    """A short ASCII id ('p1a2b…', 'E3', 'per_purchase') as bytes32, readable on an explorer."""
+    raw = str(text).encode('ascii')[:32]
+    return '0x' + raw.hex().ljust(64, '0')
+
+
+def unb32(word):
+    return bytes.fromhex(word[2:] if word.startswith('0x') else word).rstrip(b'\0').decode('ascii', 'replace')
+
+
+def h32(value):
+    value = str(value)
+    return value if value.startswith('0x') else '0x' + value
+
+
+def word(value):
+    return (value[2:].lower() if isinstance(value, str) else format(int(value), 'x')).rjust(64, '0')
+
+
+def unword(w, kind):
+    if kind == 'address':
+        return '0x' + w[24:]
+    if kind == 'bytes32':
+        return '0x' + w
+    if kind == 'bool':
+        return bool(int(w, 16))
+    return int(w, 16)
+
+
+def load_env():
+    env = dict(os.environ)
+    path = ROOT / '.env'
+    if path.exists():
+        for line in path.read_text(encoding='utf-8').splitlines():
+            if '=' in line and not line.lstrip().startswith('#'):
+                k, v = line.split('=', 1)
+                env.setdefault(k.strip(), v.strip())
+    return env
+
+
+def deployment():
+    return json.loads(DEPLOYMENT.read_text(encoding='utf-8')) if DEPLOYMENT.exists() else None
+
+
+def enabled():
+    """Chain writes need the deployment, both keys and Foundry's cast (reads need neither); PLOBY_CHAIN=off turns
+    them off."""
+    env, dep = load_env(), deployment()
+    return bool(dep and dep.get('escrow', {}).get('contract') == 'PlobyEscrow' and env.get('PLOBY_CHAIN') != 'off'
+                and env.get('DEPLOYER_KEY') and env.get('RELAYER_KEY') and Path(CAST).exists())
+
+
+class Rail:
+    """Reads need only an RPC (the public one by default: an auditor has no keys); writes need .env keys."""
+
+    def __init__(self, write=True):
+        env, dep = load_env(), deployment()
+        if not dep:
+            raise RuntimeError('deployments/monad-testnet.json is missing (python3 script/deploy_ploby.py)')
+        self.dep, self.rpc_url = dep, env.get(dep.get('rpc_env', 'MONAD_RPC')) or PUBLIC_RPC
+        self.escrow, self.token = dep['escrow']['address'], dep['token']['address']
+        self.explorer_base, self.chain_id = dep['explorer'], dep['chain_id']
+        self.roles = dict(dep['roles'])
+        self._keys = {}
+        if write:
+            self._keys = {'client': env['DEPLOYER_KEY'], 'operator': env['RELAYER_KEY']}
+        self._env = {k: v for k, v in os.environ.items() if not k.endswith('_KEY')}
+        self.nonces, self.lock = {}, threading.Lock()
+        errors = set()
+        for sol in ('PlobyEscrow.sol', 'TestKRW.sol'):
+            errors |= set(re.findall(r'error (\w+)\(\);', (ROOT / 'src' / sol).read_text(encoding='utf-8')))
+        self.errors = {self.keccak(f'{e}()')[:10]: e for e in sorted(errors)}
+        self.topics = {self.keccak(f'{n}({",".join(t for _, t in ix + data)})'): n for n, (ix, data) in EVENTS.items()}
+        self.fn = {name: self.keccak(sig)[:10] for name, sig in
+                   {'projects': 'projects(bytes32)', 'available': 'available(bytes32)',
+                    'reservedFor': 'reservedFor(bytes32,bytes32)', 'balanceOf': 'balanceOf(address)',
+                    'applied': 'applied(bytes32)'}.items()}
+
+    def tx_url(self, tx):
+        return f'{self.explorer_base}tx/{tx}' if tx else None
+
+    def address_url(self, address):
+        return f'{self.explorer_base}address/{address}'
+
+    # plumbing
+    def _cast(self, *args, key=None):
+        r = subprocess.run([CAST, *args, *(['--private-key', key] if key else [])], capture_output=True, text=True,
+                           env=self._env)
+        if r.returncode:
+            raise RuntimeError(re.sub(r'0x[0-9a-fA-F]{64}', '0x…', r.stderr.strip())[:300])
+        return r.stdout.strip()
+
+    def keccak(self, text):
+        return '0x' + keccak256(text.encode('utf-8')).hex()
+
+    def _rpc(self, method, params, raw=False):
+        """The result (or with raw the whole response); network errors and rate limits retried with backoff."""
+        req = urllib.request.Request(self.rpc_url, data=json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method,
+                                                                    'params': params}).encode(),
+                                     headers={'Content-Type': 'application/json', 'User-Agent': 'ploby/1'})
+        why = 'unreachable'
+        for attempt in range(6):
+            if attempt:
+                time.sleep(0.5 * 2 ** (attempt - 1))
+            try:
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    out = json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                why = f'HTTP {e.code}'
+                if e.code == 429 or e.code >= 500:
+                    continue
+                raise RuntimeError(f'{method}: {why}') from None
+            except (OSError, ValueError):
+                continue
+            err = out.get('error') or {}
+            if err and (err.get('code') in (429, -32005, -32029) or
+                        re.search(r'rate|limit exceeded|too many', str(err.get('message', '')), re.I)):
+                why = 'rate limited'
+                continue
+            if raw:
+                return out
+            if err:
+                raise RuntimeError(f"{method}: {err.get('message')}")
+            return out.get('result')
+        raise RuntimeError(f'{method}: RPC {why}')
+
+    def _error(self, err):
+        """The custom error a failed estimate names, 'reverted' for a revert without a known one, or None when the
+        node failed rather than the contract (the call is then retried, never logged as a refusal)."""
+        data = f"{err.get('data') or ''} {err.get('message') or ''}"
+        for s in re.findall(r'0x[0-9a-fA-F]{8}', data):
+            if s.lower() in self.errors:
+                return self.errors[s.lower()]
+        if err.get('code') == 3 or re.search(r'revert', str(err.get('message') or ''), re.I):
+            return 'reverted'
         return None
-    status = expense.get('status')
-    decision = (expense.get('decision') or {}).get('result')
-    paid = int(expense.get('paid') or 0)
-    maximum = int(expense.get('maximum') or 0)
-    recorded = bool(rec.get('recordTx'))
-    code = rec.get('code')
-    recorded_amount = rec.get('amount')
 
-    if paid > 0:
-        if not recorded:
-            return {'op': 'record_release', 'code': 1, 'amount': paid}
-        if recorded_amount != paid:
-            return {'op': 'error', 'error': 'on-chain amount does not match the settlement'}
-        if code == 2 and not rec.get('approveTx'):
-            return {'op': 'approve_release', 'amount': paid}
-        if code == 1 or code == 2:
-            return {'op': 'release', 'amount': paid}
-        return {'op': 'error', 'error': 'this decision cannot be released'}
+    def _send(self, who, to, data):
+        """Estimate, then send and wait for the receipt. A call the contract would refuse is not sent."""
+        began, sender = time.perf_counter(), self.roles[who]
 
-    if status == 'BLOCKED' and not recorded:
-        return {'op': 'record', 'code': 3, 'amount': maximum or 1}
-    if status in ('HOLD_REVIEW', 'RETRO_REVIEW') and decision == 'HOLD' and not recorded:
-        return {'op': 'record', 'code': 2, 'amount': maximum or 1}
-    if status == 'REJECTED' and decision == 'HOLD':
-        if not recorded:
-            return {'op': 'record', 'code': 2, 'amount': maximum or 1}
-        return {'op': 'reject'}
-    if status == 'RESERVED' and decision == 'HOLD' and recorded and code == 2 and not rec.get('approveTx'):
-        return {'op': 'approve'}
-    return None
-
-
-class Chain:
-    def __init__(self, repo, data):
-        self.repo = Path(repo)
-        if isinstance(data, DataRoot):
-            self.data = data
-        else:
-            self.data = open_data(data)
-        env = load_env(self.repo / '.env')
-        self.rpc_url = env['RPC_URL']
-        self.chain_id = env['CHAIN_ID']
-        self.escrow = env['ESCROW_ADDRESS']
-        self.usdc = env['USDC_ADDRESS']
-        self.agent_key = env['AGENT_PRIVATE_KEY']
-        self.client_key = env['CLIENT_PRIVATE_KEY']
-        self.client = ''
-        self.agent = ''
-        self.reason = ''
-        self._rpc = None
-        self._loader = None
-        self._inflight = set()
-        self._pending = set()
-        self._guard = threading.Lock()
-        self._send_lock = threading.RLock()
-        self._book_lock = threading.RLock()
-        ready = all(ADDR.match(v) for v in (self.escrow, self.usdc)) and self.chain_id == '84532'
-        ready = ready and all(B32.match(v) for v in (self.agent_key, self.client_key))
-        if not ready:
-            self.enabled = False
-            self.reason = 'chain settings are unset'
-        else:
+        def done(tx=None, ok=False, error=None, block=None):
+            return {'tx': tx, 'ok': ok, 'error': error, 'block': block, 'seconds': round(time.perf_counter() - began, 2)}
+        with self.lock:
+            est = self._rpc('eth_estimateGas', [{'from': sender, 'to': to, 'data': data}], raw=True)
+            if 'error' in est:
+                return done(error=self._error(est['error']) or 'rpc')
+            if who not in self.nonces:
+                self.nonces[who] = int(self._rpc('eth_getTransactionCount', [sender, 'pending']), 16)
             try:
-                self._rpc = Rpc(self.rpc_url, self.chain_id)
-                self.client = self._rpc.address(self.client_key)
-                self.agent = self._rpc.address(self.agent_key)
-                self.enabled = True
-            except RpcError as e:
-                self.enabled = False
-                self.reason = str(e)
-        self.book = self._read()
-        self._serverless = bool(os.environ.get('VERCEL'))
-        if self.enabled and not self._serverless:
-            threading.Thread(target=self._prepare_wallet, name='ploby-chain-wallet', daemon=True).start()
-
-    def bind(self, loader):
-        self._loader = loader
-
-    def meta(self):
-        return {'enabled': self.enabled, 'reason': self.reason, 'network': 'base-sepolia',
-                'explorer': EXPLORER, 'escrow': self.escrow or None, 'usdc': self.usdc or None,
-                'client': self.client or None, 'payeeWallet': self.agent or None}
-
-    def public(self, pid):
-        with self._guard:
-            pending = pid in self._inflight
-        with self._book_lock:
-            entry = dict(self.book.get(pid) or {})
-            raw_expenses = dict(entry.get('expenses') or {})
-            wallet = dict(self.book.get(WALLET) or {})
-        expenses = {}
-        mint = self._tx(wallet.get('mintTx'))
-        approve = self._tx(wallet.get('approveTx'))
-        txs = [mint, approve, self._tx(entry.get('createTx')), self._tx(entry.get('depositTx'))]
-        error = entry.get('error')
-        for eid, rec in raw_expenses.items():
-            expenses[eid] = {'status': rec.get('status'), 'error': rec.get('error'),
-                             'recordTx': rec.get('recordTx'), 'approveTx': rec.get('approveTx'),
-                             'rejectTx': rec.get('rejectTx'), 'releaseTx': rec.get('releaseTx'),
-                             'amount': rec.get('amount'), 'code': rec.get('code')}
-            txs.extend(self._tx(rec.get(name)) for name in ('recordTx', 'approveTx', 'rejectTx', 'releaseTx'))
-            if rec.get('error') and not error:
-                error = rec['error']
-        status = entry.get('status') or ('waiting' if self.enabled else 'off')
-        if pending:
-            status = 'confirming'
-        elif error:
-            status = 'error'
-        hashes = [tx for tx in txs if tx]
-        return {**self.meta(), 'status': status, 'error': None if pending else error,
-                'mintTx': mint, 'approveTx': approve,
-                'createTx': entry.get('createTx'), 'depositTx': entry.get('depositTx'),
-                'payee': entry.get('payee') or (self.agent or None), 'lastTx': hashes[-1] if hashes else None,
-                'expenses': expenses}
-
-    def schedule(self, pid):
-        if not self.enabled or not self._loader:
-            return
-        with self._guard:
-            if pid in self._inflight:
-                self._pending.add(pid)
-                return
-            self._inflight.add(pid)
-        if self._serverless:
-            return
-        threading.Thread(target=self._worker, args=(pid,), name=f'ploby-chain-{pid}', daemon=True).start()
-
-    def drain(self, deadline=None):
-        """Run queued chain work (used on Vercel after each HTTP request)."""
-        if not self.enabled or not self._loader:
-            return
-        if deadline is None:
-            deadline = time.monotonic() + 55
-        while time.monotonic() < deadline:
-            with self._guard:
-                if not self._inflight:
-                    break
-                pid = next(iter(self._inflight))
+                out = self._cast('send', to, data, '--rpc-url', self.rpc_url, '--nonce', str(self.nonces[who]),
+                                 '--gas-limit', str(int(est['result'], 16) * 12 // 10), '--async', key=self._keys[who])
+            except RuntimeError as e:
+                self.nonces.pop(who, None)
+                return done(error='nonce' if 'nonce' in str(e).lower() else 'send_failed')
+            self.nonces[who] += 1
+            tx = re.search(r'0x[0-9a-fA-F]{64}', out).group(0)
             try:
-                project = self._loader(pid)
-                if project is not None:
-                    self.sync(project)
-            except Exception as e:
-                self.note_error(pid, f'{type(e).__name__}: {e}')
-            with self._guard:
-                self._pending.discard(pid)
-                self._inflight.discard(pid)
+                receipt = self.receipt(tx, wait=90)
+            except RuntimeError:
+                receipt = None
+            if not receipt:
+                self.nonces.pop(who, None)  # read the pending nonce again: a dropped tx leaves no gap behind it
+                return done(tx, error='no_receipt')
+            ok = int(receipt['status'], 16) == 1
+            return done(tx, ok, None if ok else 'reverted', int(receipt['blockNumber'], 16))
 
-    def _worker(self, pid):
+    def receipt(self, tx, wait=0):
+        began = time.perf_counter()
+        while True:
+            r = self._rpc('eth_getTransactionReceipt', [tx])
+            if r or time.perf_counter() - began >= wait:
+                return r
+            time.sleep(0.4)
+
+    # the calls
+    def calldata(self, c):
+        """The ABI calldata of a call (every argument is a static type): selector + one word per argument."""
+        a, pid, head, n = c['args'], b32(c['pid']), h32(c['head']), int(c['n'])
+        values = {
+            'open': lambda: [pid, a['contractor'], h32(a['policy']), a['budget'], head],
+            'fund': lambda: [pid, a['amount'], head, n],
+            'accept': lambda: [pid, h32(a['policy']), a['budget'], head, n],
+            'pause': lambda: [pid, int(bool(a['paused'])), head, n],
+            'decide': lambda: [pid, b32(a['ref']), DECISION[a['decision']], b32(a['rule']), a['amount'], h32(a['policy']),
+                               head, n],
+            'settle': lambda: [pid, b32(a['ref']), a['pay'], a['returned'], head, n],
+            'refund': lambda: [pid, a['amount'], head, n],
+        }[c['call']]()
+        for v in values:
+            if isinstance(v, str) and not re.fullmatch(r'0x[0-9a-fA-F]{40}|0x[0-9a-fA-F]{64}', v):
+                raise ValueError(f'not an address or bytes32: {v!r}')
+            if isinstance(v, int) and not 0 <= v < 2 ** 256:
+                raise ValueError(f'out of range: {v}')
+        return self.keccak(SIGNATURES[c['call']])[:10] + ''.join(word(v) for v in values)
+
+    def send(self, c):
+        """One call's result: sent, refused by the contract (its error named), 'invalid' when its calldata cannot be
+        built (logged, never retried), or one of TRANSIENT when the network failed (retried by the worker)."""
         try:
-            while True:
-                project = self._loader(pid)
-                if project is not None:
-                    try:
-                        self.sync(project)
-                    except Exception as e:
-                        self.note_error(pid, f'{type(e).__name__}: {e}')
-                with self._guard:
-                    if pid not in self._pending:
-                        self._inflight.discard(pid)
-                        return
-                    self._pending.discard(pid)
-        except Exception:
-            with self._guard:
-                self._inflight.discard(pid)
-                self._pending.discard(pid)
+            data = self.calldata(c)
+        except (KeyError, TypeError, ValueError):
+            return {'tx': None, 'ok': False, 'error': 'invalid', 'block': None, 'seconds': 0}
+        try:
+            return self._send(WHO[c['call']], self.escrow, data)
+        except (RuntimeError, TimeoutError, OSError, ValueError):
+            return {'tx': None, 'ok': False, 'error': 'rpc', 'block': None, 'seconds': 0}
 
-    def sync(self, project):
-        if not self.enabled:
-            return
-        with self._send_lock:
+    # reads
+    def _call(self, data):
+        return self._rpc('eth_call', [{'to': self.escrow, 'data': data}, 'latest'])[2:]
+
+    def project(self, pid):
+        """The on-chain project (None if never opened)."""
+        out = self._call(self.fn['projects'] + word(b32(pid)))
+        w = [out[i:i + 64] for i in range(0, len(out), 64)]
+        client = unword(w[0], 'address')
+        if int(client, 16) == 0:
+            return None
+        return {'client': client, 'contractor': unword(w[1], 'address'), 'policy_hash': unword(w[2], 'bytes32'),
+                'budget': int(w[3], 16), 'funded': int(w[4], 16), 'reserved': int(w[5], 16), 'paid': int(w[6], 16),
+                'refunded': int(w[7], 16), 'paused': bool(int(w[8], 16)), 'log_head': unword(w[9], 'bytes32'),
+                'available': int(self._call(self.fn['available'] + word(b32(pid))), 16)}
+
+    def reserved_for(self, pid, ref):
+        return int(self._call(self.fn['reservedFor'] + word(b32(pid)) + word(b32(ref))), 16)
+
+    def applied(self, pid, head, n):
+        """Did the contract apply the call keyed (project, log head, n)? (`key` in PlobyEscrow.sol)"""
+        k = keccak256(bytes.fromhex(word(b32(pid)) + word(h32(head)) + word(int(n))))
+        return bool(int(self._call(self.fn['applied'] + k.hex()), 16))
+
+    def balance(self, address):
+        out = self._rpc('eth_call', [{'to': self.token, 'data': self.fn['balanceOf'] + word(address)}, 'latest'])
+        return int(out, 16)
+
+    def events_of(self, receipt):
+        """The escrow events in a receipt: [{'event', 'args', 'log_index'}]."""
+        out = []
+        for log in receipt.get('logs') or []:
+            name = self.topics.get(log['topics'][0]) if log.get('topics') else None
+            if not name or log['address'].lower() != self.escrow.lower():
+                continue
+            ix, fields = EVENTS[name]
+            data = log['data'][2:]
+            args = {f: unword(t[2:], k) for (f, k), t in zip(ix, log['topics'][1:])}
+            args.update({f: unword(data[i * 64:(i + 1) * 64], k) for i, (f, k) in enumerate(fields)})
+            out.append({'event': name, 'args': args, 'log_index': int(log['logIndex'], 16)})
+        return out
+
+    def gas(self, who):
+        return int(self._rpc('eth_getBalance', [self.roles[who], 'latest']), 16) / 1e18
+
+
+class Worker(threading.Thread):
+    """Sends the calls one by one, in log order, and hands each final result to `record(call, result)`. A network
+    failure is never recorded: the call stays first in line and is tried again, after checking whether an earlier
+    send of it landed after all."""
+
+    def __init__(self, rail, record, backoff=2.0):
+        super().__init__(daemon=True, name='ploby-chain')
+        self.rail, self.record, self.backoff = rail, record, backoff
+        self.queue, self.cv, self.busy = deque(), threading.Condition(), None
+
+    def submit(self, calls):
+        with self.cv:
+            self.queue.extend(calls)
+            self.cv.notify()
+
+    def pending(self, pid=None):
+        with self.cv:
+            items = list(self.queue) + ([self.busy] if self.busy else [])
+        return [c for c in items if pid is None or c['pid'] == pid]
+
+    def run(self):
+        sent = 0
+        while True:
+            with self.cv:
+                while not self.queue:
+                    self.cv.wait()
+                self.busy = c = self.queue.popleft()
             try:
-                self._prepare_wallet()
-                entry = self._entry(project.id)
-                recorded = any(rec.get('recordTx') for rec in (entry.get('expenses') or {}).values())
-                if not recorded and ADDR.match(self.agent):
-                    entry['payee'] = self.agent
-                    self._save()
-                self._fund(project)
-                entry = self.book.get(project.id) or {}
-                if entry.get('status') == 'funded':
-                    for expense in project.expenses.values():
-                        self._expense(project, expense)
-            except (ChainError, RpcError) as e:
-                entry = self._entry(project.id)
-                entry['error'] = self._scrub(str(e))
-                if entry.get('status') != 'funded':
-                    entry['status'] = 'error'
-                self._save()
+                result = self.deliver(c)
+            except Exception as e:  # never let one call kill the worker: try it again, first in line
+                print(f"chain: {c['call']} for line {c['line']} failed ({type(e).__name__}), retrying", flush=True)
+                with self.cv:
+                    self.queue.appendleft(c)
+                    self.busy = None
+                time.sleep(self.backoff)
+                continue
+            try:
+                self.record(c, result)
+            except Exception as e:  # the call stays unsent in the log and is sent again at the next start
+                print(f"chain: could not log {c['call']} for line {c['line']}: {type(e).__name__}", flush=True)
+            with self.cv:
+                self.busy = None
+            sent += 1
+            if sent % 20 == 0:
+                self.top_up()
 
-    def note_error(self, pid, message):
-        self._entry(pid)['error'] = self._scrub(message)
-        self._entry(pid)['status'] = 'error'
-        self._save()
+    def deliver(self, c):
+        """Send until the contract itself answers: a tx, or a refusal it names."""
+        result, wait, sent_tx = self.rail.send(c), self.backoff, None
+        while result['error'] in TRANSIENT:
+            sent_tx = result.get('tx') or sent_tx
+            print(f"chain: {c['call']} for line {c['line']} not confirmed ({result['error']}), retrying in {wait:g}s",
+                  flush=True)
+            if result['error'] == 'send_failed':
+                self.top_up()
+            time.sleep(wait)
+            wait = min(wait * 2, 60)
+            landed = sent_tx and self.landed(sent_tx)
+            if landed:
+                return landed
+            result = self.rail.send(c)
+        if result['error'] == 'AlreadyApplied':  # an earlier send (this run or before a restart) is on chain
+            landed = sent_tx and self.landed(sent_tx)
+            if landed:
+                return landed
+            return {**result, 'ok': self.rail.applied(c['pid'], c['head'], c['n'])}
+        if result['error'] == 'ProjectExists':  # ours only if the contract holds the same client, payee and policy
+            p, a = self.rail.project(c['pid']), c['args']
+            ours = bool(p) and p['client'].lower() == self.rail.roles['client'].lower() and \
+                p['contractor'].lower() == a['contractor'].lower() and p['policy_hash'].lower() == h32(a['policy']).lower()
+            return {**result, 'ok': ours, 'error': 'ProjectExists' if ours else 'ProjectTaken'}
+        return result
 
-    def _prepare_wallet(self):
-        with self._send_lock:
-            entry = self.book.setdefault(WALLET, {})
-            if entry.get('ready'):
-                return
-            balance = self._erc20_balance(self.client)
-            allowance = self._erc20_allowance(self.client, self.escrow)
-            if balance < CUSHION and not entry.get('mintTx'):
-                entry['mintTx'] = self._rpc.send(
-                    self.agent_key, self.usdc, USDC_ABI, 'mint', self.client, CUSHION - balance)
-                self._save()
-            if allowance < CUSHION and not entry.get('approveTx'):
-                entry['approveTx'] = self._rpc.send(
-                    self.client_key, self.usdc, USDC_ABI, 'approve', self.escrow, MAX_UINT)
-                self._save()
-            entry['ready'] = True
-            self._save()
-
-    def _ensure(self, needed):
-        balance = self._erc20_balance(self.client)
-        allowance = self._erc20_allowance(self.client, self.escrow)
-        if balance < needed:
-            self._rpc.send(self.agent_key, self.usdc, USDC_ABI, 'mint', self.client, needed - balance)
-        if allowance < needed:
-            self._rpc.send(self.client_key, self.usdc, USDC_ABI, 'approve', self.escrow, MAX_UINT)
-
-    def _fund(self, project):
-        entry = self._entry(project.id)
-        if entry.get('depositTx') or project.status not in ('ACTIVE', 'CLOSING', 'CLOSED'):
-            return
-        doc = project.doc
-        if not doc:
-            return
-        policy_hash = (project.active or {}).get('hash') or ''
-        if not B32.match(policy_hash) or not ADDR.match(self.agent):
-            raise ChainError('policy hash or settlement payee is not usable on chain')
-        budget = to_base(doc['projectBudget'])
-        if budget <= 0:
-            raise ChainError('project budget is zero')
-        self._ensure(budget)
-        pid_hash = self._keccak(project.id)
-        entry.update(projectId=pid_hash, policyHash=policy_hash, payee=self.agent, budget=doc['projectBudget'])
-        self._step(entry, 'createTx', self.client_key, 'createProject', pid_hash, policy_hash, budget)
-        self._step(entry, 'depositTx', self.client_key, 'deposit', pid_hash)
-        entry['status'] = 'funded'
-        entry['error'] = None
-        self._save()
-
-    def _expense(self, project, expense):
-        entry = self._entry(project.id)
-        rec = (entry.get('expenses') or {}).setdefault(expense['id'], {})
-        payee = entry.get('payee') or '0x0000000000000000000000000000000000000000'
-        evidence = rec.get('evidence') or self._keccak(f"{project.id}:{expense['id']}")
-        rec['evidence'] = evidence
-        for _ in range(4):
-            step = next_step(expense, rec)
-            if step is None:
-                break
-            if step['op'] == 'error':
-                rec['status'] = 'error'
-                rec['error'] = step['error']
-                entry['error'] = step['error']
-                self._save()
-                break
-            amount = to_base(step.get('amount') or 0)
-            if step['op'] in ('record', 'record_release'):
-                self._record(entry, rec, payee, evidence, step['code'], amount, step['amount'])
-            if step['op'] == 'reject':
-                rec['rejectTx'] = self._rpc.send(
-                    self.client_key, self.escrow, ESCROW_ABI, 'rejectHold',
-                    Rpc.b32(entry['projectId']), Rpc.b32(evidence))
-                rec['status'] = 'rejected'
-            if step['op'] in ('approve', 'approve_release'):
-                rec['approveTx'] = self._rpc.send(
-                    self.client_key, self.escrow, ESCROW_ABI, 'approveHold',
-                    Rpc.b32(entry['projectId']), Rpc.b32(evidence))
-                rec['status'] = 'approved'
-            if step['op'] in ('release', 'record_release', 'approve_release'):
-                rec['releaseTx'] = self._rpc.send(
-                    self.agent_key, self.escrow, ESCROW_ABI, 'release',
-                    Rpc.b32(entry['projectId']), Rpc.b32(evidence), payee, to_base(step['amount']))
-                rec['status'] = 'released'
-                rec['error'] = None
-            self._save()
-
-    def _record(self, entry, rec, payee, evidence, code, amount_base, amount):
-        decision = (
-            Rpc.b32(entry['projectId']),
-            Rpc.b32(evidence),
-            Rpc.b32(entry['policyHash']),
-            amount_base,
-            code,
-            0,
-        )
-        rec['recordTx'] = self._rpc.send(
-            self.agent_key, self.escrow, ESCROW_ABI, 'recordDecision', decision, payee)
-        rec.update(code=code, amount=amount, status='recorded', error=None)
-
-    def _step(self, entry, field, key, fn_name, *args):
-        if entry.get(field):
-            return
+    def landed(self, tx):
+        """The final result of a tx that was sent, or None while it has no receipt."""
         try:
-            if fn_name == 'createProject':
-                entry[field] = self._rpc.send(
-                    key, self.escrow, ESCROW_ABI, 'createProject',
-                    Rpc.b32(args[0]), Rpc.b32(args[1]), args[2])
-            elif fn_name == 'deposit':
-                entry[field] = self._rpc.send(
-                    key, self.escrow, ESCROW_ABI, 'deposit', Rpc.b32(args[0]))
-            else:
-                raise ChainError(f'unknown step {fn_name}')
-        except RpcError as e:
-            if field == 'createTx' and 'ProjectExists' in str(e):
-                entry[field] = 'already-created'
-            else:
-                raise ChainError(str(e)) from e
-        self._save()
+            r = self.rail.receipt(tx)
+        except (RuntimeError, OSError, ValueError):
+            return None
+        if not r:
+            return None
+        ok = int(r['status'], 16) == 1
+        return {'tx': tx, 'ok': ok, 'error': None if ok else 'reverted', 'block': int(r['blockNumber'], 16), 'seconds': 0}
 
-    def _erc20_balance(self, account):
-        return self._rpc.erc20_uint(self.usdc, 'balanceOf', account)
-
-    def _erc20_allowance(self, owner, spender):
-        return self._rpc.erc20_uint(self.usdc, 'allowance', owner, spender)
-
-    def _keccak(self, text):
-        return self._rpc.keccak_hex(text)
-
-    def _tx(self, value):
-        return value if isinstance(value, str) and B32.match(value) else None
-
-    def _scrub(self, text):
-        for secret in (self.agent_key, self.client_key):
-            if secret:
-                text = text.replace(secret, '0x…')
-        return text[-400:]
-
-    def _entry(self, pid):
-        return self.book.setdefault(pid, {'expenses': {}})
-
-    def _read(self):
-        raw = self.data.read_text('chain.json')
-        if not raw:
-            return {}
+    def top_up(self):
+        """Keep the operator's gas above 0.3 MON from the client wallet (testnet MON only)."""
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return data if isinstance(data, dict) else {}
-
-    def _save(self):
-        with self._book_lock:
-            self.data.write_text('chain.json', json.dumps(self.book, ensure_ascii=False))
-
-
-def to_base(amount):
-    return int(amount) * BASE_UNITS
-
-
-def _self_check():
-    assert to_base(200) == 200_000_000
-    assert next_step({'status': 'BLOCKED', 'maximum': 300, 'paid': 0}, {})['code'] == 3
+            if self.rail.gas('operator') < 0.3:
+                self.rail._cast('send', self.rail.roles['operator'], '--value', '1ether', '--rpc-url',
+                                self.rail.rpc_url, key=self.rail._keys['client'])
+                self.rail.nonces.pop('client', None)
+        except (RuntimeError, OSError, KeyError):
+            pass

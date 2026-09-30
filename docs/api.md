@@ -37,6 +37,9 @@ Signatures are HMAC-SHA256 with per-role demo keys held by the server; they stan
 | POST | `/api/projects` | `{as: 'client', ...NewProject}` | `ProjectView` (status DRAFT, policy v1 PROPOSED) |
 | GET | `/api/projects/{id}?as=role` | | `ProjectView` for that role |
 | POST | `/api/projects/{id}/actions` | `{as, action, ...params}` | `{ok: true, result, view: ProjectView}` or HTTP 400 `{ok: false, error, code}` |
+| POST | `/api/projects/{id}/agent` | `{as: 'contractor', task, offers: [document id]}` | `{ok: true, result: {task, plan, ai, tried: [{need, document, expense, result, rule, status}], stopped}, view}` — the purchase agent plans once (Kiln flow `agent`), then files requests (`escrow/agent.py`) |
+| GET | `/api/projects/{id}/chain` | | `{chain: ChainStatus, onchain: {client, contractor, policy_hash, budget, funded, reserved, paid, refunded, paused, log_head, available} \| null, engine: {funded, reserved, paid, refunded, available}, match}` — read live from PlobyEscrow ([chain.md](chain.md)) |
+| GET | `/api/projects/{id}/audit` | | the auditor's report (`python3 -m escrow.audit --json`): replay, policies, payments with what authorized them, stops, chain checks, verdict |
 
 Every GET and POST first runs the keeper: every deadline that has passed on the demo clock applies its pre-agreed fallback, logged with `by: 'keeper'`.
 
@@ -201,8 +204,18 @@ SIGNED: active version, its milestone PLANNED until the client's deposit covers 
 Action   = {action, target: {kind: 'project'|'policy'|'milestone'|'expense'|'change_order', id} | null,
             label, deadline | null, fallback | null, needs_response: bool}
 Deadline = {target: {kind, id}, label, at, owner: role, fallback}
-LogEntry = {i, at, by: role|'keeper', op, text, head}
+LogEntry = {i, at, by: role|'keeper'|'relayer', op, text, head, chain?: [ChainResult]}
+ChainResult = {line, n, call: 'open'|'fund'|'accept'|'pause'|'decide'|'settle'|'refund', args, tx | null, url | null,
+               ok, error | null, block | null}      # a relayer 'chain' line: the tx that mirrors log line `line`
+ChainStatus = {enabled, network, chain_id, contract, contract_url, token, pending, sent, refused}
+AgentTask = {id: 'A1', task, offers: [DocRef], plan: {needs: [{need, offers: [document id], why}], skip: [{offer, why}]},
+             ai: {ok, problems, usage, model}, at, line, requests: [{expense, need, try, document, status, result, rule}]}
 ```
+
+`ProjectView` also carries `chain: ChainStatus` and `agent_tasks: [AgentTask]`; an `Expense` filed by the agent carries
+`via: {task, need, why, try}`, and expenses and milestones carry the `chain` results that mirror them. With chain writes
+on, a request's line keeps what the contract said before the decision in `inputs.chain` (`{paused, available}` or
+`{skipped}`); it can only make the `state` and `funds` rules stricter.
 
 ## Actions
 

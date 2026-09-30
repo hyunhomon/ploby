@@ -1,0 +1,39 @@
+Ploby audit — p20951e674af4 "카페 온담 홈페이지 리뉴얼"
+records: evidence/projects/p20951e674af4/log.jsonl (38 lines), head eb04663a4e0056a2…
+[ok] every signature verifies (demo HMAC keys) and the hash chain recomputes to the head
+[ok] replaying the log alone rebuilds the state: ACTIVE, funded 1,500,000원, reserved 1,000,000원, paid 24,200원, refunded 0원
+policy v1 0xe0425eb109448149… ACTIVE: signed by client ✓, contractor ✓
+
+payments
+  E1 24,200원 → contractor 0x7de24839… under policy v1: INSIDE what the client allowed
+     #5 request_commitment by contractor via the purchase agent (도메인 1년 등록); document e30e1a5e479c… hash ok, total appears in it
+     reading: gabia / domain / 22,000원 + fee 2,200원 = 24,200원
+     rules: allocation ✓  state ✓  window ✓  payment_mode ✓  vendor ✓  category ✓  payee ✓  per_purchase ✓  expense_budget ✓  category_budget ✓  funds ✓  evidence ✓  probable_duplicate ✓  split_pattern ✓  price_anomaly ✓  → APPROVE
+     #8 review_settlement by client: 24,200원 — the client approved the receipt
+
+stops (recorded, never silent)
+  E2 BLOCK at #11 (purchase agent): 건별 한도 (부가세·수수료 포함) — BLOCKED
+  E4 BLOCK at #15 (purchase agent): 허용 공급자 — BLOCKED
+  E5 HOLD at #17 (purchase agent): 가격 이상 (카테고리 대표값 대비) — EXPIRED
+  E6 BLOCK at #22 (purchase agent): 프로젝트 상태 (진행 중, 새 약정 일시정지 아님) — BLOCKED
+  E7 BLOCK at #25 (purchase agent): 정책 기간 — BLOCKED
+
+chain
+  contract 0x0c54143Ba8480c9C041E27C5FDed6e13B2541762 (https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762)
+  [ok] #3.0 open   https://testnet.monadvision.com/tx/0x1697a18e58f9089d64df011ceba5a94ac362cdb771a72a3745d6e84ce7807751
+  [ok] #3.1 fund   https://testnet.monadvision.com/tx/0xaede16388700c247e1ccd465cded297218e934a84479d355c45a26bc84254b23
+  [ok] #3.2 decide https://testnet.monadvision.com/tx/0x2ca05e43795df27231fc7fe2ee45abad0c82108ec5e0b0ce4224bb97ee4b5360
+  [ok] #5.0 decide https://testnet.monadvision.com/tx/0xe44e6c6977570b23460eeebfe901adefbf185ec083e13f34afa9182b8284a97d
+  [ok] #8.0 settle https://testnet.monadvision.com/tx/0xf9ae2da4ccb12527dbb8eaeb5575a5050f2f64c2cec4ab4d1558380cfa47ede4
+  [ok] #11.0 decide https://testnet.monadvision.com/tx/0xe6c2340192ab7c7369127f79f536c4e86369876b4d9b85ecfa6f6e8a22829cf9
+  [ok] #13.0 decide https://testnet.monadvision.com/tx/0x6f13721f1297c94d3cfc7bddbf7187104540d43507359f63c76607fb036da436
+  [ok] #15.0 decide https://testnet.monadvision.com/tx/0xbd34ede855731d99ec9d450e154bc3de8d1163cde2f5cfd9f592bc7ffa6a31c2
+  [ok] #17.0 decide https://testnet.monadvision.com/tx/0x81566fccbb1f0b88e6c9f38004b685122051a0ae71345cb38037959536269f53
+  [ok] #18.0 settle https://testnet.monadvision.com/tx/0xfe206d080eacdbbbca07b57cc4b2e2cad450644a8519c889349fb836fba28e29
+  [ok] #20.0 pause  https://testnet.monadvision.com/tx/0x3517e8493ed6b78164e0c8e5f54c18bc9ba464a2ff259902a7abdcacba599e3f
+  [ok] #22.0 decide https://testnet.monadvision.com/tx/0x69b5e875f1f12822a15cfe43661941a93a1e2cf8d5f44c8b25299c4a1866073c
+  [ok] #23.0 pause  https://testnet.monadvision.com/tx/0x7335d51cedaa6b08d8d8587747d97c34252bd30b5193d0b85a3b065f1d2f5cc7
+  [ok] #25.0 decide https://testnet.monadvision.com/tx/0x8fba4e7f2af3b6d85eb43122a03d31f6a8531667000cf62fb1bdec8ea021b651
+  [ok] the contract's funded/reserved/paid/refunded equal the replayed ledger
+
+verdict: 1 of 1 payments shown inside what the client allowed; 5 stops recorded; records consistent

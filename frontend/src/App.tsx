@@ -15,7 +15,15 @@ import type { Clock, DocRef, Meta, Role } from "./types"
 
 const ROLE_KEY = "ploby.role"
 
+/** `#/p/…?as=contractor` pins a window to a role (two windows side by side share localStorage). */
+function roleInUrl(): Role | null {
+  const r = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("as")
+  return r === "client" || r === "contractor" || r === "resolver" ? r : null
+}
+
 function loadRole(): Role {
+  const pinned = roleInUrl()
+  if (pinned) return pinned
   try {
     const r = window.localStorage.getItem(ROLE_KEY)
     if (r === "client" || r === "contractor" || r === "resolver") return r
@@ -102,6 +110,8 @@ export function App() {
   useEffect(() => {
     const on = () => {
       setRoute(parseHash())
+      const pinned = roleInUrl()
+      if (pinned) setRoleState(pinned)
       window.scrollTo(0, 0)
     }
     window.addEventListener("hashchange", on)
@@ -117,11 +127,17 @@ export function App() {
       .clock()
       .then(setClock)
       .catch(() => setClock(null))
-  }, [])
+  }, [i18n.language])
 
   const setRole = (r: Role) => {
     setRoleState(r)
     saveRole(r)
+    if (roleInUrl()) {
+      const [path, query = ""] = window.location.hash.split("?")
+      const q = new URLSearchParams(query)
+      q.set("as", r)
+      window.history.replaceState(null, "", `${path}?${q.toString()}`)
+    }
   }
 
   const navigate = useCallback((hash: string) => {
@@ -187,12 +203,11 @@ export function App() {
                 className="demo-toggle"
                 aria-expanded={demoOpen}
                 aria-controls="demo-tools"
-                aria-label={t("app.demoTools")}
                 onClick={() => setDemoOpen(!demoOpen)}
               >
                 <span className="demo-dot" />
                 <span className="desktop-only">{t("app.demoTools")}</span>
-                <span className="mobile-only">{t("app.demoShort")}</span>
+                <span className="mobile-only">Demo</span>
               </button>
               <label className="language-select">
                 <span className="sr-only">{t("common.language")}</span>
@@ -263,10 +278,10 @@ export function App() {
         </div>
 
         <main className="main" id="main-content" tabIndex={-1}>
-          {route.page === "home" && <Home key={role} refreshKey={tick} />}
+          {route.page === "home" && <Home key={`${role}-${i18n.language}`} refreshKey={tick} />}
           {route.page === "new" && <NewProject />}
           {route.page === "project" && (
-            <ProjectPage key={`${route.id}-${role}`} id={route.id} refreshKey={tick} onNow={onNow} />
+            <ProjectPage key={`${route.id}-${role}-${i18n.language}`} id={route.id} refreshKey={tick} onNow={onNow} />
           )}
         </main>
 

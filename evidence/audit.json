@@ -1,0 +1,437 @@
+{
+  "project": "p20951e674af4",
+  "name": "카페 온담 홈페이지 리뉴얼",
+  "log": "evidence/projects/p20951e674af4/log.jsonl",
+  "lines": 38,
+  "head": "eb04663a4e0056a2ece10252edff7ceb1a56de4f37cf3bae47ee0dc2c9671323",
+  "replay": {
+    "ok": true,
+    "refused": null,
+    "status": "ACTIVE",
+    "ledger": {
+      "budget": 1500000,
+      "expense_budget": 500000,
+      "milestone_budget": 1000000,
+      "funded": 1500000,
+      "expense_reserved": 0,
+      "milestone_reserved": 1000000,
+      "expense_released": 24200,
+      "milestone_released": 0,
+      "released": 24200,
+      "refunded": 0,
+      "migrated_out": 0,
+      "available": 475800,
+      "expense_capacity": 475800,
+      "milestone_capacity": 0,
+      "deposit_room": 0,
+      "funding_needed": 0
+    }
+  },
+  "policies": [
+    {
+      "version": 1,
+      "hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b",
+      "status": "ACTIVE",
+      "signed": {
+        "client": 1790812799605,
+        "contractor": 1790812799606
+      },
+      "readback": [
+        "총 한도: 50만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+        "공급자: AWS, Vercel, 가비아, Figma, Adobe Stock만",
+        "기간: 지금부터 2026-10-31(토) 23:59까지",
+        "한 번에: 20만 원까지 (부가세·수수료 포함)",
+        "횟수: 제한 없음"
+      ]
+    }
+  ],
+  "payments": [
+    {
+      "ref": "E1",
+      "kind": "COMMITMENT",
+      "status": "SETTLED",
+      "paid": 24200,
+      "payee": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
+      "policy": {
+        "version": 1,
+        "hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b"
+      },
+      "request": {
+        "line": 5,
+        "op": "request_commitment",
+        "by": "contractor",
+        "via": {
+          "need": "도메인 1년 등록",
+          "task": "A1",
+          "try": 1,
+          "why": "제시된 도메인(ondam-cafe.co.kr) 1년 등록 서비스 제공."
+        },
+        "document": {
+          "id": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "name": "가비아 도메인 견적 (24,200원)"
+        },
+        "evidence": {
+          "found": true,
+          "id": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "hash_ok": true,
+          "total_in_text": true
+        },
+        "reading": {
+          "vendor": "gabia",
+          "category": "domain",
+          "amount": 22000,
+          "fee": 2200,
+          "total": 24200
+        },
+        "onchain_before": {
+          "skipped": "3 calls pending"
+        }
+      },
+      "decision": {
+        "result": "APPROVE",
+        "reason": "all rules passed",
+        "rules": [
+          {
+            "rule": "allocation",
+            "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "state",
+            "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "window",
+            "label": "정책 기간",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "payment_mode",
+            "label": "결제 방식 (환급)",
+            "ok": true,
+            "detail": "환급 (작업자에게 지급)"
+          },
+          {
+            "rule": "vendor",
+            "label": "허용 공급자",
+            "ok": true,
+            "detail": "가비아"
+          },
+          {
+            "rule": "category",
+            "label": "허용 카테고리",
+            "ok": true,
+            "detail": "도메인"
+          },
+          {
+            "rule": "payee",
+            "label": "수취인 (정책에 등록된 작업자 지갑)",
+            "ok": true,
+            "detail": "작업자 0x7de24839…"
+          },
+          {
+            "rule": "per_purchase",
+            "label": "건별 한도 (부가세·수수료 포함)",
+            "ok": true,
+            "detail": "24,200원"
+          },
+          {
+            "rule": "expense_budget",
+            "label": "경비 예산 잔여",
+            "ok": true,
+            "detail": "잔여 500,000원"
+          },
+          {
+            "rule": "category_budget",
+            "label": "카테고리 예산 잔여",
+            "ok": true,
+            "detail": "카테고리 예산 없음"
+          },
+          {
+            "rule": "funds",
+            "label": "예치금 가용 잔액",
+            "ok": true,
+            "detail": "가용 500,000원"
+          },
+          {
+            "rule": "evidence",
+            "label": "문서 판독과 증빙 수준",
+            "ok": true,
+            "detail": "E1 업로드 문서, 판독 일치"
+          },
+          {
+            "rule": "probable_duplicate",
+            "label": "중복 가능성 (같은 공급자·같은 금액)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "split_pattern",
+            "label": "분할 청구 (건별 한도 회피)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "price_anomaly",
+            "label": "가격 이상 (카테고리 대표값 대비)",
+            "ok": true,
+            "detail": ""
+          }
+        ]
+      },
+      "client_approval": [],
+      "payments": [
+        {
+          "line": 8,
+          "op": "review_settlement",
+          "by": "client",
+          "amount": 24200,
+          "how": "the client approved the receipt",
+          "text": "클라이언트가 E1 정산을 승인해 24,200원이 작업자에게 지급됐습니다"
+        }
+      ],
+      "receipt": {
+        "document": {
+          "id": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "name": "가비아 영수증 (24,200원)"
+        },
+        "claimed": 24200,
+        "evidence": {
+          "found": true,
+          "id": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "hash_ok": true,
+          "total_in_text": true
+        }
+      },
+      "cap": 24200,
+      "inside": true
+    }
+  ],
+  "refunds": [],
+  "stops": [
+    {
+      "ref": "E2",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "per_purchase",
+      "label": "건별 한도 (부가세·수수료 포함)",
+      "line": 11,
+      "via": {
+        "need": "메인 페이지 이미지 소스",
+        "task": "A2",
+        "try": 1,
+        "why": "40장 팩이 우선이며, 웹사이트 사용이 허용된 정식 라이선스를 제공합니다."
+      },
+      "amount": 203500
+    },
+    {
+      "ref": "E4",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "vendor",
+      "label": "허용 공급자",
+      "line": 15,
+      "via": {
+        "need": "기계식 키보드",
+        "task": "A3",
+        "try": 1,
+        "why": "로지텍 MX Mechanical 무선 기계식 키보드가 작업실 용도에 적합한 제품입니다."
+      },
+      "amount": 129000
+    },
+    {
+      "ref": "E5",
+      "result": "HOLD",
+      "status": "EXPIRED",
+      "rule": "price_anomaly",
+      "label": "가격 이상 (카테고리 대표값 대비)",
+      "line": 17,
+      "via": {
+        "need": "웹 호스팅",
+        "task": "A4",
+        "try": 1,
+        "why": "AWS 청구서로, EC2, RDS, S3/CloudFront 서비스를 포함하는 웹 호스팅 비용을 포함합니다."
+      },
+      "amount": 180000
+    },
+    {
+      "ref": "E6",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "state",
+      "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+      "line": 22,
+      "via": {
+        "need": "디자인 협업 툴 2석",
+        "task": "A5",
+        "try": 1,
+        "why": "피그마 프로페셔널 2석이 디자인 협업 툴로 명확히 요청된 요구사항에 적합하기 때문입니다."
+      },
+      "amount": 99000
+    },
+    {
+      "ref": "E7",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "window",
+      "label": "정책 기간",
+      "line": 25,
+      "via": {
+        "need": "호스팅 플랜 한 달 구매",
+        "task": "A6",
+        "try": 1,
+        "why": "버셀 프로 플랜 1개월 구독 요금을 명시한 영수증이 제공되었습니다."
+      },
+      "amount": 33000
+    }
+  ],
+  "chain": {
+    "contract": "0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "contract_url": "https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "calls": [
+      {
+        "line": 3,
+        "n": 0,
+        "call": "open",
+        "tx": "0x1697a18e58f9089d64df011ceba5a94ac362cdb771a72a3745d6e84ce7807751",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x1697a18e58f9089d64df011ceba5a94ac362cdb771a72a3745d6e84ce7807751"
+      },
+      {
+        "line": 3,
+        "n": 1,
+        "call": "fund",
+        "tx": "0xaede16388700c247e1ccd465cded297218e934a84479d355c45a26bc84254b23",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xaede16388700c247e1ccd465cded297218e934a84479d355c45a26bc84254b23"
+      },
+      {
+        "line": 3,
+        "n": 2,
+        "call": "decide",
+        "tx": "0x2ca05e43795df27231fc7fe2ee45abad0c82108ec5e0b0ce4224bb97ee4b5360",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x2ca05e43795df27231fc7fe2ee45abad0c82108ec5e0b0ce4224bb97ee4b5360"
+      },
+      {
+        "line": 5,
+        "n": 0,
+        "call": "decide",
+        "tx": "0xe44e6c6977570b23460eeebfe901adefbf185ec083e13f34afa9182b8284a97d",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xe44e6c6977570b23460eeebfe901adefbf185ec083e13f34afa9182b8284a97d"
+      },
+      {
+        "line": 8,
+        "n": 0,
+        "call": "settle",
+        "tx": "0xf9ae2da4ccb12527dbb8eaeb5575a5050f2f64c2cec4ab4d1558380cfa47ede4",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xf9ae2da4ccb12527dbb8eaeb5575a5050f2f64c2cec4ab4d1558380cfa47ede4"
+      },
+      {
+        "line": 11,
+        "n": 0,
+        "call": "decide",
+        "tx": "0xe6c2340192ab7c7369127f79f536c4e86369876b4d9b85ecfa6f6e8a22829cf9",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xe6c2340192ab7c7369127f79f536c4e86369876b4d9b85ecfa6f6e8a22829cf9"
+      },
+      {
+        "line": 13,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x6f13721f1297c94d3cfc7bddbf7187104540d43507359f63c76607fb036da436",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x6f13721f1297c94d3cfc7bddbf7187104540d43507359f63c76607fb036da436"
+      },
+      {
+        "line": 15,
+        "n": 0,
+        "call": "decide",
+        "tx": "0xbd34ede855731d99ec9d450e154bc3de8d1163cde2f5cfd9f592bc7ffa6a31c2",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xbd34ede855731d99ec9d450e154bc3de8d1163cde2f5cfd9f592bc7ffa6a31c2"
+      },
+      {
+        "line": 17,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x81566fccbb1f0b88e6c9f38004b685122051a0ae71345cb38037959536269f53",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x81566fccbb1f0b88e6c9f38004b685122051a0ae71345cb38037959536269f53"
+      },
+      {
+        "line": 18,
+        "n": 0,
+        "call": "settle",
+        "tx": "0xfe206d080eacdbbbca07b57cc4b2e2cad450644a8519c889349fb836fba28e29",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xfe206d080eacdbbbca07b57cc4b2e2cad450644a8519c889349fb836fba28e29"
+      },
+      {
+        "line": 20,
+        "n": 0,
+        "call": "pause",
+        "tx": "0x3517e8493ed6b78164e0c8e5f54c18bc9ba464a2ff259902a7abdcacba599e3f",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x3517e8493ed6b78164e0c8e5f54c18bc9ba464a2ff259902a7abdcacba599e3f"
+      },
+      {
+        "line": 22,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x69b5e875f1f12822a15cfe43661941a93a1e2cf8d5f44c8b25299c4a1866073c",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x69b5e875f1f12822a15cfe43661941a93a1e2cf8d5f44c8b25299c4a1866073c"
+      },
+      {
+        "line": 23,
+        "n": 0,
+        "call": "pause",
+        "tx": "0x7335d51cedaa6b08d8d8587747d97c34252bd30b5193d0b85a3b065f1d2f5cc7",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x7335d51cedaa6b08d8d8587747d97c34252bd30b5193d0b85a3b065f1d2f5cc7"
+      },
+      {
+        "line": 25,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x8fba4e7f2af3b6d85eb43122a03d31f6a8531667000cf62fb1bdec8ea021b651",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x8fba4e7f2af3b6d85eb43122a03d31f6a8531667000cf62fb1bdec8ea021b651"
+      }
+    ],
+    "onchain": {
+      "client": "0xd51bb0f75bebcb03ee5b40f1f0a04a5ba060f845",
+      "contractor": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
+      "policy_hash": "0xe0425eb10944814996a9b7cdc2f1596fa4ba5c9c46646e8500bdf66f898a5d1b",
+      "budget": 1500000,
+      "funded": 1500000,
+      "reserved": 1000000,
+      "paid": 24200,
+      "refunded": 0,
+      "paused": false,
+      "log_head": "0xf9393a0f6b59b2d38d3cba693aa84e94276ba140479d720086fe7b6b02fc47b3",
+      "available": 475800
+    },
+    "engine": {
+      "funded": 1500000,
+      "reserved": 1000000,
+      "paid": 24200,
+      "refunded": 0
+    },
+    "balances_match": true,
+    "problems": []
+  },
+  "verdict": {
+    "records_consistent": true,
+    "payments": 1,
+    "inside": 1,
+    "stops": 5
+  }
+}

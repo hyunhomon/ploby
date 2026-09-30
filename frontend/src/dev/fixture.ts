@@ -1219,9 +1219,11 @@ export const fixtureBackend: Backend = {
   act: async (_id, as, action, params) => {
     throw new ApiError(`픽스처 모드: 서버에 보내지 않았습니다 — ${JSON.stringify({ as, action, ...params })}`, "fixture", 0)
   },
-  retryChain: async (id, as) => {
-    if (id === B_ID) return viewB(as)
-    if (id === A_ID) return viewA(as)
-    throw new ApiError(`픽스처에 없는 프로젝트: ${id}`, "not_found", 404)
+  onchain: async () => ({ chain: { enabled: false } }),
+  agentRun: async () => {
+    throw new ApiError("픽스처 모드: 구매 에이전트는 서버에서만 실행됩니다", "fixture", 0)
+  },
+  audit: async () => {
+    throw new ApiError("픽스처 모드: 감사는 서버의 로그로만 실행됩니다", "fixture", 0)
   },
 }

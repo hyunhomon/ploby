@@ -28,9 +28,11 @@ from .pcp_bridge import domain, form as forms, lang, readback
 
 ROLES = ('client', 'contractor', 'resolver')
 SIGNERS = ('client', 'contractor')
-NAMES = {'client': '카페 온담', 'contractor': '한결웹스튜디오', 'resolver': 'Ploby 분쟁 해결자'}
+SIGNED = ROLES + ('relayer',)  # the relayer signs the chain results it writes back (escrow/chain.py)
+NAMES = {'client': '카페 온담', 'contractor': '한결웹스튜디오', 'resolver': 'Ploby 분쟁 해결자',
+         'relayer': 'Ploby 체인 릴레이어'}
 ROLE_KO = {'client': '클라이언트', 'contractor': '작업자', 'resolver': '분쟁 해결자'}
-DEMO_KEYS = {r: f'ploby-demo-key:{r}'.encode('utf-8') for r in ROLES}
+DEMO_KEYS = {r: f'ploby-demo-key:{r}'.encode('utf-8') for r in SIGNED}
 KST = dt.timezone(dt.timedelta(hours=9))
 HOUR, DAY = 3600, 86400
 DEFAULT_PERIODS = {'client_review_hours': 72, 'resolver_review_days': 7, 'evidence_days': 7, 'reservation_days': 7}

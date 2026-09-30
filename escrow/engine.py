@@ -24,6 +24,17 @@ E_CLOCK = {
     'reservation': ('예약 유효기간 (구매 보고)', 'contractor', '예약 만료, 가용 복귀'),
     'evidence': ('증빙 제출 기한', 'contractor', '증빙 결함 → 분쟁 해결'),
 }
+CHAIN_KO = {  # call -> what it did, in the log's words
+    'open': lambda a: f"프로젝트 개설 (예산 {won(a.get('budget') or 0)}, 수취인 작업자 지갑 고정)",
+    'fund': lambda a: f"클라이언트 예치 {won(a.get('amount') or 0)}",
+    'accept': lambda a: f"클라이언트가 새 정책 해시 수락 (예산 {won(a.get('budget') or 0)})",
+    'pause': lambda a: '새 약정 일시정지' if a.get('paused') else '새 약정 재개',
+    'decide': lambda a: f"{a.get('ref')} {a.get('decision')} ({a.get('rule')}) {won(a.get('amount') or 0)}"
+                        + (' 예약' if a.get('decision') == 'APPROVE' else ' 기록, 돈은 움직이지 않음'),
+    'settle': lambda a: f"{a.get('ref')} 작업자에게 {won(a.get('pay') or 0)} 지급"
+                        + (f", 예약 {won(a['returned'])} 반환" if a.get('returned') else ''),
+    'refund': lambda a: f"클라이언트에게 {won(a.get('amount') or 0)} 환불",
+}
 RESOLVER_FALLBACK = {'CLIENT_REVIEW': '약정된 적격 금액 정산', 'POLICY_OR_SYSTEM_AMBIGUITY': '청구액과 약정 상한 중 작은 금액 정산',
                      'EVIDENCE_DEFECT': '거절, 예약 가용 복귀', 'INTEGRITY_RISK': '거절, 예약 가용 복귀'}
 
@@ -48,6 +59,55 @@ class Project(Core, Milestones, Expenses, Changes):
         if p['target'] == 'milestone':
             return '타임아웃: ' + self.milestone_timeout(p['kind'], self.milestones[p['ref']])
         return '타임아웃: ' + self.expense_timeout(p['kind'], self.expenses[p['ref']], line['at'])
+
+    # -- the purchase agent (escrow/agent.py)
+    def op_agent_task(self, line, p, i):
+        """The contractor delegates purchases to the agent: the task, the offers, and the plan the model made (an
+        input, like a reading). It moves no money: each purchase the agent tries is its own request, under the rules."""
+        self.need(line, 'contractor')
+        self.state_is('ACTIVE', 'CLOSING')
+        plan, offers = i.get('plan') or {}, p.get('offers') or []
+        if not plan.get('needs'):
+            raise Refused('에이전트 계획이 없습니다', 'invalid')
+        tid = f"A{len(self.agent_tasks) + 1}"
+        self.agent_tasks.append({'id': tid, 'task': str(p.get('task') or '')[:500], 'offers': offers, 'plan': plan,
+                                 'ai': i.get('ai'), 'at': line['at'], 'line': len(self.log)})
+        name = {o.get('id'): o.get('name') for o in offers}
+        needs = '; '.join(f"{n['need']}: {' → '.join(name.get(x, x[:8]) for x in n['offers']) or '맞는 견적 없음'}"
+                          for n in plan['needs'])
+        return f"작업자가 구매 에이전트({tid})에게 맡겼습니다: “{str(p.get('task') or '')[:60]}” — 계획 {needs}"
+
+    def agent_view(self, t):
+        mine = [e for e in self.expenses.values() if (e.get('via') or {}).get('task') == t['id']]
+        return {**t, 'requests': [{'expense': e['id'], 'need': e['via'].get('need'), 'try': e['via'].get('try'),
+                                   'document': (e['quote'] or {}).get('document'), 'status': e['status'],
+                                   'result': (e['decision'] or {}).get('result'),
+                                   'rule': next((r['rule'] for r in (e['decision'] or {}).get('rules') or []
+                                                 if r['ok'] is False), None)} for e in mine]}
+
+    # -- the chain (escrow/chain.py)
+    def op_chain(self, line, p, i):
+        """A contract call's result, written back by the relayer next to the log line it mirrors: the tx hash, or
+        the contract's refusal (never sent). It moves no money here: the chain mirrors this ledger."""
+        self.need(line, 'relayer')
+        at, call, args = p.get('line'), p.get('call'), p.get('args') or {}
+        if not isinstance(at, int) or not 0 <= at < len(self.log) or self.log[at]['op'] == 'chain':
+            raise Refused('체인 결과가 가리키는 로그 줄이 없습니다', 'invalid')
+        if call not in CHAIN_KO:
+            raise Refused(f'알 수 없는 체인 호출 {call!r}', 'invalid')
+        r = {'line': at, 'n': p.get('n'), 'call': call, 'args': args, 'tx': p.get('tx'), 'url': p.get('url'),
+             'ok': bool(p.get('ok')), 'error': p.get('error'), 'block': p.get('block')}
+        self.log[at].setdefault('chain', []).append(r)
+        target = self.expenses.get(args.get('ref')) or self.milestones.get(args.get('ref'))
+        if target is not None:
+            target.setdefault('chain', []).append(r)
+        self.chain.append(r)
+        what = CHAIN_KO[call](args)
+        if r['ok'] and r['tx']:
+            return f"온체인 기록 (#{at}): {what} — tx {r['tx'][:10]}…{r['tx'][-6:]}"
+        if r['ok']:
+            return f"온체인 기록 (#{at}): {what} — 이미 체인에 있음"
+        return f"온체인 거절 (#{at}): {what} — 컨트랙트가 거부 ({r['error']}), 전송하지 않음"
 
     # -- what a role sees
     def deadlines(self):
@@ -103,6 +163,8 @@ class Project(Core, Milestones, Expenses, Changes):
         if role in pol.SIGNERS and s == 'ACTIVE':
             act('begin_close', '종료 시작 (CLOSING)', {'kind': 'project', 'id': self.id})
             act('draft_change_order', '범위 밖 요청 → 변경 주문 초안', None)
+        if role == 'contractor' and s == 'ACTIVE':
+            act('agent_run', '구매 에이전트에게 맡기기 (정책 안에서만 요청)', None)
         if role == 'contractor' and s == 'ACTIVE' and not self.paused:
             act('request_commitment', '구매 전 약정 요청', None)
             act('retroactive_request', '사후 청구 (사전 약정 없음)', None)
@@ -194,7 +256,8 @@ class Project(Core, Milestones, Expenses, Changes):
                 'ledger': self.ledger(), 'milestones': list(self.milestones.values()),
                 'expenses': [self.expense_view(e) for e in self.expenses.values()],
                 'change_orders': list(self.change_orders.values()), 'actions': self.actions(role),
-                'deadlines': self.deadlines(), 'log': self.log, 'head': self.head}
+                'deadlines': self.deadlines(), 'log': self.log, 'head': self.head,
+                'agent_tasks': [self.agent_view(t) for t in self.agent_tasks]}
 
     def summary(self, role, now):
         todo = [a for a in self.actions(role) if a['needs_response']]

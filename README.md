@@ -1,71 +1,119 @@
 # Ploby
 
-외주 프로젝트의 **작업 대금과 프로젝트 경비를 미리 확보하고, 양측이 합의한 조건에 따라 지급하는 양자 간 에스크로**입니다.
+**Declared function (GWDC Challenge B):** Ploby keeps an AI purchasing agent's spending inside the budget a client funded: the agent can only *request* purchases, code decides each request against a policy both parties signed, a contract on Monad testnet holds and moves the money, and every approval and every stop is recorded so that anyone can reconstruct whether a payment was allowed.
 
-> **AI는 정보를 해석하지만 돈을 움직일 권한은 갖지 않습니다.**
+**Reviewers, in two minutes:** [evidence](docs/evidence.md) — six purchase-agent runs on Kiln and Monad testnet, five pushed outside the line, each with its log line, decision and transaction · [chain](docs/chain.md) — what PlobyEscrow enforces and what the engine reads, writes and settles on chain · [efficiency](docs/efficiency.md) — Kiln tokens, cost and energy per flow. Re-check it without any key: `python3 -m escrow.audit evidence/projects/p20951e674af4/log.jsonl --data evidence`, then `python3 harness/tamper.py` and `python3 harness/check.py` (Python 3 standard library only).
 
-제품의 목적, 흐름, 의사결정, 권한, 회계는 [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)가 1급 기준이며, 이 문서는 수정하지 않는 불변 문서입니다 (문서 안에서는 제품을 이전 이름인 SmartEscrow로 부릅니다). 그 문서 §22에 따라 현재 동작은 코드와 테스트가 기준이고, 이 README와 [`docs/api.md`](docs/api.md)가 현재 구현을 설명합니다. 목표 아키텍처의 세부 결정은 [`docs/adr`](docs/adr/README.md)에 있습니다. 아래에서 **현재 구현**과 **목표 설계**를 구분해 적습니다.
+> **The AI interprets information; it never has the authority to move money.**
 
-## 현재 구현
+Ploby is a **two-party escrow that secures a freelance project's fees and project expenses up front and pays them out on the terms both sides agreed**. The users are a small café that commissioned a website redesign (the client, Café Ondam) and the web studio doing the work (the contractor, Hangyeol Web Studio). Today, project expenses such as domains, hosting and design tools are either prepaid by the contractor, who may never be reimbursed, or charged to a card the client hands over without knowing what was paid for or why. Payment rails record who sent money to whom, not who allowed it and on what terms.
 
-| 영역 | 현재 구현 | 목표 설계 (미구현) |
+## Challenge B at a glance
+
+| Criterion | In Ploby | Evidence |
 | --- | --- | --- |
-| 정책 | 양측이 같은 정책 해시에 서명해야 발효되는 불변·버전형 정책. 경비 규칙은 PCP 규칙 언어(양식 또는 문장 → 두 번의 독립 판독 → 읽어드리기) | RFC 8785 + keccak256, EIP-712 서명 (현재: 정렬 JSON + sha256, 데모 키 HMAC 서명) |
-| 작업 대금 | 선예치·예약된 마일스톤, 제출 통지, 클라이언트 검수 기한, 인수 기준 기반 이의, 분쟁 해결자, 침묵 시 지급, 미납·착수 기한 | 온체인 제출 통지와 기한 |
-| 경비 | 구매 전 약정 → 구매 보고 → 영수증 제출 통지 → 정산, 사후 청구, 약정 상한 초과분은 변경 주문 | 공급자 직접 지급, 외화 |
-| 판정 | §6 순서의 결정론적 규칙(배분·상태·기간·결제 방식·공급자·카테고리·수취인·건별 한도·경비/카테고리 예산·가용 잔액) → BLOCK, 판독 불신·위험 신호(중복·분할·가격 이상) → HOLD, 모두 통과 → APPROVE(예약) | 증빙 확인 서비스, 인보이스 배분 레지스트리 |
-| HOLD | 유형별(CLIENT_REVIEW, POLICY_OR_SYSTEM_AMBIGUITY, EVIDENCE_DEFECT, INTEGRITY_RISK, EXCESS_AMOUNT) 클라이언트 기한·분쟁 해결 기한·최종 대체 결과, 누구나 실행하는 타임아웃 | 체인 시간 기준 permissionless 타임아웃 |
-| 생명주기 | DRAFT → ACTIVE → CLOSING → CLOSED / CANCELLED, 새 약정 일시정지, 미예약 잔액 환불 | 보안 동결, RECOVERY_ONLY, 마이그레이션 |
-| 기록 | 모든 변경이 서명된 해시 체인 로그 한 줄, 로그만으로 같은 상태 재생. 원문 증빙은 로그 밖에 저장하고 로그에는 해시·매니페스트 해시만 | 암호화 증빙 저장소, 온체인 해시 앵커 |
-| 집행 | 오프체인 엔진이 규칙을 집행. `.env`에 배포 주소와 키가 있으면 Base Sepolia `ExpenseEscrow`가 경비 BLOCK·HOLD를 기록하고 정산액을 MockUSDC로 지급. 마일스톤·환불은 오프체인 | 프로젝트별 불변 `ProjectEscrow` |
-| AI | Kiln `qwen3-32b`: 경비 규칙 문장, 견적서·영수증 판독, 변경 주문 초안. 실패하면 HOLD, 절대 자동 승인 없음. 모델의 사고 과정은 저장하지 않음 | — |
-| 화면 | 역할별 공간(클라이언트·작업자·분쟁 해결자), 데모 시계 | 지갑 로그인 |
+| Declared function & user need | The sentence above. **What the AI does**: the contractor's purchase agent picks among quotes and drafts a purchase plan; reading of quotes and receipts; compiling expense-rule sentences into rules (two independent readings); drafting change orders. **What code does**: every decision (the rules, in §6 order), reserving, paying and refunding money, deadlines and timeouts, the signed hash-chain log, chain calls | [`escrow/agent.py`](escrow/agent.py), [`escrow/ai.py`](escrow/ai.py), [`escrow/expenses.py`](escrow/expenses.py) |
+| Boundaries & stopping | Boundary = the policy both parties signed (allowed suppliers and categories, per-item limit **including VAT and fees**, expense budget, period, available balance, client pause). Enforced in two places: ① before reserving money, the engine applies the rules to the supplier's own document, not to what the agent says ② the contract pays only the contractor wallet named in the policy, cannot exceed the deposit, and allows no new reservations while paused. Stops are recorded too, as BLOCK/HOLD decisions in the log and on chain | [`docs/evidence.md`](docs/evidence.md): five runs pushed outside the boundary (over the limit because of VAT, unlisted supplier, injected invoice, client pause, period expired), each with log line + tx. The agent BLOCKed over VAT moves to the next candidate in its plan (a 10-pack) and gets APPROVE |
+| Kiln integration & efficiency | Kiln `qwen3-32b` (the organizers switched models from gpt-oss-120b, which returns 404 on Kiln). Metered per flow: `agent`, `quote`, `write`/`read`/`reread`, `change`. **How responses drive decisions**: the rules check the supplier, amount and fees the reading returned, and the engine's decision (APPROVE · HOLD · BLOCK) sets the agent's next move (next candidate · wait · stop). Zero LLM calls in payment decisions; rules compiled once per project; one reading per document (the 172 replays after that cost $0); one plan per agent task. The full app flow: 28 API calls, $0.0032, with 53% of prompt tokens served from Kiln's prefix cache. Energy: 4 RNGD cards × 180 W × latency upper bound, plus a per-token estimate from benchmarks (sources cited) | [`docs/efficiency.md`](docs/efficiency.md), `python3 harness/usage_report.py`, the Kiln generation id table in [`docs/evidence.md`](docs/evidence.md) |
+| Blockchain integration | Monad testnet (10143) [PlobyEscrow `0x0c54…1762`](https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762) + [tKRW `0xE73a…af58`](https://testnet.monadvision.com/address/0xE73a03D814434987f33f5E2b6b51c1dD8A44af58). Before deciding, the engine **reads the contract's pause state and available balance**, then **records** the decision (decide) and **settles** the money (settle · refund). Every call carries the hash-chain head of its log line, and the tx hash is written back to the log | [`docs/chain.md`](docs/chain.md), [`src/PlobyEscrow.sol`](src/PlobyEscrow.sol), [`evidence/`](evidence) |
+| Approval & evidence | The client grants the budget (policy signature + deposit tx), tracks spending (agent tasks, decisions, tx links, on-chain balance vs. ledger), stops the agent (pause tx → the next request is recorded as BLOCK), and gets receipts (settlement records + Verify tab). A third party reconstructs everything from the records alone: `python3 -m escrow.audit` | [`escrow/audit.py`](escrow/audit.py), the **Verify** tab in the UI, [`evidence/audit.txt`](evidence/audit.txt) |
 
-`src/ExpenseEscrow.sol`은 Base Sepolia용 레거시 프로토타입입니다. `.env`에 주소와 키가 있으면 앱이 경비 예치·기록·정산을 그 컨트랙트에 보냅니다. 마일스톤 지급, 일시정지, 환불은 장부에 남고 MockUSDC로 움직이지 않습니다. 실제 자금에 사용하면 안 됩니다 ([`DECISIONS.md`](DECISIONS.md)).
-
-## 실행
-
-필요한 것: Python 3.12+ (Vercel과 동일), Node.js 20.19+ 또는 22.12+와 npm, `pip install -r requirements.txt` (체인 RPC), 선택 사항으로 Kiln API 키.
-
-```shell
-cp .env.example .env            # KILN_API_KEY와 Base Sepolia 주소·키
-pip3 install -r requirements.txt
-python3 -m escrow.server        # 저장소 루트에서 실행. API: http://127.0.0.1:3010/api  (데이터: var/)
-cd frontend && npm ci && npm run dev        # 화면: http://localhost:5173  (/api를 3010으로 프록시)
+```mermaid
+flowchart LR
+  C[Client<br/>grant budget · pause · receipts] -->|policy signature + deposit| E
+  W[Contractor] -->|assigns task| A[Purchase agent<br/>Kiln qwen3-32b<br/>one plan]
+  A -->|requests only<br/>supplier document attached| E[Ploby engine<br/>§6 rules = code<br/>APPROVE · HOLD · BLOCK]
+  K[Kiln reading<br/>quotes · receipts] -->|structured fields| E
+  E -->|one signed line| L[(Hash-chain log)]
+  L -->|a call per line + log head| X[PlobyEscrow<br/>Monad testnet]
+  X -->|pause · available balance| E
+  X -->|tx hash| L
+  L --> V[Audit tool<br/>reconstructs from records alone]
+  X --> V
 ```
 
-Vercel: 저장소 루트에서 `vercel --prod`. 환경 변수 — `KILN_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `.env.example`의 Base Sepolia 항목. 헬스: `GET /api/health`.
+<p>
+<img src="docs/images/expenses.png" width="32%" alt="Contractor view: the purchase agent's plan and the rules' decision on each request (APPROVE, HOLD for price anomaly, BLOCK for per-item limit, supplier or project state)">
+<img src="docs/images/overview.png" width="32%" alt="Client overview: deposited, reserved, paid, refunded and available amounts in PlobyEscrow on Monad testnet match the engine ledger">
+<img src="docs/images/activity.png" width="32%" alt="Records: each line of the signed hash-chain log with the link to the tx that mirrors it">
+</p>
+<p><img src="docs/images/audit.png" width="66%" alt="Verify tab: signatures, hash chain and replay, the grounds for every payment, recorded stops, and each tx matched against its log line"></p>
 
-화면 오른쪽 위에서 한국어·영어와 클라이언트·작업자·분쟁 해결자의 공간을 전환합니다. 선택한 언어는 브라우저에 저장됩니다. 상세 화면은 요약·작업·경비·계약·변경 요청·기록·관리로 나뉘며, 요약에는 예약 대금과 우선 확인할 일 3개를 표시합니다. **데모 도구**를 열면 데모 시계로 시간을 앞당길 수 있습니다. 경과한 기한의 최종 대체 결과가 적용됩니다. 새 프로젝트는 기본 정보 → 경비 규칙 → 작업과 대금 → 확인 및 생성 순서로 작성합니다. 시각·상호작용 규칙은 [디자인 시스템](docs/design-system.md)을 참고하세요. 샘플 문서(견적서·영수증·제출물)는 `escrow/quotes/`, `escrow/samples/`에 있습니다.
+To re-check the evidence yourself (no keys, public RPC only):
 
-## 검증
-
-```shell
-python3 harness/check.py        # 오프라인 불변식 47개: 모델·네트워크 없이 PROJECT_OVERVIEW 원칙과 성공 기준 확인
-forge test                      # 레거시 컨트랙트 테스트
-cd frontend && npm run build    # 타입 검사 + 프로덕션 빌드
-python3 -m pcp spend            # Kiln 키 사용액 (팀 공용 예산)
+```bash
+python3 -m escrow.audit evidence/projects/p20951e674af4/log.jsonl --data evidence
 ```
 
-## 구조
+[`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) is the first-class reference for the product's purpose, flows, decisions, permissions and accounting, and it is an immutable document that is never edited (it is written in Korean and still calls the product by its earlier name, SmartEscrow). Per its §22, code and tests define current behavior, and this README and [`docs/api.md`](docs/api.md) describe the current implementation. Detailed decisions for the target architecture are in [`docs/adr`](docs/adr/README.md). Below, the **current implementation** and the **target design** are kept apart.
 
-| 경로 | 내용 |
+## Current implementation
+
+| Area | Current implementation | Target design (not implemented) |
+| --- | --- | --- |
+| Policy | Immutable, versioned policy that takes effect only when both parties sign the same policy hash. Expense rules use the PCP rule language (form or sentence → two independent readings → readback) | RFC 8785 + keccak256, EIP-712 signatures (now: sorted JSON + sha256, HMAC signatures with demo keys) |
+| Work fees | Prefunded, reserved milestones; submission notices; client review deadlines; objections based on acceptance criteria; resolver; payment on silence; non-delivery and start deadlines | On-chain submission notices and deadlines |
+| Expenses | Purchase commitment before buying → purchase report → receipt submission notice → settlement; retroactive claims; amounts above the commitment cap go to a change order. **The contractor's purchase agent** plans and submits requests (next candidate on BLOCK, waits on HOLD, stops on pause) | Direct payment to suppliers, foreign currency |
+| Decision | Deterministic rules in §6 order (allocation, state, period, payment method, supplier, category, payee, per-item limit, expense/category budget, available balance) → BLOCK; untrusted reading or risk signals (duplicate, split, price anomaly) → HOLD; all pass → APPROVE (reserve). The contract's pause state and available balance are read before deciding, and the stricter side wins | Evidence verification service, invoice allocation registry |
+| HOLD | Per type (CLIENT_REVIEW, POLICY_OR_SYSTEM_AMBIGUITY, EVIDENCE_DEFECT, INTEGRITY_RISK, EXCESS_AMOUNT): client deadline, dispute-resolution deadline, final fallback outcome; timeouts anyone can execute | Permissionless timeouts on chain time |
+| Lifecycle | DRAFT → ACTIVE → CLOSING → CLOSED / CANCELLED, pause on new commitments, refund of the unreserved balance | Security freeze, RECOVERY_ONLY, migration |
+| Records | Every change is one line in a signed hash-chain log; the same state replays from the log alone. Original evidence is stored outside the log, with only hashes and manifest hashes in it. Each chain call leaves the log head on chain | Encrypted evidence store |
+| Enforcement | **Monad testnet `PlobyEscrow`**: deposits, reservations, payments and refunds are executed on chain, and APPROVE · HOLD · BLOCK decisions are recorded. The decision itself is made by the off-chain engine | A per-project immutable `ProjectEscrow` that enforces the decision too |
+| AI | Kiln `qwen3-32b`: purchase plans (agent), expense-rule sentences, reading of quotes and receipts, change order drafts. On failure the result is HOLD or no plan, never an automatic approval. The model's reasoning is not stored | — |
+| Audit | `python3 -m escrow.audit`: signatures, hash chain and replay; the grounds for every payment (policy, rule, approval, fallback outcome); the list of stops; the log's txs checked against the public chain | — |
+| UI | Role spaces (client, contractor, resolver), Korean and English, purchase agent, on-chain balance, **Verify** tab, demo clock | Wallet login |
+
+`src/ExpenseEscrow.sol` is a legacy prototype for Base Sepolia that remains in the repository but is **not connected to the current app.** The app uses `src/PlobyEscrow.sol`. Both contracts are testnet-only and must not be used with real funds ([`DECISIONS.md`](DECISIONS.md)).
+
+## Run it
+
+Requirements: Python 3 (standard library only), Node.js 20.19+ or 22.12+ with npm, and optionally a Kiln API key and Foundry (`cast` for chain writes).
+
+```shell
+cp .env.example .env            # with KILN_API_KEY, readings are real; without it, readings become HOLD. Add chain keys to mirror on chain
+python3 -m escrow.server        # run from the repository root. API: http://127.0.0.1:3010/api  (data: var/)
+cd frontend && npm ci && npm run dev        # UI: http://localhost:5173  (proxies /api to 3010)
+```
+
+At the top right of the UI you switch between Korean and English and between the client, contractor and resolver spaces. The chosen language is saved in the browser. The detail view is split into Overview, Tasks, Expenses, Contract, Change requests, Records, Verify and Admin. The overview shows reserved fees, what needs attention first, and the on-chain balance compared with the engine ledger. The contractor assigns tasks to the purchase agent in the **Expenses** tab, and the client sees in the same tab what the agent requested and what the rules answered. Open **Demo tools** to move time forward with the demo clock; the final fallback outcomes of passed deadlines are applied. A new project is created in four steps: basics → expense rules → tasks and fees → review and create. For visual and interaction rules, see the [design system](docs/design-system.md). Sample documents (quotes, receipts, deliverables) are in `escrow/quotes/` and `escrow/samples/`. The three-minute demo script is in [`docs/demo.md`](docs/demo.md).
+
+## Checks
+
+```shell
+python3 harness/check.py        # 64 offline checks: PROJECT_OVERVIEW principles, the agent, the audit and contract rules (Python model), with no model or network
+python3 harness/fuzz.py         # 200 random projects: whatever the mix of actions, chain calls pass the contract rules and match the ledger
+forge test                      # 12 PlobyEscrow tests + legacy contract tests
+cd frontend && npm run build    # type check + production build
+python3 harness/evidence.py     # challenge evidence runs on Kiln + Monad testnet (docs/evidence.md, evidence/)
+python3 -m escrow.audit <project id>   # verify from records alone (var/ or --data)
+python3 harness/tamper.py       # tampering demo: points to the edited line; a forgery re-signed with the public demo key is caught by the on-chain log head and amounts
+python3 harness/demo_setup.py   # prepare a demo project on a running server (through signing and deposit)
+python3 -m pcp spend            # Kiln key spend (shared team budget)
+```
+
+## Layout
+
+| Path | Contents |
 | --- | --- |
-| `pcp/` | 규칙 언어, 두 번의 독립 판독 컴파일러, 읽어드리기, 판정, Kiln 클라이언트(캐시·계측·예산 가드) |
-| `pipeline.json`, `domains/escrow.json` | 단계별 모델 라우팅, 공급자 레지스트리와 카테고리 대표값 |
-| `escrow/policy.py` | 정책 문서, 해시, 서명, 마일스톤, 최종 대체 결과 표 |
-| `escrow/core.py`, `milestones.py`, `expenses.py`, `changes.py`, `engine.py` | 상태와 원장, 마일스톤, 경비, 변경 주문, 키퍼와 역할별 화면 모델 |
-| `escrow/store.py`, `escrow/server.py` | 로그 저장·재생, 데모 시계, 증빙 저장소, HTTP API |
-| `escrow/ai.py` | Kiln 판독(경비 규칙, 문서, 변경 주문 초안) — 판독 결과만 기록 |
-| `frontend/` | React 19 + Vite 7 역할별 화면 |
-| `harness/check.py` | 오프라인 검증 |
-| `src/`, `test/`, `script/` | 레거시 Solidity 프로토타입. 경비 정산만 앱과 연결 |
-| `docs/` | 제품·흐름·아키텍처·용어·ADR·Kiln·API 문서 |
+| `pcp/` | Rule language, compiler with two independent readings, readback, decisions, Kiln client (cache, metering, budget guard) |
+| `pipeline.json`, `domains/escrow.json` | Per-stage model routing, supplier registry and category reference values |
+| `escrow/policy.py` | Policy document, hash, signatures, milestones, final fallback outcome table |
+| `escrow/core.py`, `milestones.py`, `expenses.py`, `changes.py`, `engine.py` | State and ledger, milestones, expenses, change orders, keeper and per-role view models |
+| `escrow/store.py`, `escrow/server.py` | Log storage and replay, demo clock, evidence store, HTTP API |
+| `escrow/ai.py`, `escrow/agent.py` | Kiln reading (expense rules, documents, change order drafts) and the contractor's purchase agent — only model outputs are recorded |
+| `escrow/chain.py`, `src/PlobyEscrow.sol`, `src/TestKRW.sol` | Mirror that turns the log into contract calls, and the Monad testnet contracts (`deployments/monad-testnet.json`, `script/deploy_ploby.py`) |
+| `escrow/audit.py` | Audit from records alone |
+| `frontend/` | React 19 + Vite 7 per-role UI |
+| `harness/check.py`, `harness/fuzz.py` | 64 offline checks, chain-mirror checks on random projects |
+| `harness/evidence.py`, `harness/tamper.py`, `harness/demo_setup.py`, `harness/usage_report.py` | Challenge evidence runs, tampering demo, demo setup, Kiln usage per flow |
+| `evidence/` | Logs, evidence files and audit output from the evidence runs |
+| `src/ExpenseEscrow.sol`, `script/Deploy.s.sol` | Legacy Solidity prototype (not connected to the current app) |
+| `docs/` | Product, flows, architecture, glossary, ADRs, Kiln, API, chain, efficiency and evidence docs |
 
-## 한계
+## Limits
 
-- 규칙과 기한은 오프체인 엔진이 집행합니다. 체인은 그 결과 중 경비 예치·BLOCK·HOLD·정산만 복사하고, 실패한 트랜잭션은 로그를 되돌리지 않습니다.
-- 서명은 서버가 보관한 데모 키의 HMAC입니다. 역할 전환은 지갑 로그인이 아닙니다.
-- 증빙은 텍스트 문서(E1)만 받고, 암호화 없이 `var/docs/`에 저장합니다.
-- 분쟁 해결자는 미납 단위를 거절만 할 수 있습니다 (해지 보상은 미구현).
-- MockUSDC·테스트 토큰 전제의 데모이며, 규제·수탁·보안 감사는 비범위입니다 ([`PROJECT_OVERVIEW.md` §18](PROJECT_OVERVIEW.md#18-현재-한계와-비범위)).
+- Decisions are made by the off-chain engine. The contract enforces how money moves (payee, amount cap, pause) and records decisions, but does not recompute the rules on chain. If the operator key were stolen, it could record decisions outside the policy, but it could not send money to anyone but the contractor or move more than the deposit.
+- Signatures are HMACs with demo keys held by the server. Role switching is not a wallet login, and the demo client wallet and operator key live in the server's `.env`.
+- Evidence is accepted only as text documents (E1) and stored unencrypted in `var/docs/`.
+- The resolver can only reject undelivered units (termination compensation is not implemented).
+- The demo assumes the tKRW test token; regulation, custody and security audits are out of scope ([`PROJECT_OVERVIEW.md` §18](PROJECT_OVERVIEW.md#18-현재-한계와-비범위)).

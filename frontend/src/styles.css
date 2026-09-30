@@ -1670,28 +1670,6 @@ summary:active {
   color: var(--muted);
   font-size: 12px;
 }
-.chain-steps {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
-}
-.chain-steps li {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border);
-}
-.chain-done {
-  font-weight: 650;
-}
-.chain-accounts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-top: 8px;
-}
 .status-help {
   margin-top: 12px;
 }
@@ -3146,4 +3124,38 @@ summary:active {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ---------------------------------------------------------------- chain, agent, audit (components/Onchain.tsx) */
+.chain-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chain-link {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--accent-border); background: var(--accent-bg); color: var(--accent-strong);
+  font-size: 12px; font-family: var(--font-mono, ui-monospace, monospace); text-decoration: none; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+a.chain-link:hover { border-color: var(--accent-strong); }
+.chain-refused { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad); }
+.chain-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+.chain-table th, .chain-table td { padding: 6px 8px; border-bottom: 1px solid var(--accent-border); text-align: right; }
+.chain-table th:first-child { text-align: left; font-weight: 500; }
+.chain-table thead th { font-size: 12px; color: var(--muted, #6b6b6b); font-weight: 500; }
+.chain-diff td { color: var(--bad); font-weight: 600; }
+.agent-form { display: grid; gap: 10px; margin-bottom: 14px; }
+.agent-form textarea { width: 100%; }
+.agent-offers { border: 1px solid var(--accent-border); border-radius: 10px; padding: 8px 12px; display: grid; gap: 6px; }
+.agent-offer { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.agent-h { font-size: 14px; margin: 16px 0 8px; }
+.agent-needs { margin: 8px 0; padding-left: 20px; display: grid; gap: 8px; }
+.agent-tries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; }
+.agent-try { display: inline-flex; align-items: center; gap: 4px; }
+.audit { display: grid; gap: 8px; }
+.audit-checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
+.audit-payment { border: 1px solid var(--accent-border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; }
+.audit-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.audit-rules { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.rule-bad { color: var(--bad); font-weight: 600; }
+@media (max-width: 480px) {
+  .chain-table { font-size: 13px; }
+  .chain-table th, .chain-table td { padding: 4px; }
 }

@@ -4,10 +4,11 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ago, kst, shortHash, urgency, won } from "../format"
-import { ROLE_KO, caption, label } from "../labels"
+import { ROLE_KO, label } from "../labels"
 import type { ProjectView, Role } from "../types"
 import { Act, actionLabel, anchorOf, describeTarget, findAction, scrollToAnchor, useProject } from "./projectCtx"
 import { Banner, Card, Chip, CopyHash, Empty, When } from "./ui"
+import { ChainLinks } from "./Onchain"
 
 export function TodoCard({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
@@ -45,7 +46,7 @@ export function TodoCard({ view }: { view: ProjectView }) {
               {a.fallback && (
                 <details className="todo-fallback">
                   <summary>{t("activity.noResponse")}</summary>
-                  <p>{caption(a.fallback)}</p>
+                  <p>{a.fallback}</p>
                 </details>
               )}
               <div className="todo-actions">
@@ -177,7 +178,7 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
             <span className="tl-dot" aria-hidden />
             <div className="tl-body">
               <div className="tl-head">
-                <strong>{caption(d.label)}</strong>
+                <strong>{d.label}</strong>
                 <Chip tone={d.owner === role ? "accent" : "muted"}>
                   {d.owner === role ? t("activity.myTurn") : label(ROLE_KO, d.owner)}
                 </Chip>
@@ -186,7 +187,7 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
                 {describeTarget(view, d.target)}
               </button>
               <When at={d.at} now={view.now} />
-              {d.fallback && <div className="clock-fallback">{t("activity.silence", { fallback: caption(d.fallback) })}</div>}
+              {d.fallback && <div className="clock-fallback">{t("activity.silence", { fallback: d.fallback })}</div>}
             </div>
           </li>
         ))}
@@ -198,7 +199,8 @@ export function DeadlinesCard({ view }: { view: ProjectView }) {
 export function LogCard({ view }: { view: ProjectView }) {
   const { t } = useTranslation()
   const [all, setAll] = useState(false)
-  const entries = [...view.log].reverse()
+  const entries = [...view.log].reverse().filter((e) => e.op !== "chain")
+  const hidden = view.log.length - entries.length
   const shown = all ? entries : entries.slice(0, 12)
   return (
     <Card
@@ -210,6 +212,7 @@ export function LogCard({ view }: { view: ProjectView }) {
         <span className="muted">{t("activity.currentHead")}</span> <CopyHash hash={view.head} head={10} tail={6} />
       </div>
       {entries.length === 0 && <Empty>{t("activity.noLog")}</Empty>}
+      {hidden > 0 && <p className="muted small">{t("chain.hiddenLines", { count: hidden })}</p>}
       <ol className="log">
         {shown.map((e) => (
           <li key={e.i} className={`log-item ${e.by === "keeper" ? "log-keeper" : ""}`}>
@@ -220,7 +223,8 @@ export function LogCard({ view }: { view: ProjectView }) {
                 {kst(e.at, view.now)} · {ago(e.at, view.now)}
               </span>
             </div>
-            <div className="log-text">{caption(e.text)}</div>
+            <div className="log-text">{e.text}</div>
+            <ChainLinks results={e.chain} />
             <div className="log-foot">
               <code>{e.op}</code>
               <code className="muted" title={e.head}>

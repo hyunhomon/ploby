@@ -4,7 +4,7 @@
 import { createContext, useContext, type ReactNode } from "react"
 import type { ActionParams } from "../api"
 import { tr } from "../i18n"
-import { ACTION_KO, TARGET_KO, caption, label } from "../labels"
+import { ACTION_KO, TARGET_KO, label } from "../labels"
 import type { Action, Deadline, ProjectView, Target, TargetKind } from "../types"
 
 /** Values a dialog can be opened with (e.g. an out-of-scope item for a change-order draft). */
@@ -20,6 +20,8 @@ export interface ProjectCtx {
   busy: boolean
   run: (action: Action, params?: ActionParams) => Promise<boolean>
   open: (action: Action, preset?: Preset) => void
+  /** Replace the view with one the server returned outside `run` (the purchase agent). */
+  replace: (view: ProjectView) => void
 }
 
 export const ProjectContext = createContext<ProjectCtx | null>(null)
@@ -47,8 +49,7 @@ export function actionsFor(view: ProjectView, target: TargetRef): Action[] {
 }
 
 export function actionLabel(a: Action): string {
-  if (a.label) return caption(a.label)
-  return ACTION_KO[a.action] ? label(ACTION_KO, a.action) : a.action
+  return ACTION_KO[a.action] ? label(ACTION_KO, a.action) : a.label || a.action
 }
 
 /** The params that name an action's target (docs/api.md, "Actions"). */

@@ -41,23 +41,6 @@ export function Home({ refreshKey }: { refreshKey: number }) {
   }, [role, refreshKey, retry])
 
   const needs = (items ?? []).reduce((total, p) => total + needsOf(p), 0)
-  const waiting = (items ?? []).filter((p) => needsOf(p) > 0)
-  const openAttention = () => {
-    if (waiting.length === 1) {
-      navigate(`#/p/${encodeURIComponent(waiting[0].id)}`)
-      return
-    }
-    if (waiting.length > 1) {
-      if (filter === "needs" && !query.trim()) navigate(`#/p/${encodeURIComponent(waiting[0].id)}`)
-      else {
-        setQuery("")
-        setFilter("needs")
-      }
-      return
-    }
-    setFilter("all")
-    setQuery("")
-  }
   const matchesFilter = (p: ProjectSummary, id: string) =>
     id === "all" ||
     (id === "active" && ["ACTIVE", "CLOSING"].includes(p.status)) ||
@@ -104,7 +87,7 @@ export function Home({ refreshKey }: { refreshKey: number }) {
           <button
             type="button"
             className={`attention-strip ${needs === 0 ? "attention-clear" : ""}`}
-            onClick={openAttention}
+            onClick={() => setFilter(needs ? "needs" : "all")}
           >
             <span className="attention-icon">
               <Icon name={needs ? "clock" : "check"} size={22} />

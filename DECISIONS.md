@@ -2,14 +2,6 @@
 
 Implementation assumptions made where the initial spec is silent. Newest first.
 
-## 2026-09-30 — Chain copy stays behind the log
-
-The client wallet is funded and the escrow allowance is raised once, in the background, so activating a project sends `createProject` and `deposit` only. The HTTP request appends the log and returns; chain transactions run on a thread and the project view says confirming until they land. A failed transaction is kept beside the log. `POST /api/projects/{id}/chain` retries from the last saved transaction and does not append a line. Settlement pays the agent wallet from `AGENT_PRIVATE_KEY`, which can be opened on Basescan. Milestone payments, pause, and refunds stay in the ledger.
-
-## 2026-09-30 — Legacy chain on the Python app
-
-The Ploby engine still decides. When `ESCROW_ADDRESS`, `USDC_ADDRESS`, `AGENT_PRIVATE_KEY`, and `CLIENT_PRIVATE_KEY` are set, `cast` mirrors three moments onto the already deployed ExpenseEscrow: the project becomes ACTIVE (mint, approve, `createProject`, full `deposit` of `projectBudget` in 6-decimal units), a BLOCK or request HOLD is recorded, and a settlement `release`s the paid amount to the policy contractor address. An APPROVE is recorded at settlement so the amount matches the contract. Milestone payments, pause, and refunds are not chain calls. A failed transaction is stored beside the log and does not roll the log back.
-
 ## 2026-09-29 — Phase 3 UI
 
 The demo UI is one Vite + React page. It talks to the Phase 2 API through a dev proxy at `/api`. The API listens on port 3010 so it does not collide with other local apps that already use 3001. Project id is kept in `localStorage`. Case buttons only fill the request text; they do not skip the policy engine. Submit stays available after stop so the revocation BLOCK is visible. Transaction links are shown only for 32-byte hashes, because mock chain ids such as `0xrecord1` are not Basescan transactions.

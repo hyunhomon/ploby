@@ -32,5 +32,3 @@ frontend/dist/
 # Local browser QA artifacts
 .playwright-mcp/
 output/playwright/
-.vercel
-.env*

@@ -3,8 +3,12 @@ evidence text, off chain and out of the log: the log keeps its hash), <root>/clo
 offset). Loading a project replays its log; nothing else is stored.
 
 An action goes: the keeper applies elapsed deadlines -> the inputs are prepared outside the lock (the model's
-reading of a document, a change-order draft) -> the line is signed by the acting role's demo key, applied to a
-copy of the state, and only then appended. A refused line changes nothing.
+reading of a document, a change-order draft, the escrow contract's state) -> the line is signed by the acting
+role's demo key, applied to a copy of the state, and only then appended. A refused line changes nothing.
+
+With a rail (escrow/chain.py), every appended line's money change becomes contract calls, sent in order by one
+worker; each result comes back as a relayer-signed 'chain' line. On start, calls the log implies but has no
+result for are sent again (the contract refuses a call applied twice).
 """
 import copy
 import hashlib
@@ -14,9 +18,8 @@ import threading
 import time
 from pathlib import Path
 
-from . import ai, policy as pol
+from . import agent, ai, chain, policy as pol
 from .core import Refused, raw
-from .data import DataRoot, open_data
 from .engine import Project
 
 ACTIONS = {'sign_policy', 'deposit', 'cancel_project', 'pause', 'resume', 'begin_close', 'withdraw',
@@ -38,24 +41,32 @@ def _write_json(path, value):
 
 
 class Store:
-    def __init__(self, root, reader=None, drafter=None, compiler=None, chain=None):
-        self.data = root if isinstance(root, DataRoot) else open_data(root)
-        self.root = self.data.local
+    def __init__(self, root, reader=None, drafter=None, compiler=None, rail=None, planner=None):
+        self.root = Path(root)
         (self.root / 'projects').mkdir(parents=True, exist_ok=True)
         (self.root / 'docs').mkdir(parents=True, exist_ok=True)
         self.reader = reader or ai.reading
         self.drafter = drafter or ai.draft_change
         self.compiler = compiler or ai.compile_policy
-        self.chain = chain
+        self.planner = planner or agent.plan
         self.lock = threading.RLock()
-        if chain is not None:
-            chain.bind(self.snapshot)
         self.candidates = {}
-        clock = self.data.read_text('clock.json')
-        self.offset = json.loads(clock)['offset'] if clock else 0
+        clock = self.root / 'clock.json'
+        self.offset = _read_json(clock)['offset'] if clock.exists() else 0
         self.projects = {}
-        for pid in self.data.list_project_ids():
-            self.projects[pid] = self.replay(pid)
+        for d in sorted((self.root / 'projects').iterdir()):
+            if (d / 'log.jsonl').exists():
+                self.projects[d.name] = self.replay(d.name)
+        self.rail, self.worker = None, None
+        if rail:
+            self.start_chain(rail)
+
+    def start_chain(self, rail):
+        """Mirror every project on chain from now on, first sending what the logs imply but never got a result."""
+        self.rail, self.worker = rail, chain.Worker(rail, self.chain_result)
+        for pid in self.projects:
+            self.worker.submit(self.unsent(pid))
+        self.worker.start()
 
     # -- clock
     def now(self):
@@ -64,7 +75,7 @@ class Store:
     def advance(self, seconds=None, reset=False):
         with self.lock:
             self.offset = 0 if reset else self.offset + int(seconds) * 1000
-            self.data.write_text('clock.json', json.dumps({'offset': self.offset}, ensure_ascii=False))
+            _write_json(self.root / 'clock.json', {'offset': self.offset})
             self.keeper()
             return {'now': self.now(), 'offset': self.offset}
 
@@ -83,32 +94,78 @@ class Store:
         """Apply line to a copy; append it only if it applies. Returns the new state and the log sentence."""
         Q = copy.deepcopy(P)
         text = Q.apply(line)
-        rel = f'projects/{P.id}/log.jsonl'
-        self.data.append_line(rel, raw(line))
+        path = self.path(P.id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8', newline='\n') as f:
+            f.write(raw(line) + '\n')
+            f.flush()
+            os.fsync(f.fileno())
         self.projects[P.id] = Q
-        if self.chain is not None:
-            self.chain.schedule(Q.id)
+        if self.worker and line['op'] != 'chain':
+            self.worker.submit(chain.calls(P.id, len(Q.log) - 1, Q.head, chain.money(P), chain.money(Q), Q))
         return Q, text
 
-    def snapshot(self, pid):
-        """A copy the chain thread can read without holding the store lock."""
-        with self.lock:
-            project = self.projects.get(pid)
-            return copy.deepcopy(project) if project is not None else None
+    # -- the chain
+    def lines(self, pid):
+        return [json.loads(t) for t in self.path(pid).read_text(encoding='utf-8').splitlines()]
 
-    def retry_chain(self, pid, role):
-        """Send the chain copy again from the last transaction that landed. The log stays as it is."""
+    def unsent(self, pid):
+        """The calls the log implies that have no result in it yet."""
+        _, todo, done = chain.plan(pid, self.lines(pid), Project)
+        return [c for c in todo if (c['line'], c['n']) not in done]
+
+    def chain_result(self, c, r):
+        params = {'line': c['line'], 'n': c['n'], 'call': c['call'], 'args': c['args'], 'tx': r.get('tx'),
+                  'url': self.rail.tx_url(r.get('tx')), 'ok': bool(r['ok']), 'error': r['error'], 'block': r.get('block')}
         with self.lock:
-            self.get(pid)
-            if self.chain is None or not self.chain.enabled:
-                raise Refused('체인이 꺼져 있습니다', 'state')
-            self.chain.schedule(pid)
-            return self.present(self.get(pid), role)
+            self.keeper(c['pid'])  # elapsed deadlines first, at their own times, so a late result never delays one
+            P = self.get(c['pid'])
+            self.commit(P, self.line('relayer', 'chain', params, {}, max(self.now(), P.at)))
+
+    def onchain(self, pid):
+        """What the contract says before a request is decided: its pause flag and available balance. Read only when
+        no call of this project is still on its way (otherwise the engine's own state is the newer one)."""
+        if not self.rail:
+            return None
+        with self.lock:
+            head = self.get(pid).head
+        waiting = len(self.worker.pending(pid))
+        if waiting:
+            return {'skipped': f'{waiting} calls pending'}
+        try:
+            p = self.rail.project(pid)
+        except (RuntimeError, OSError, ValueError):
+            return {'skipped': 'chain unreachable'}
+        if p is None:
+            return {'skipped': 'not opened'}
+        return {'paused': p['paused'], 'available': p['available'], 'contract': self.rail.escrow, 'head': head}
+
+    def chain_status(self, pid):
+        if not self.rail:
+            return {'enabled': False}
+        P = self.get(pid)
+        return {'enabled': True, 'network': 'Monad testnet', 'chain_id': self.rail.chain_id,
+                'contract': self.rail.escrow, 'contract_url': self.rail.address_url(self.rail.escrow),
+                'token': self.rail.token, 'pending': len(self.worker.pending(pid)),
+                'sent': sum(1 for r in P.chain if r['tx']), 'refused': sum(1 for r in P.chain if not r['ok'])}
+
+    def onchain_state(self, pid):
+        """The contract's view of the project next to the engine's ledger (for the screen and the auditor)."""
+        with self.lock:
+            P = self.get(pid)
+            ledger, status = P.ledger(), self.chain_status(pid)
+        if not self.rail:
+            return {'chain': status}
+        p = self.rail.project(pid)
+        mirror = {'funded': ledger['funded'], 'reserved': ledger['expense_reserved'] + ledger['milestone_reserved'],
+                  'paid': ledger['released'], 'refunded': ledger['refunded'], 'available': ledger['available']}
+        return {'chain': status, 'onchain': p, 'engine': mirror,
+                'match': bool(p) and all(p[k] == v for k, v in mirror.items()) and not status['pending']}
 
     @staticmethod
     def line(by, op, params, inputs, at):
         line = {'op': op, 'at': at, 'by': by, 'params': params, 'inputs': inputs}
-        if by in pol.ROLES:
+        if by in pol.SIGNED:
             line['sig'] = pol.sign(by, raw(line))
         return line
 
@@ -133,11 +190,11 @@ class Store:
         if len(text) > 200_000:
             raise Refused('문서가 너무 깁니다 (텍스트 200KB 이내)', 'invalid')
         sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
-        rel = f'docs/{sha}.json'
-        if not self.data.exists(rel):
-            self.data.write_text(rel, json.dumps({'id': sha, 'name': str(name or '문서')[:120], 'text': text},
-                                                 ensure_ascii=False))
-        document = _read_json(self.root / 'docs' / f'{sha}.json')
+        path = self.root / 'docs' / f'{sha}.json'
+        name = str(name or '문서')[:120]
+        if not path.exists() or _read_json(path).get('name') != name:  # the same text, named anew (the id is the text's)
+            _write_json(path, {'id': sha, 'name': name, 'text': text})
+        document = _read_json(path)
         return {'id': sha, 'name': document['name']}
 
     def doc_text(self, doc_id):
@@ -162,15 +219,10 @@ class Store:
             raise Refused('프로젝트가 없습니다', 'invalid')
         return P
 
-    def present(self, project, role):
-        view = project.view(role, self.now())
-        view['chain'] = self.chain.public(project.id) if self.chain is not None else {'enabled': False}
-        return view
-
     def view(self, pid, role):
         with self.lock:
             self.keeper(pid)
-            return self.present(self.get(pid), role)
+            return {**self.get(pid).view(role, self.now()), 'chain': self.chain_status(pid)}
 
     def listing(self, role):
         with self.lock:
@@ -224,7 +276,7 @@ class Store:
             except pol.PolicyError as e:
                 raise Refused(str(e), 'invalid') from None
             P, _ = self.commit(Project(pid), self.line('client', 'create', {'doc': doc}, {}, now))
-            return self.present(P, role)
+            return P.view(role, now)
 
     def act(self, pid, role, action, params):
         if role not in pol.ROLES:
@@ -235,19 +287,74 @@ class Store:
             self.keeper(pid)
             P = self.get(pid)
             if action == 'run_timeouts':
-                return '경과한 기한을 모두 처리했습니다', self.present(P, role)
+                return '경과한 기한을 모두 처리했습니다', P.view(role, self.now())
             context = {'name': P.name, 'milestones': [m['title'] for m in P.milestones.values()]}
         inputs = self.prepare(pid, role, action, params, context)  # may call the model: outside the lock
         with self.lock:
             self.keeper(pid)
             P = self.get(pid)
-            now = self.now()
+            now = max(self.now(), P.at)  # a demo clock set back never dates a line before the last one
+            read = inputs.get('chain') or {}
+            if 'head' in read and (read['head'] != P.head or self.worker.pending(pid)):
+                inputs['chain'] = {'skipped': 'the project changed while the contract was read'}  # stale: engine only
             if action == 'sign_policy':
                 inputs['signature'] = pol.sign(role, P.version(params.get('version'))['hash'])
             if 'manifest_docs' in inputs:
                 inputs['manifest'] = self.manifest(pid, action, inputs.pop('manifest_docs'), role, now, params.get('note', ''))
             P, text = self.commit(P, self.line(role, action, clean(params), inputs, now))
-            return text, self.present(P, role)
+            return text, {**P.view(role, now), 'chain': self.chain_status(pid)}
+
+    def agent_run(self, pid, role, task, offer_ids):
+        """The contractor's purchase agent (escrow/agent.py): plan once, then file the plan's first choices as
+        requests; on a BLOCK try the need's next offer, on a HOLD wait, on a stopped project stop."""
+        if role != 'contractor':
+            raise Refused('구매 에이전트는 작업자가 맡깁니다', 'forbidden')
+        task = str(task or '').strip()
+        if not task:
+            raise Refused('에이전트에게 맡길 일을 적어 주세요', 'invalid')
+        ids = list(dict.fromkeys(offer_ids or []))
+        if not ids or len(ids) > agent.MAX_OFFERS:
+            raise Refused(f'견적(공급자 문서)을 1~{agent.MAX_OFFERS}개 고르세요', 'invalid')
+        docs = [self.doc_text(x) for x in ids]
+        with self.lock:
+            self.keeper(pid)
+            P = self.get(pid)
+            P.state_is('ACTIVE', 'CLOSING')
+            context = {'name': P.name, 'contractor': pol.NAMES['contractor']}
+        found, meta = self.planner(task, [{'id': d['id'], 'name': d['name'], 'text': d['text']} for d in docs], context)
+        if not found:
+            raise Refused(f"에이전트가 계획을 세우지 못했습니다 ({'; '.join(meta.get('problems') or [])}) — 직접 요청하세요",
+                          'state')
+        with self.lock:
+            self.keeper(pid)
+            P = self.get(pid)
+            offers = [{'id': d['id'], 'name': d['name']} for d in docs]
+            P, _ = self.commit(P, self.line('contractor', 'agent_task', {'task': task, 'offers': offers},
+                                            {'plan': found, 'ai': meta}, max(self.now(), P.at)))
+            tid = P.agent_tasks[-1]['id']
+        tried, stopped = [], None
+        for need in found['needs']:
+            for k, doc_id in enumerate(need['offers'], 1):
+                via = {'task': tid, 'need': need['need'], 'why': need['why'], 'try': k}
+                try:
+                    self.act(pid, 'contractor', 'request_commitment', {'document': doc_id, 'via': via})
+                except Refused as e:
+                    tried.append({'need': need['need'], 'document': doc_id, 'refused': str(e)})
+                    break
+                e = next(e for e in reversed(list(self.get(pid).expenses.values())) if e.get('via') == via)
+                d = e['decision'] or {}
+                rule = d.get('reason') if d.get('result') == 'BLOCK' else None
+                tried.append({'need': need['need'], 'document': doc_id, 'expense': e['id'], 'result': d.get('result'),
+                              'rule': rule, 'status': e['status']})
+                if rule == 'state':
+                    stopped = '프로젝트가 멈춰 있어 에이전트가 중단했습니다'
+                if d.get('result') != 'BLOCK' or stopped:
+                    break
+            if stopped:
+                break
+        with self.lock:
+            view = {**self.get(pid).view(role, self.now()), 'chain': self.chain_status(pid)}
+        return {'task': tid, 'plan': found, 'ai': meta, 'tried': tried, 'stopped': stopped}, view
 
     def prepare(self, pid, role, action, params, context):
         """The inputs a line carries: what came from outside the rules, fixed before the rules run."""
@@ -258,6 +365,8 @@ class Store:
             out = {'reading': reading, 'document': {'id': d['id'], 'name': d['name']}, 'manifest_docs': [d]}
             if params.get('manual'):
                 out['manual'] = params['manual']
+            if action in ('request_commitment', 'retroactive_request') and self.rail:
+                out['chain'] = self.onchain(pid)
             return out
         if action == 'submit_delivery':
             docs = [self.doc_text(x) for x in params.get('documents') or []]
@@ -276,4 +385,4 @@ class Store:
 
 def clean(params):
     """What of the request goes into the line: the params, never the acting role or bulky inputs."""
-    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action')}
+    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action', 'lang')}

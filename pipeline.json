@@ -19,5 +19,9 @@
   "change": {
     "model": "qwen3-32b",
     "think": false
+  },
+  "agent": {
+    "model": "qwen3-32b",
+    "think": false
   }
 }
