@@ -28,7 +28,18 @@ from pathlib import Path
 BASE = 'https://api.bricksum.com/v1'
 MODEL = os.environ.get('KILN_MODEL', 'qwen3-32b')  # the organizers moved the challenge off gpt-oss-120b
 ROOT = Path(__file__).resolve().parents[1]
-RUNS = ROOT / 'harness' / 'runs'
+
+
+def _runs_dir():
+    """Writable meter/cache dir (repo harness/runs locally, /tmp on Vercel)."""
+    if os.environ.get('KILN_RUNS_DIR'):
+        return Path(os.environ['KILN_RUNS_DIR'])
+    if os.environ.get('VERCEL'):
+        return Path('/tmp/ploby-kiln')
+    return ROOT / 'harness' / 'runs'
+
+
+RUNS = _runs_dir()
 CACHE = RUNS / 'cache'
 USAGE = RUNS / 'usage.jsonl'
 
@@ -37,10 +48,12 @@ def _key():
     key = os.environ.get('KILN_API_KEY')
     if key:
         return key
-    for line in (ROOT / '.env').read_text(encoding='utf-8').splitlines():
-        name, _, value = line.partition('=')
-        if name.strip() in ('API_KEY', 'KILN_API_KEY'):
-            return value.strip().strip('"\'')
+    env_path = ROOT / '.env'
+    if env_path.is_file():
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            name, _, value = line.partition('=')
+            if name.strip() in ('API_KEY', 'KILN_API_KEY'):
+                return value.strip().strip('"\'')
     raise SystemExit('no API_KEY in .env')
 
 
@@ -170,9 +183,12 @@ def spend_report():
 
 
 def _log(record):
-    RUNS.mkdir(parents=True, exist_ok=True)
-    with _log_lock, USAGE.open('a', encoding='utf-8', newline='\n') as f:
-        f.write(json.dumps(record, ensure_ascii=False) + '\n')
+    try:
+        RUNS.mkdir(parents=True, exist_ok=True)
+        with _log_lock, USAGE.open('a', encoding='utf-8', newline='\n') as f:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+    except OSError:
+        pass  # meter log is optional when the filesystem is read-only
 
 
 def thinking(model, on):
@@ -214,8 +230,11 @@ def chat(messages, flow, *, model=None, cache=True, sample=0, tag=None, **params
         'cached': False,
         'stage': flow,
     }
-    CACHE.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
+    except OSError:
+        pass
     _log({'t': time.time(), 'flow': flow, 'tag': tag, 'request': digest[:16], 'cache_hit': False,
           'model': out['model'], 'finish': out['finish'], 'latency_ms': out['latency_ms'],
           'prompt_tokens': usage.get('prompt_tokens'), 'completion_tokens': usage.get('completion_tokens'),
