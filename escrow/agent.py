@@ -39,7 +39,7 @@ Rules:
 - Do not guess what the policy allows (vendors, limits, budgets, dates): the program checks that. If an offer provides a need, list it.
 - If no offer provides a need, keep the need with an empty offers list.
 - Every offer not listed under any need goes in skip.
-- Write need and why in the language of the task."""
+- Write need and why in the language of the task, without offer ids (o1, o2, ...)."""
 
 
 def ask(task, offers):

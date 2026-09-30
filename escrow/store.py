@@ -191,8 +191,9 @@ class Store:
             raise Refused('문서가 너무 깁니다 (텍스트 200KB 이내)', 'invalid')
         sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
         path = self.root / 'docs' / f'{sha}.json'
-        if not path.exists():
-            _write_json(path, {'id': sha, 'name': str(name or '문서')[:120], 'text': text})
+        name = str(name or '문서')[:120]
+        if not path.exists() or _read_json(path).get('name') != name:  # the same text, named anew (the id is the text's)
+            _write_json(path, {'id': sha, 'name': name, 'text': text})
         document = _read_json(path)
         return {'id': sha, 'name': document['name']}
 
