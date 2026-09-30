@@ -1,0 +1,27 @@
+http://ploby.qucord.com:18771, :18771 {
+    bind 127.0.0.1
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    @api path /api /api/*
+    handle @api {
+        request_body {
+            max_size 2MB
+        }
+        header Cache-Control no-store
+        reverse_proxy 127.0.0.1:3010 {
+            header_down -Access-Control-Allow-Origin
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+    handle {
+        root * /srv/ploby/frontend/dist
+        try_files {path} /index.html
+        header Cache-Control "public, max-age=0, must-revalidate"
+        file_server
+    }
+}

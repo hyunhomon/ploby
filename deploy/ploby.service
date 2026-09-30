@@ -1,0 +1,28 @@
+[Unit]
+Description=Ploby API (Kiln and Monad testnet)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ploby
+Group=ploby
+WorkingDirectory=/srv/ploby
+EnvironmentFile=/etc/ploby/ploby.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/ploby/.venv/bin/python -m escrow.server --port 3010 --data /var/lib/ploby/data
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ploby/data /srv/ploby/harness/runs
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

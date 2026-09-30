@@ -309,7 +309,7 @@ const ko = {
     documentId: "문서 ID(sha256)",
   },
   api: {
-    network: "서버에 연결할 수 없습니다. 백엔드(127.0.0.1:3010)가 실행 중인지 확인하세요.",
+    network: "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
     server: "서버 오류 (HTTP {{status}})",
     parse: "서버 응답을 읽을 수 없습니다.",
   },
@@ -625,7 +625,7 @@ const en = {
     documentId: "Document ID (sha256)",
   },
   api: {
-    network: "Couldn’t reach the server. Check that the backend is running at 127.0.0.1:3010.",
+    network: "Couldn’t reach the server. Please try again shortly.",
     server: "Server error (HTTP {{status}})",
     parse: "Couldn’t read the server response.",
   },

@@ -89,6 +89,7 @@ export function ProjectPage({
       .then((v) => {
         if (!live) return
         setView(v)
+        setError(null)
         onNow(v.now)
       })
       .catch((e) => {
@@ -107,7 +108,7 @@ export function ProjectPage({
       if (document.visibilityState !== "visible" || dialog || busy) return
       api
         .project(id, role)
-        .then((v) => setView(v))
+        .then((v) => { setView(v); setError(null) })
         .catch(() => undefined)
     }, 10000)
     return () => window.clearInterval(h)
@@ -119,7 +120,7 @@ export function ProjectPage({
     const h = window.setTimeout(() => {
       api
         .project(id, role)
-        .then((v) => setView(v))
+        .then((v) => { setView(v); setError(null) })
         .catch(() => undefined)
     }, 2500)
     return () => window.clearTimeout(h)
