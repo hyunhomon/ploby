@@ -67,6 +67,9 @@ def samples():
 def route(store, method, path, query, body):
     role = (query.get('as') or [None])[0] or body.get('as')
     parts = [p for p in path.split('/') if p][1:]  # after 'api'
+    if method == 'GET' and parts == ['health']:
+        chain = store.chain.meta() if store.chain is not None else {'enabled': False}
+        return {'ok': True, 'api': 'ploby', 'kiln': ai.enabled(), 'chain': chain}
     if method == 'GET' and parts == ['meta']:
         return meta()
     if parts == ['clock']:
@@ -150,8 +153,10 @@ def main():
     ap.add_argument('--port', type=int, default=3010)
     ap.add_argument('--data', default=str(ROOT / 'var'))
     a = ap.parse_args()
-    chain = Chain(ROOT, a.data)
-    store = Store(a.data, chain=chain)
+    from .data import open_data
+    data = open_data(a.data)
+    chain = Chain(ROOT, data)
+    store = Store(data, chain=chain)
     for pid, project in list(store.projects.items()):
         if project.status in ('ACTIVE', 'CLOSING', 'CLOSED'):
             chain.schedule(pid)

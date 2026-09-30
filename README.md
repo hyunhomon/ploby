@@ -25,13 +25,16 @@
 
 ## 실행
 
-필요한 것: Python 3 (표준 라이브러리만), Node.js 20.19+ 또는 22.12+와 npm, 선택 사항으로 Kiln API 키와 Foundry.
+필요한 것: Python 3.12+ (Vercel과 동일), Node.js 20.19+ 또는 22.12+와 npm, `pip install -r requirements.txt` (체인 RPC), 선택 사항으로 Kiln API 키.
 
 ```shell
-cp .env.example .env            # KILN_API_KEY를 넣으면 실제 판독, 없으면 판독이 HOLD가 됨
+cp .env.example .env            # KILN_API_KEY와 Base Sepolia 주소·키
+pip3 install -r requirements.txt
 python3 -m escrow.server        # 저장소 루트에서 실행. API: http://127.0.0.1:3010/api  (데이터: var/)
 cd frontend && npm ci && npm run dev        # 화면: http://localhost:5173  (/api를 3010으로 프록시)
 ```
+
+Vercel: 저장소 루트에서 `vercel --prod`. 환경 변수 — `KILN_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `.env.example`의 Base Sepolia 항목. 헬스: `GET /api/health`.
 
 화면 오른쪽 위에서 한국어·영어와 클라이언트·작업자·분쟁 해결자의 공간을 전환합니다. 선택한 언어는 브라우저에 저장됩니다. 상세 화면은 요약·작업·경비·계약·변경 요청·기록·관리로 나뉘며, 요약에는 예약 대금과 우선 확인할 일 3개를 표시합니다. **데모 도구**를 열면 데모 시계로 시간을 앞당길 수 있습니다. 경과한 기한의 최종 대체 결과가 적용됩니다. 새 프로젝트는 기본 정보 → 경비 규칙 → 작업과 대금 → 확인 및 생성 순서로 작성합니다. 시각·상호작용 규칙은 [디자인 시스템](docs/design-system.md)을 참고하세요. 샘플 문서(견적서·영수증·제출물)는 `escrow/quotes/`, `escrow/samples/`에 있습니다.
 

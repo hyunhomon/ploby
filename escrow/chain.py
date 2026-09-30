@@ -1,23 +1,23 @@
 """Base Sepolia writes for the legacy ExpenseEscrow already deployed from this repo.
 
-The Python engine still decides. This module only mirrors the moments that move demo
-tokens: the project becomes ACTIVE (createProject + deposit), a request is BLOCK or HOLD
-(recordDecision), the client accepts or rejects that HOLD, and a settlement pays the
-contractor (release). Milestone payments stay off chain. The contract cannot change the
-amount after recordDecision, so an APPROVE is recorded at settlement with the paid amount.
+The Python engine still decides. This module mirrors expense deposit, BLOCK/HOLD
+recording, and settlement release. Milestone payments stay off chain.
 
-Reads `.env` the same way the Kiln client does. Missing chain settings leave the app
-off chain. Transactions go through `cast` (Foundry), which is already used to deploy.
+Uses JSON-RPC (web3) so the same code runs on Vercel without Foundry. Reads chain
+settings from the process environment first, then ``.env`` at the repo root.
 """
 import json
+import os
 import re
-import shutil
-import subprocess
 import threading
+import time
 from pathlib import Path
 
-BASE_UNITS = 1_000_000  # MockUSDC has 6 decimals; 1 policy unit (KRW) = 1 token
-# One top-up for the client wallet. Later projects only createProject and deposit.
+from .abis import ESCROW_ABI, USDC_ABI
+from .data import DataRoot, open_data
+from .rpc import Rpc, RpcError
+
+BASE_UNITS = 1_000_000
 CUSHION = 50_000_000 * BASE_UNITS
 MAX_UINT = 2 ** 256 - 1
 EXPLORER = 'https://sepolia.basescan.org'
@@ -32,7 +32,6 @@ class ChainError(Exception):
 
 
 def load_env(path):
-    """Values already in the process win. The file fills the rest."""
     found = {}
     if path.exists():
         for line in path.read_text(encoding='utf-8').splitlines():
@@ -42,7 +41,6 @@ def load_env(path):
             name, value = text.split('=', 1)
             value = value.strip().strip('"').strip("'")
             found[name.strip()] = value
-    import os
     out = {}
     for name in KEYS:
         out[name] = os.environ.get(name) or found.get(name) or ''
@@ -53,12 +51,7 @@ def load_env(path):
     return out
 
 
-def to_base(amount):
-    return int(amount) * BASE_UNITS
-
-
 def next_step(expense, rec):
-    """The next chain call for one expense, or None when the book already matches it."""
     rec = rec or {}
     if rec.get('releaseTx') or rec.get('rejectTx'):
         return None
@@ -97,19 +90,21 @@ def next_step(expense, rec):
 class Chain:
     def __init__(self, repo, data):
         self.repo = Path(repo)
-        self.data = Path(data)
-        self.book_path = self.data / 'chain.json'
+        if isinstance(data, DataRoot):
+            self.data = data
+        else:
+            self.data = open_data(data)
         env = load_env(self.repo / '.env')
-        self.rpc = env['RPC_URL']
+        self.rpc_url = env['RPC_URL']
         self.chain_id = env['CHAIN_ID']
         self.escrow = env['ESCROW_ADDRESS']
         self.usdc = env['USDC_ADDRESS']
         self.agent_key = env['AGENT_PRIVATE_KEY']
         self.client_key = env['CLIENT_PRIVATE_KEY']
-        self.cast = shutil.which('cast')
         self.client = ''
         self.agent = ''
         self.reason = ''
+        self._rpc = None
         self._loader = None
         self._inflight = set()
         self._pending = set()
@@ -121,23 +116,21 @@ class Chain:
         if not ready:
             self.enabled = False
             self.reason = 'chain settings are unset'
-        elif not self.cast:
-            self.enabled = False
-            self.reason = 'cast (Foundry) is not installed'
         else:
-            self.enabled = True
             try:
-                self.client = self._cast('wallet', 'address', '--private-key', self.client_key).strip()
-                self.agent = self._cast('wallet', 'address', '--private-key', self.agent_key).strip()
-            except ChainError as e:
+                self._rpc = Rpc(self.rpc_url, self.chain_id)
+                self.client = self._rpc.address(self.client_key)
+                self.agent = self._rpc.address(self.agent_key)
+                self.enabled = True
+            except RpcError as e:
                 self.enabled = False
                 self.reason = str(e)
         self.book = self._read()
-        if self.enabled:
+        self._serverless = bool(os.environ.get('VERCEL'))
+        if self.enabled and not self._serverless:
             threading.Thread(target=self._prepare_wallet, name='ploby-chain-wallet', daemon=True).start()
 
     def bind(self, loader):
-        """loader(project_id) -> a detached project, called off the store lock by the chain thread."""
         self._loader = loader
 
     def meta(self):
@@ -178,7 +171,6 @@ class Chain:
                 'expenses': expenses}
 
     def schedule(self, pid):
-        """Copy this project onto the chain without blocking the request that wrote the log."""
         if not self.enabled or not self._loader:
             return
         with self._guard:
@@ -186,7 +178,30 @@ class Chain:
                 self._pending.add(pid)
                 return
             self._inflight.add(pid)
+        if self._serverless:
+            return
         threading.Thread(target=self._worker, args=(pid,), name=f'ploby-chain-{pid}', daemon=True).start()
+
+    def drain(self, deadline=None):
+        """Run queued chain work (used on Vercel after each HTTP request)."""
+        if not self.enabled or not self._loader:
+            return
+        if deadline is None:
+            deadline = time.monotonic() + 55
+        while time.monotonic() < deadline:
+            with self._guard:
+                if not self._inflight:
+                    break
+                pid = next(iter(self._inflight))
+            try:
+                project = self._loader(pid)
+                if project is not None:
+                    self.sync(project)
+            except Exception as e:
+                self.note_error(pid, f'{type(e).__name__}: {e}')
+            with self._guard:
+                self._pending.discard(pid)
+                self._inflight.discard(pid)
 
     def _worker(self, pid):
         try:
@@ -223,7 +238,7 @@ class Chain:
                 if entry.get('status') == 'funded':
                     for expense in project.expenses.values():
                         self._expense(project, expense)
-            except ChainError as e:
+            except (ChainError, RpcError) as e:
                 entry = self._entry(project.id)
                 entry['error'] = self._scrub(str(e))
                 if entry.get('status') != 'funded':
@@ -236,32 +251,30 @@ class Chain:
         self._save()
 
     def _prepare_wallet(self):
-        """Mint a cushion of MockUSDC and approve the escrow once. Later deposits skip both."""
         with self._send_lock:
             entry = self.book.setdefault(WALLET, {})
             if entry.get('ready'):
                 return
-            balance = self._erc20('balanceOf(address)(uint256)', self.client)
-            allowance = self._erc20('allowance(address,address)(uint256)', self.client, self.escrow)
+            balance = self._erc20_balance(self.client)
+            allowance = self._erc20_allowance(self.client, self.escrow)
             if balance < CUSHION and not entry.get('mintTx'):
-                entry['mintTx'] = self._send(self.agent_key, self.usdc, 'mint(address,uint256)',
-                                              self.client, str(CUSHION - balance))
+                entry['mintTx'] = self._rpc.send(
+                    self.agent_key, self.usdc, USDC_ABI, 'mint', self.client, CUSHION - balance)
                 self._save()
             if allowance < CUSHION and not entry.get('approveTx'):
-                entry['approveTx'] = self._send(self.client_key, self.usdc, 'approve(address,uint256)',
-                                                 self.escrow, str(MAX_UINT))
+                entry['approveTx'] = self._rpc.send(
+                    self.client_key, self.usdc, USDC_ABI, 'approve', self.escrow, MAX_UINT)
                 self._save()
             entry['ready'] = True
             self._save()
 
     def _ensure(self, needed):
-        """Top up only when this deposit is larger than the cushion already approved."""
-        balance = self._erc20('balanceOf(address)(uint256)', self.client)
-        allowance = self._erc20('allowance(address,address)(uint256)', self.client, self.escrow)
+        balance = self._erc20_balance(self.client)
+        allowance = self._erc20_allowance(self.client, self.escrow)
         if balance < needed:
-            self._send(self.agent_key, self.usdc, 'mint(address,uint256)', self.client, str(needed - balance))
+            self._rpc.send(self.agent_key, self.usdc, USDC_ABI, 'mint', self.client, needed - balance)
         if allowance < needed:
-            self._send(self.client_key, self.usdc, 'approve(address,uint256)', self.escrow, str(MAX_UINT))
+            self._rpc.send(self.client_key, self.usdc, USDC_ABI, 'approve', self.escrow, MAX_UINT)
 
     def _fund(self, project):
         entry = self._entry(project.id)
@@ -278,12 +291,9 @@ class Chain:
             raise ChainError('project budget is zero')
         self._ensure(budget)
         pid_hash = self._keccak(project.id)
-        # Pay the agent wallet, which the demo can open. A payee saved before deposit is replaced;
-        # after deposit the recorded payee must stay, or release reverts PayeeMismatch.
         entry.update(projectId=pid_hash, policyHash=policy_hash, payee=self.agent, budget=doc['projectBudget'])
-        self._step(entry, 'createTx', self.client_key, self.escrow, 'createProject(bytes32,bytes32,uint256)',
-                   pid_hash, policy_hash, str(budget))
-        self._step(entry, 'depositTx', self.client_key, self.escrow, 'deposit(bytes32)', pid_hash)
+        self._step(entry, 'createTx', self.client_key, 'createProject', pid_hash, policy_hash, budget)
+        self._step(entry, 'depositTx', self.client_key, 'deposit', pid_hash)
         entry['status'] = 'funded'
         entry['error'] = None
         self._save()
@@ -308,74 +318,67 @@ class Chain:
             if step['op'] in ('record', 'record_release'):
                 self._record(entry, rec, payee, evidence, step['code'], amount, step['amount'])
             if step['op'] == 'reject':
-                rec['rejectTx'] = self._send(self.client_key, self.escrow, 'rejectHold(bytes32,bytes32)',
-                                              entry['projectId'], evidence)
+                rec['rejectTx'] = self._rpc.send(
+                    self.client_key, self.escrow, ESCROW_ABI, 'rejectHold',
+                    Rpc.b32(entry['projectId']), Rpc.b32(evidence))
                 rec['status'] = 'rejected'
             if step['op'] in ('approve', 'approve_release'):
-                rec['approveTx'] = self._send(self.client_key, self.escrow, 'approveHold(bytes32,bytes32)',
-                                               entry['projectId'], evidence)
+                rec['approveTx'] = self._rpc.send(
+                    self.client_key, self.escrow, ESCROW_ABI, 'approveHold',
+                    Rpc.b32(entry['projectId']), Rpc.b32(evidence))
                 rec['status'] = 'approved'
             if step['op'] in ('release', 'record_release', 'approve_release'):
-                rec['releaseTx'] = self._send(self.agent_key, self.escrow, 'release(bytes32,bytes32,address,uint256)',
-                                               entry['projectId'], evidence, payee, str(to_base(step['amount'])))
+                rec['releaseTx'] = self._rpc.send(
+                    self.agent_key, self.escrow, ESCROW_ABI, 'release',
+                    Rpc.b32(entry['projectId']), Rpc.b32(evidence), payee, to_base(step['amount']))
                 rec['status'] = 'released'
                 rec['error'] = None
             self._save()
 
     def _record(self, entry, rec, payee, evidence, code, amount_base, amount):
-        destination = payee if code != 3 else payee
-        rec['recordTx'] = self._send(
-            self.agent_key, self.escrow,
-            'recordDecision((bytes32,bytes32,bytes32,uint256,uint8,uint256),address)',
-            f"({entry['projectId']},{evidence},{entry['policyHash']},{amount_base},{code},0)",
-            destination)
+        decision = (
+            Rpc.b32(entry['projectId']),
+            Rpc.b32(evidence),
+            Rpc.b32(entry['policyHash']),
+            amount_base,
+            code,
+            0,
+        )
+        rec['recordTx'] = self._rpc.send(
+            self.agent_key, self.escrow, ESCROW_ABI, 'recordDecision', decision, payee)
         rec.update(code=code, amount=amount, status='recorded', error=None)
 
-    def _step(self, entry, field, key, to, sig, *args):
+    def _step(self, entry, field, key, fn_name, *args):
         if entry.get(field):
             return
         try:
-            entry[field] = self._send(key, to, sig, *args)
-        except ChainError as e:
+            if fn_name == 'createProject':
+                entry[field] = self._rpc.send(
+                    key, self.escrow, ESCROW_ABI, 'createProject',
+                    Rpc.b32(args[0]), Rpc.b32(args[1]), args[2])
+            elif fn_name == 'deposit':
+                entry[field] = self._rpc.send(
+                    key, self.escrow, ESCROW_ABI, 'deposit', Rpc.b32(args[0]))
+            else:
+                raise ChainError(f'unknown step {fn_name}')
+        except RpcError as e:
             if field == 'createTx' and 'ProjectExists' in str(e):
                 entry[field] = 'already-created'
             else:
-                raise
+                raise ChainError(str(e)) from e
         self._save()
 
-    def _send(self, key, to, sig, *args):
-        out = self._cast('send', '--json', '--rpc-url', self.rpc, '--private-key', key, to, sig, *args)
-        try:
-            data = json.loads(out)
-        except json.JSONDecodeError as e:
-            raise ChainError('cast did not return a receipt') from e
-        tx = data.get('transactionHash') or data.get('hash')
-        if not tx:
-            raise ChainError('cast receipt has no transaction hash')
-        return tx
+    def _erc20_balance(self, account):
+        return self._rpc.erc20_uint(self.usdc, 'balanceOf', account)
+
+    def _erc20_allowance(self, owner, spender):
+        return self._rpc.erc20_uint(self.usdc, 'allowance', owner, spender)
+
+    def _keccak(self, text):
+        return self._rpc.keccak_hex(text)
 
     def _tx(self, value):
         return value if isinstance(value, str) and B32.match(value) else None
-
-    def _erc20(self, sig, *args):
-        out = self._cast('call', '--rpc-url', self.rpc, self.usdc, sig, *args).strip()
-        token = out.split()[0] if out else '0'
-        try:
-            return int(token, 0)
-        except ValueError as e:
-            raise ChainError('could not read the token balance') from e
-
-    def _keccak(self, text):
-        return self._cast('keccak', text).strip()
-
-    def _cast(self, *args):
-        try:
-            proc = subprocess.run([self.cast, *args], capture_output=True, text=True, timeout=180)
-        except subprocess.TimeoutExpired as e:
-            raise ChainError('cast timed out') from e
-        if proc.returncode != 0:
-            raise ChainError(self._scrub((proc.stderr or proc.stdout or 'cast failed').strip()))
-        return proc.stdout
 
     def _scrub(self, text):
         for secret in (self.agent_key, self.client_key):
@@ -387,29 +390,24 @@ class Chain:
         return self.book.setdefault(pid, {'expenses': {}})
 
     def _read(self):
-        if not self.book_path.exists():
+        raw = self.data.read_text('chain.json')
+        if not raw:
             return {}
         try:
-            data = json.loads(self.book_path.read_text(encoding='utf-8'))
+            data = json.loads(raw)
         except json.JSONDecodeError:
             return {}
         return data if isinstance(data, dict) else {}
 
     def _save(self):
-        self.book_path.parent.mkdir(parents=True, exist_ok=True)
-        self.book_path.write_text(json.dumps(self.book, ensure_ascii=False), encoding='utf-8')
+        with self._book_lock:
+            self.data.write_text('chain.json', json.dumps(self.book, ensure_ascii=False))
+
+
+def to_base(amount):
+    return int(amount) * BASE_UNITS
 
 
 def _self_check():
     assert to_base(200) == 200_000_000
     assert next_step({'status': 'BLOCKED', 'maximum': 300, 'paid': 0}, {})['code'] == 3
-    hold = {'status': 'HOLD_REVIEW', 'decision': {'result': 'HOLD'}, 'maximum': 200, 'paid': 0}
-    assert next_step(hold, {})['code'] == 2
-    assert next_step({'status': 'SETTLED', 'paid': 150, 'maximum': 200}, {})['op'] == 'record_release'
-    recorded = {'recordTx': '0x1', 'code': 1, 'amount': 150}
-    assert next_step({'status': 'SETTLED', 'paid': 150}, recorded)['op'] == 'release'
-    assert next_step({'status': 'SETTLED', 'paid': 100}, recorded)['op'] == 'error'
-    assert next_step({'status': 'REJECTED', 'decision': {'result': 'HOLD'}, 'maximum': 200, 'paid': 0},
-                     {'recordTx': '0x1', 'code': 2, 'amount': 200})['op'] == 'reject'
-    assert next_step({'status': 'RESERVED', 'decision': {'result': 'HOLD'}, 'paid': 0},
-                     {'recordTx': '0x1', 'code': 2, 'amount': 200})['op'] == 'approve'

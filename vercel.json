@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "frontend",
+      "framework": "vite",
+      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    },
+    "api": {
+      "root": ".",
+      "entrypoint": "escrow.wsgi:app",
+      "functions": {
+        "escrow/wsgi.py": {
+          "maxDuration": 300,
+          "excludeFiles": "{frontend/**,backend/**,var/**,out/**,cache/**,lib/**,broadcast/**,test/**,script/**,docs/**,harness/**,node_modules/**,.git/**,.env,.env.*}"
+        }
+      }
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

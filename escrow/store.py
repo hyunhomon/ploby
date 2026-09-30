@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import ai, policy as pol
 from .core import Refused, raw
+from .data import DataRoot, open_data
 from .engine import Project
 
 ACTIONS = {'sign_policy', 'deposit', 'cancel_project', 'pause', 'resume', 'begin_close', 'withdraw',
@@ -38,7 +39,8 @@ def _write_json(path, value):
 
 class Store:
     def __init__(self, root, reader=None, drafter=None, compiler=None, chain=None):
-        self.root = Path(root)
+        self.data = root if isinstance(root, DataRoot) else open_data(root)
+        self.root = self.data.local
         (self.root / 'projects').mkdir(parents=True, exist_ok=True)
         (self.root / 'docs').mkdir(parents=True, exist_ok=True)
         self.reader = reader or ai.reading
@@ -49,12 +51,11 @@ class Store:
         if chain is not None:
             chain.bind(self.snapshot)
         self.candidates = {}
-        clock = self.root / 'clock.json'
-        self.offset = _read_json(clock)['offset'] if clock.exists() else 0
+        clock = self.data.read_text('clock.json')
+        self.offset = json.loads(clock)['offset'] if clock else 0
         self.projects = {}
-        for d in sorted((self.root / 'projects').iterdir()):
-            if (d / 'log.jsonl').exists():
-                self.projects[d.name] = self.replay(d.name)
+        for pid in self.data.list_project_ids():
+            self.projects[pid] = self.replay(pid)
 
     # -- clock
     def now(self):
@@ -63,7 +64,7 @@ class Store:
     def advance(self, seconds=None, reset=False):
         with self.lock:
             self.offset = 0 if reset else self.offset + int(seconds) * 1000
-            _write_json(self.root / 'clock.json', {'offset': self.offset})
+            self.data.write_text('clock.json', json.dumps({'offset': self.offset}, ensure_ascii=False))
             self.keeper()
             return {'now': self.now(), 'offset': self.offset}
 
@@ -82,12 +83,8 @@ class Store:
         """Apply line to a copy; append it only if it applies. Returns the new state and the log sentence."""
         Q = copy.deepcopy(P)
         text = Q.apply(line)
-        path = self.path(P.id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open('a', encoding='utf-8', newline='\n') as f:
-            f.write(raw(line) + '\n')
-            f.flush()
-            os.fsync(f.fileno())
+        rel = f'projects/{P.id}/log.jsonl'
+        self.data.append_line(rel, raw(line))
         self.projects[P.id] = Q
         if self.chain is not None:
             self.chain.schedule(Q.id)
@@ -136,10 +133,11 @@ class Store:
         if len(text) > 200_000:
             raise Refused('문서가 너무 깁니다 (텍스트 200KB 이내)', 'invalid')
         sha = hashlib.sha256(text.encode('utf-8')).hexdigest()
-        path = self.root / 'docs' / f'{sha}.json'
-        if not path.exists():
-            _write_json(path, {'id': sha, 'name': str(name or '문서')[:120], 'text': text})
-        document = _read_json(path)
+        rel = f'docs/{sha}.json'
+        if not self.data.exists(rel):
+            self.data.write_text(rel, json.dumps({'id': sha, 'name': str(name or '문서')[:120], 'text': text},
+                                                 ensure_ascii=False))
+        document = _read_json(self.root / 'docs' / f'{sha}.json')
         return {'id': sha, 'name': document['name']}
 
     def doc_text(self, doc_id):
