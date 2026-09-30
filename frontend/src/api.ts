@@ -1,7 +1,7 @@
 // The one JSON API (docs/api.md). With `?fixture=1` in the URL every call is answered by
 // src/dev/fixture.ts instead, so the UI can be checked without the server.
 
-import { tr } from "./i18n"
+import { language, tr } from "./i18n"
 import type {
   ActionOk,
   AgentRun,
@@ -81,7 +81,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   return data as T
 }
 
-const q = (role: Role) => `as=${encodeURIComponent(role)}`
+const q = (role: Role) => `as=${encodeURIComponent(role)}&lang=${language()}`
 
 const http: Backend = {
   meta: () => call("GET", "/api/meta"),
@@ -92,12 +92,12 @@ const http: Backend = {
   document: (id) => call("GET", `/api/documents/${encodeURIComponent(id)}`),
   compileRules: (words) => call("POST", "/api/rules/compile", { words }),
   projects: (as) => call("GET", `/api/projects?${q(as)}`),
-  createProject: (project) => call("POST", "/api/projects", { as: "client", ...project }),
+  createProject: (project) => call("POST", "/api/projects?lang=" + language(), { as: "client", ...project }),
   project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
   act: (id, as, action, params) =>
-    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action }),
+    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action, lang: language() }),
   onchain: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/chain`),
-  agentRun: (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers }),
+  agentRun: (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers, lang: language() }),
   audit: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/audit`),
 }
 

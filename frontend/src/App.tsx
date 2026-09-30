@@ -278,10 +278,10 @@ export function App() {
         </div>
 
         <main className="main" id="main-content" tabIndex={-1}>
-          {route.page === "home" && <Home key={role} refreshKey={tick} />}
+          {route.page === "home" && <Home key={`${role}-${i18n.language}`} refreshKey={tick} />}
           {route.page === "new" && <NewProject />}
           {route.page === "project" && (
-            <ProjectPage key={`${route.id}-${role}`} id={route.id} refreshKey={tick} onNow={onNow} />
+            <ProjectPage key={`${route.id}-${role}-${i18n.language}`} id={route.id} refreshKey={tick} onNow={onNow} />
           )}
         </main>
 

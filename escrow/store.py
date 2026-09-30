@@ -384,4 +384,4 @@ class Store:
 
 def clean(params):
     """What of the request goes into the line: the params, never the acting role or bulky inputs."""
-    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action')}
+    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action', 'lang')}

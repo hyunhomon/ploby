@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, audit, chain, policy as pol
+from . import ai, audit, chain, english, policy as pol
 from .core import Refused
 from .pcp_bridge import domain
 from .store import Store
@@ -115,6 +115,22 @@ def route(store, method, path, query, body):
     raise Refused(f'없는 경로: {method} {path}', 'invalid')
 
 
+def translated(out, lang):
+    """The engine's Korean sentences in English for `lang=en` (escrow/english.py); anything else as it is."""
+    if lang != 'en':
+        return out
+    if isinstance(out, list):
+        return [english.view(dict(x)) if isinstance(x, dict) else x for x in out]
+    if isinstance(out, dict):
+        if isinstance(out.get('view'), dict):
+            out = {**out, 'view': english.view(out['view'])}
+            if isinstance(out.get('result'), str):
+                out['result'] = english.text(out['result'])
+        elif 'log' in out or 'deadlines' in out:
+            out = english.view(out)
+    return out
+
+
 def handler(store):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -146,7 +162,9 @@ def handler(store):
                 if not isinstance(body, dict):
                     return self.send(400, {'ok': False, 'error': 'JSON 본문은 객체여야 합니다', 'code': 'invalid'})
             try:
-                self.send(200, route(store, method, url.path, parse_qs(url.query), body))
+                query = parse_qs(url.query)
+                lang = (query.get('lang') or [None])[0] or body.get('lang')
+                self.send(200, translated(route(store, method, url.path, query, body), lang))
             except Refused as e:
                 self.send(400, {'ok': False, 'error': str(e), 'code': e.code})
             except Exception as e:  # a bug: say so, change nothing (commit only appends after a clean apply)
