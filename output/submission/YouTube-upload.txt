@@ -1,0 +1,46 @@
+TITLE
+Ploby | GWDC 2026 Challenge B — Bounded AI Purchasing Agent
+
+VISIBILITY
+Unlisted (anyone with the link can watch). After uploading, paste the video URL into the Demo Link field.
+
+DESCRIPTION
+Ploby keeps an AI purchasing agent's requests within a client-funded project policy and records every approval and stop.
+
+This 2:49 demonstration shows:
+00:00 Agreed project scope and budget
+00:10 Kiln qwen3-32b planning and adaptation after a blocked offer
+00:40 Purchase report, receipt review and completed testnet settlement
+01:21 Boundary run 1: an unlisted vendor
+01:42 Boundary run 2: purchase total over the cap
+01:58 Both stops in the audit, with matching public-chain events
+02:08 Human pause and the stopped task
+02:24 Independent evidence and inference efficiency
+
+The two boundary runs use a fresh project with the same spending limits, so previous document allocations do not mask the tested rules. Both plans call Kiln live; previously read quote documents use the local response cache. The UI and logs distinguish these cases.
+
+Test environment: Monad testnet (10143), TestKRW. No real funds. Role approvals in the filmed run use public demo HMAC keys, so the verifier correctly reports partial human-approval verification. Optional EIP-712 approvals are checked by the off-chain engine; the deployed contract still trusts its operator for business-rule decisions. The demo clock is advanced by three days; blockchain timestamps use real testnet time.
+
+The recording is trimmed for time. Clips accelerated to 1.25x or 1.4x are labeled; still captures are labeled. English captions are burned into the video. No voiceover.
+
+Repository and reproducible evidence:
+https://github.com/hyunhomon/ploby
+https://github.com/hyunhomon/ploby/blob/main/docs/submission.md
+
+Completed settlement:
+https://testnet.monadvision.com/tx/0x25209465868c777c2d9a74d99ed9e5b17158a2f8959480d58b85c44484bf3e9d
+
+Boundary run 1, vendor blocked:
+https://testnet.monadvision.com/tx/0x87f2d29aecb42a7501058382d7fa7e71e1d5c3d431bc255659ceb8d86c3705d4
+
+Boundary run 2, purchase cap exceeded:
+https://testnet.monadvision.com/tx/0xfed139854ff621adce522456a9a94f04c8e826787fd8b4995aa92197dfe56f1a
+
+ENERGY DISCLOSURE
+Efficiency uses eight matched document fixtures and an immediate exact-cache replay. It is not an unseen-document accuracy claim. Energy is an accelerator-only estimate under explicit hardware assumptions, not measured Kiln power.
+
+FILES
+Ploby-Track-B-Demo.mp4 — upload this video
+Ploby-Track-B-English.srt — optional YouTube subtitle upload (captions are already visible)
+Ploby-Pitch-Final.pdf — pitch deck upload; replace team fields before submitting
+Ploby-Pitch-Final.pptx — editable source for team fields

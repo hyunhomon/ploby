@@ -4,7 +4,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { api, errorText } from "../api"
+import { api, downloadEvidence, errorText, FIXTURE } from "../api"
+import { L } from "../i18n"
 import { shortHash, won } from "../format"
 import { DECISION_TONE, ROLE_KO, RULE_KO, label, toneOf } from "../labels"
 import type { AgentRun, AgentTask, AuditReport, ChainResult, Expense, Milestone, OnchainState, ProjectView } from "../types"
@@ -171,6 +172,8 @@ export function AgentPanel({ view }: { view: ProjectView }) {
           <Field label={t("agent.task")}>
             <textarea rows={3} value={task} onChange={(e) => setTask(e.target.value)} />
           </Field>
+          <details className="mini-fold">
+          <summary>{L("검토할 견적", "Offers to review")} · {chosen.length}</summary>
           <fieldset className="agent-offers">
             <legend className="small muted">{t("agent.offers")}</legend>
             {quotes.map((q) => (
@@ -186,6 +189,7 @@ export function AgentPanel({ view }: { view: ProjectView }) {
               </label>
             ))}
           </fieldset>
+          </details>
           <p className="muted small">{t("agent.rule")}</p>
           <div className="row-end">
             <button type="button" className="btn btn-primary" onClick={run} disabled={running || !task.trim()}>
@@ -195,13 +199,14 @@ export function AgentPanel({ view }: { view: ProjectView }) {
         </div>
       )}
       {!can && view.viewer.role === "client" && <Banner tone="info">{t("agent.clientNote")}</Banner>}
-      {last?.stopped && <Banner tone="warn">{t("agent.stopped", { why: last.stopped })}</Banner>}
-      <h3 className="agent-h">{t("agent.history")}</h3>
+      {last?.stopped && <Banner tone="warn">{L("프로젝트가 멈춰 있어 나머지 구매를 중단했습니다.", "Project paused. Remaining purchases stopped.")}</Banner>}
+      <h3 className="agent-h">{L("최근 결과", "Latest result")}</h3>
       {tasks.length === 0 && <Empty>{t("agent.none")}</Empty>}
       <div className="stack">
-        {[...tasks].reverse().map((task) => (
-          <AgentTaskView key={task.id} task={task} />
-        ))}
+        {tasks.length > 0 && <AgentTaskView key={tasks[tasks.length - 1].id} task={tasks[tasks.length - 1]} />}
+        {tasks.length > 1 && <details className="mini-fold"><summary>{t("agent.history")} · {tasks.length - 1}</summary>
+          {[...tasks].reverse().slice(1).map((task) => <AgentTaskView key={task.id} task={task} />)}
+        </details>}
       </div>
     </Card>
   )
@@ -211,20 +216,26 @@ function AgentTaskView({ task }: { task: AgentTask }) {
   const { t } = useTranslation()
   const name = (id: string) => task.offers.find((o) => o.id === id)?.name ?? shortHash(id, 6, 4)
   const u = task.ai?.usage
+  const count = (state: string) => task.requests.filter((r) => r.result === state).length
   return (
-    <details className="item record agent-task" open>
+    <details className="item record agent-task">
       <summary className="item-head record-summary">
         <div className="item-title">
           <h3>
-            {task.id} · {task.task}
+            {task.id} · {L("구매 결과와 이유", "Purchase results and reasons")}
           </h3>
+          {task.stopped && <p className="small">{L("프로젝트가 멈춰 있어 나머지 구매를 중단했습니다.", "Project paused. Remaining purchases stopped.")}</p>}
+          <p className="muted small">{count("APPROVE")} {L("예약", "reserved")} · {count("HOLD")} {L("검토 대기", "awaiting review")} · {count("BLOCK")} {L("차단", "blocked")}</p>
         </div>
         <span className="muted small">#{task.line}</span>
       </summary>
       <div className="record-body">
+        <p>{task.task}</p>
         {u && (
           <p className="muted small">
+            <Chip tone="muted">{u.cached ? L("기록 재생", "Recorded replay") : L("실제 API 호출", "Live API call")}</Chip>{" "}
             {t("agent.usage", { model: task.ai?.model ?? "", tokens: u.tokens ?? 0, cost: (u.cost_usd ?? 0).toFixed(5), seconds: u.seconds ?? 0 })}
+            {u.cached && <span> · {L("토큰·시간은 최초 호출 기준", "Tokens and time refer to the original call")}</span>}
           </p>
         )}
         <ol className="agent-needs">
@@ -271,6 +282,15 @@ export function AuditCard({ view }: { view: ProjectView }) {
   const [report, setReport] = useState<AuditReport | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const stale = !!report && report.head !== view.head
+  const exportRecords = async () => {
+    setExporting(true)
+    setError(null)
+    try { await downloadEvidence(view.id) }
+    catch (e) { setError(errorText(e)) }
+    finally { setExporting(false) }
+  }
   const run = async () => {
     setBusy(true)
     setError(null)
@@ -298,19 +318,25 @@ export function AuditCard({ view }: { view: ProjectView }) {
         </>
       }
       aside={
-        <button type="button" className="btn btn-primary" onClick={run} disabled={busy}>
-          {busy ? t("audit.running") : t("audit.run")}
-        </button>
+        <div className="row-wrap">
+          <button type="button" className="btn btn-primary" onClick={run} disabled={busy}>{busy ? t("audit.running") : t("audit.run")}</button>
+          <button type="button" className="btn" onClick={exportRecords} disabled={exporting || FIXTURE}>
+            {exporting ? L("준비 중…", "Preparing…") : L("증빙 ZIP 내려받기", "Export evidence ZIP")}
+          </button>
+        </div>
       }
     >
       {error && <Banner tone="bad">{error}</Banner>}
+      <p className="muted small">{L("ZIP에는 이 프로젝트의 기록·원문·독립 검증기가 들어 있습니다. API 키 없이 verify.py로 확인할 수 있습니다.", "The ZIP contains this project’s records, originals and a standalone verifier. Run verify.py without an API key.")}</p>
+      {stale && <Banner tone="warn">{L("검사 이후 기록이 바뀌었습니다. 다시 검증해 주세요.", "Records changed after this check. Verify again for the current state.")}</Banner>}
       {report && !report.replay.ok && report.replay.refused && (
         <Banner tone="bad">{t("audit.tampered", { line: report.replay.refused.line, error: report.replay.refused.error })}</Banner>
       )}
       {report && report.replay.ok && (
         <div className="audit">
           {v && (
-            <Banner tone={v.records_consistent && v.inside === v.payments ? "ok" : "bad"}>
+            <Banner tone={stale || v.status === "incomplete" || !v.status ? "warn" : v.status === "verified" ? "ok" : "bad"}>
+              <strong>{stale ? L("이전 검사 결과", "Previous check") : v.status === "verified" ? L("검증 완료", "Verified") : v.status === "failed" ? L("검증 실패", "Verification failed") : L("일부 검증 완료", "Partially verified")}</strong>{" · "}
               {t("audit.verdict", {
                 payments: v.payments,
                 inside: v.inside,
@@ -323,6 +349,18 @@ export function AuditCard({ view }: { view: ProjectView }) {
               })}
             </Banner>
           )}
+          {v && v.payments === 0 && <p>{L("아직 완료된 지급이 없습니다. 정산 후 지급의 근거를 검증할 수 있습니다.", "No payment has completed yet. Settle a purchase to verify its payment trail.")}</p>}
+          <ul className="audit-checks">
+            <li>{L("원문", "Original documents")}: {report.evidence?.status === "verified" ? "✓" : report.evidence?.status === "failed" ? "✗" : "—"} {report.evidence?.checked ?? 0}/{report.evidence?.total ?? 0}
+              {!!report.evidence?.missing.length && <> · {report.evidence.missing.length} {L("누락", "missing")}</>}
+              {!!report.evidence?.failed.length && <> · {report.evidence.failed.length} {L("불일치", "invalid")}</>}
+            </li>
+            <li>{L("공개 체인", "Public chain")}: {v?.chain === "checked" && !report.chain?.problems?.length ? "✓" : "—"} {v?.chain === "checked" ? L("대조 완료", "Compared") : L("확인하지 못함", "Not checked")}</li>
+            <li>{L("사용자 승인", "Human approval")}: {report.authorization?.status === "verified" ? `✓ ${report.authorization.wallet_actions} EIP-712` : L("데모 서명 또는 승인 미완료", "Demo signatures or pending approvals")}</li>
+          </ul>
+          {report.authorization?.status !== "verified" && <p className="muted small">{L("데모 서명은 기록 재생용입니다. 실제 사람이 승인했다는 독립적인 증명은 제공하지 않습니다.", "Demo signatures support replay. They do not independently prove a person’s approval.")}</p>}
+          <details className="mini-fold">
+          <summary>{L("지급·규칙·거래 상세", "Payment, rule and transaction details")}</summary>
           <ul className="audit-checks">
             <li>✓ {t("audit.signatures", { lines: report.lines })}</li>
             <li>
@@ -411,6 +449,7 @@ export function AuditCard({ view }: { view: ProjectView }) {
               </div>
             </>
           )}
+          </details>
         </div>
       )}
     </Card>

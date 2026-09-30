@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, audit, chain, english, policy as pol
+from . import ai, audit, bundle, chain, english, wallet, policy as pol
 from .core import Refused
 from .pcp_bridge import domain
 from .store import Store
@@ -27,7 +27,7 @@ IMPLEMENTATION = {  # PROJECT_OVERVIEW: 현재 구현 and 목표 설계 are neve
         '서명된 해시 체인 로그: 모든 변경이 한 줄, 재생하면 같은 상태. 체인 호출마다 그 줄의 로그 헤드를 싣고 tx 해시를 로그에 되씀',
         '작업자의 구매 에이전트 (Kiln): 계획 1회, 요청만 하고 판정은 정책, BLOCK이면 대안·HOLD면 대기·정지면 중단',
         '감사: python3 -m escrow.audit — 로그·증빙·공개 체인만으로 모든 지급의 근거와 온체인 일치를 재구성',
-        '양측 정책 서명과 버전 (데모 키 HMAC — 지갑 서명 대체)',
+        '양측 정책 서명과 버전: 기본 HMAC 데모, 선택형 EIP-712 지갑 승인 (엔진·독립 재생에서 검증)',
         '구매 전 약정 → 지출 → 증빙 → 정산, 사후 청구, 마일스톤 선예약·검수·타임아웃, 분쟁 해결자',
         'Kiln qwen3-32b 판독: 경비 규칙 문장(두 번의 독립 판독), 견적서·영수증, 변경 주문 초안, 구매 계획',
         '텍스트 문서 업로드 = E1 증빙, 원문은 로그 밖 오프체인 저장소 (해시만 로그에)',
@@ -35,7 +35,7 @@ IMPLEMENTATION = {  # PROJECT_OVERVIEW: 현재 구현 and 목표 설계 are neve
     ],
     'target': [
         '프로젝트별 불변 ProjectEscrow 컨트랙트가 판정 자체까지 온체인에서 강제 (현재: 판정은 오프체인 엔진, 자금 집행은 공용 PlobyEscrow)',
-        'EIP-712 / EIP-1271 서명, 정책 서명 서비스, 릴레이어·키퍼의 권한 분리',
+        '컨트랙트 내 EIP-712 / EIP-1271 서명 검증, 정책 서명 서비스, 릴레이어·키퍼의 권한 분리',
         '암호화 증빙 저장소, Evidence Attestation, E2(DKIM)·E3(공급자 API) 증빙',
         '공급자 직접 지급 (DIRECT_VENDOR), 공유 인보이스 배분 레지스트리',
         '프로젝트 자산 인계와 보류액, 보안 동결·RECOVERY_ONLY·마이그레이션',
@@ -51,7 +51,7 @@ def meta():
                          'category_ko': d.category_name(r['category'])} for r in d.registry],
             'categories': [{'id': c, 'name_ko': d.category_name(c)} for c in d.categories],
             'defaults': dict(pol.DEFAULT_PERIODS), 'ai': {'enabled': ai.enabled(), 'model': 'qwen3-32b'},
-            'chain': chain_meta(), 'implementation': IMPLEMENTATION}
+            'chain': chain_meta(), 'wallet': {'available': wallet.available()}, 'implementation': IMPLEMENTATION}
 
 
 def chain_meta():
@@ -106,8 +106,12 @@ def route(store, method, path, query, body):
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'audit' and method == 'GET':
         store.get(parts[1])  # a known project: the auditor then reads its log file, not the server's state
         return audit.audit(parts[1], str(store.root), offline=not chain.deployment())
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'evidence' and method == 'GET':
+        return bundle.export(store, parts[1])
+    if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'wallet-intent' and method == 'POST':
+        return store.wallet_intent(parts[1], body.get('as'), body.get('action'), body.get('params') or {})
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'agent' and method == 'POST':
-        result, view = store.agent_run(parts[1], body.get('as'), body.get('task'), body.get('offers'))
+        result, view = store.agent_run(parts[1], body.get('as'), body.get('task'), body.get('offers'), body.get('wallet'))
         return {'ok': True, 'result': result, 'view': view}
     if len(parts) == 3 and parts[0] == 'projects' and parts[2] == 'actions' and method == 'POST':
         text, view = store.act(parts[1], body.get('as'), body.get('action'), body)
@@ -138,9 +142,12 @@ def handler(store):
         protocol_version = 'HTTP/1.1'
 
         def send(self, code, obj):
-            data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+            download = isinstance(obj, bundle.Download)
+            data = obj.body if download else json.dumps(obj, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Type', 'application/zip' if download else 'application/json; charset=utf-8')
+            if download:
+                self.send_header('Content-Disposition', f'attachment; filename="{obj.filename}"')
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')

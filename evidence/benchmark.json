@@ -1,0 +1,2775 @@
+{
+  "schema": "ploby.benchmark/1",
+  "created_at": "2026-09-30T01:43:59Z",
+  "model": "qwen3-32b",
+  "sample": "submission-1790732639295989000",
+  "scope": "Eight declared application fixtures; fresh project per case; fixed policy and date. Cold means no local response cache. Provider prefix caching may still apply. Warm immediately replays the identical requests. No claim about unseen documents.",
+  "energy_scope": "Assumptions from docs/efficiency.md, accelerator inference only. No Kiln power telemetry; excludes client, storage, networking and chain energy.",
+  "policy": {
+    "vendors": [
+      "aws",
+      "vercel",
+      "gabia",
+      "figma",
+      "adobe-stock"
+    ],
+    "per_purchase_including_fees": 200000,
+    "expense_budget": 500000,
+    "date": "2026-10-01",
+    "until": "2026-10-31"
+  },
+  "phases": {
+    "cold": {
+      "summary": {
+        "cases": 8,
+        "correct": 8,
+        "false_approvals": 0,
+        "api_calls": 8,
+        "cache_hits": 0,
+        "sent_prompt_tokens": 5067,
+        "sent_completion_tokens": 986,
+        "cost_usd": 0.00052472,
+        "wall_seconds": 17.89967503902153,
+        "median_wall_seconds": 2.2989162915037014,
+        "assumed_accelerator_bound_wh": 3.49682,
+        "assumed_accelerator_estimate_wh": [
+          0.09246863107638889,
+          1.6789015477430556
+        ]
+      },
+      "cases": [
+        {
+          "id": "q-gabia",
+          "document": {
+            "name": "Gabia domain quote (₩24,200)",
+            "text": "견 적 서\n\n견적번호: GB-Q-20261002-0417\n견적일자: 2026년 10월 2일\n공급자: (주)가비아 | 사업자등록번호 214-86-12345 | 경기도 성남시 분당구 대왕판교로 660\n수신: 한결웹스튜디오 귀하 (프로젝트: 카페 온담 홈페이지 리뉴얼)\n\n품목                              기간    수량   단가      공급가액\n도메인 신규 등록 (ondam-cafe.co.kr)   1년     1     22,000    22,000\n\n공급가액    22,000원\n부가세      2,200원\n합계        24,200원\n\n유효기간: 견적일로부터 7일\n결제: 가비아 결제 페이지(카드/계좌이체)\n문의: 1544-4370\n"
+          },
+          "sha256": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "가비아",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "도메인",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "24,200원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "gabia",
+              "category": "domain",
+              "item": "도메인 신규 등록",
+              "amount": 22000,
+              "fee": 2200,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "(주)가비아",
+              "invoice_no": "GB-Q-20261002-0417",
+              "date": "2026년 10월 2일",
+              "item": "도메인 신규 등록",
+              "amount_text": "22,000",
+              "fee_text": "2,200",
+              "total_text": "24,200",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 823,
+              "cost_usd": 6.2e-05,
+              "recorded_cost_usd": 6.2e-05,
+              "seconds": 2.18,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "6e84b296-b87f-4f41-9cb1-d259dc1e6570"
+            ]
+          },
+          "wall_seconds": 2.5582013750099577,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "6e84b296-b87f-4f41-9cb1-d259dc1e6570",
+              "cache_hit": false,
+              "prompt_tokens": 701,
+              "completion_tokens": 122,
+              "cached_tokens": 700,
+              "cost_usd": 6.224e-05,
+              "latency_ms": 2179.8
+            }
+          ]
+        },
+        {
+          "id": "q-figma",
+          "document": {
+            "name": "Figma 2 seats quote (₩99,000)",
+            "text": "QUOTE / 견적서\n\nFigma, Inc. (피그마)\n760 Market Street, San Francisco, CA 94102\nQuote No.: FIG-Q-2026-100381\nDate: 2026-10-03\nBill to: 한결웹스튜디오 (카페 온담 홈페이지 리뉴얼)\n\nItem                                   Seats   Unit price   Amount\nFigma Professional - 1 month (monthly)   2       45,000     90,000\n\n공급가액 (Subtotal)   90,000 KRW\n부가세 (VAT 10%)      9,000 KRW\n합계 (Total)          99,000 KRW\n\nBilling: charged to the card on file on acceptance.\n"
+          },
+          "sha256": "f1b264dfb388bb9dfadfc83722fe3998e27a8b90766b5ea91fc6ac9928724630",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Figma",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "소프트웨어",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "99,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "figma",
+              "category": "software",
+              "item": "Figma Professional - 1 month (monthly)",
+              "amount": 90000,
+              "fee": 9000,
+              "units": 2
+            },
+            "fields": {
+              "vendor_text": "Figma, Inc. (피그마)",
+              "invoice_no": "FIG-Q-2026-100381",
+              "date": "2026-10-03",
+              "item": "Figma Professional - 1 month (monthly)",
+              "amount_text": "90,000",
+              "fee_text": "9,000",
+              "total_text": "99,000",
+              "units": 2
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 754,
+              "cost_usd": 6.8e-05,
+              "recorded_cost_usd": 6.8e-05,
+              "seconds": 2.16,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "05635650-cf73-4adf-89cb-b826d4fde122"
+            ]
+          },
+          "wall_seconds": 2.16931037500035,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "05635650-cf73-4adf-89cb-b826d4fde122",
+              "cache_hit": false,
+              "prompt_tokens": 630,
+              "completion_tokens": 124,
+              "cached_tokens": 428,
+              "cost_usd": 6.8e-05,
+              "latency_ms": 2161.5
+            }
+          ]
+        },
+        {
+          "id": "q-vercel",
+          "document": {
+            "name": "Vercel Pro 1 month (₩33,000)",
+            "text": "Vercel Inc. (버셀)\n440 N Barranca Ave #4133, Covina, CA 91723\nInvoice No.: VCL-2026-11-020447\nInvoice date: 2026-11-02\nBill to: 한결웹스튜디오 (카페 온담 홈페이지 리뉴얼)\n\nDescription                          Qty   Amount\nVercel Pro plan - 1 month (1 seat)    1    30,000\n\n공급가액 (Subtotal)   30,000원\n부가세 (VAT 10%)      3,000원\n합계 (Total due)      33,000원\n"
+          },
+          "sha256": "5699c3e9e0d4d49b766f9eb24e99f5207363a91bbd0a0f4eec7a06bd7a681ab6",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Vercel",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "호스팅",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "33,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "vercel",
+              "category": "hosting",
+              "item": "Vercel Pro plan - 1 month (1 seat)",
+              "amount": 30000,
+              "fee": 3000,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Vercel Inc. (버셀)",
+              "invoice_no": "VCL-2026-11-020447",
+              "date": "2026-11-02",
+              "item": "Vercel Pro plan - 1 month (1 seat)",
+              "amount_text": "30,000원",
+              "fee_text": "3,000원",
+              "total_text": "33,000원",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 744,
+              "cost_usd": 6.9e-05,
+              "recorded_cost_usd": 6.9e-05,
+              "seconds": 2.31,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "582c3ee2-f96c-4496-80cd-58c90ebcd436"
+            ]
+          },
+          "wall_seconds": 2.317496583011234,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "582c3ee2-f96c-4496-80cd-58c90ebcd436",
+              "cache_hit": false,
+              "prompt_tokens": 612,
+              "completion_tokens": 132,
+              "cached_tokens": 428,
+              "cost_usd": 6.88e-05,
+              "latency_ms": 2313.1
+            }
+          ]
+        },
+        {
+          "id": "q-adobe",
+          "document": {
+            "name": "Adobe Stock 40-image pack (₩203,500, over cap with VAT)",
+            "text": "견적서 (QUOTATION)\n\nAdobe Stock (어도비 스톡) - Adobe Systems Korea\n견적번호: AS-KR-Q-26100614\n견적일자: 2026-10-06\n고객: 한결웹스튜디오 / 프로젝트: 카페 온담 홈페이지 리뉴얼\n\n품목                                        수량   금액\nAdobe Stock 이미지 팩 (표준 라이선스 이미지 40장)   1     185,000\n\n공급가액    185,000원\n부가세       18,500원\n합계        203,500원\n\n라이선스: 표준 라이선스, 웹사이트 사용 가능\n유효기간: 2026-10-13까지\n"
+          },
+          "sha256": "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124",
+          "expected": "BLOCK",
+          "observed": {
+            "result": "BLOCK",
+            "reason": "per_purchase",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Adobe Stock",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "디자인 소스",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": false,
+                "detail": "203,500원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "adobe-stock",
+              "category": "assets",
+              "item": "Adobe Stock 이미지 팩",
+              "amount": 185000,
+              "fee": 18500,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Adobe Stock (어도비 스톡) - Adobe Systems Korea",
+              "invoice_no": "AS-KR-Q-26100614",
+              "date": "2026-10-06",
+              "item": "Adobe Stock 이미지 팩",
+              "amount_text": "185,000",
+              "fee_text": "18,500",
+              "total_text": "203,500",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 761,
+              "cost_usd": 5.8e-05,
+              "recorded_cost_usd": 5.8e-05,
+              "seconds": 2.11,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "f17f0398-10dd-41bf-963a-bb1d8a703675"
+            ]
+          },
+          "wall_seconds": 2.1108488330210093,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "f17f0398-10dd-41bf-963a-bb1d8a703675",
+              "cache_hit": false,
+              "prompt_tokens": 646,
+              "completion_tokens": 115,
+              "cached_tokens": 645,
+              "cost_usd": 5.808e-05,
+              "latency_ms": 2107.8
+            }
+          ]
+        },
+        {
+          "id": "q-adobe-10",
+          "document": {
+            "name": "Adobe Stock 10-image pack (₩55,000)",
+            "text": "견적서 (QUOTATION)\n\nAdobe Stock (어도비 스톡) - Adobe Systems Korea\n견적번호: AS-KR-Q-26100615\n견적일자: 2026-10-06\n고객: 한결웹스튜디오 / 프로젝트: 카페 온담 홈페이지 리뉴얼\n\n품목                                        수량   금액\nAdobe Stock 이미지 팩 (표준 라이선스 이미지 10장)   1     50,000\n\n공급가액     50,000원\n부가세        5,000원\n합계         55,000원\n\n라이선스: 표준 라이선스, 웹사이트 사용 가능\n유효기간: 2026-10-13까지\n"
+          },
+          "sha256": "95c0098539109054968c5b6b6e51ee3395037d7544827d0cf829b35725fe971b",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Adobe Stock",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "디자인 소스",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "55,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "adobe-stock",
+              "category": "assets",
+              "item": "Adobe Stock 이미지 팩 (표준 라이선스)",
+              "amount": 50000,
+              "fee": 5000,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Adobe Stock (어도비 스톡) - Adobe Systems Korea",
+              "invoice_no": "AS-KR-Q-26100615",
+              "date": "2026-10-06",
+              "item": "Adobe Stock 이미지 팩 (표준 라이선스)",
+              "amount_text": "50,000",
+              "fee_text": "5,000",
+              "total_text": "55,000",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 776,
+              "cost_usd": 7.2e-05,
+              "recorded_cost_usd": 7.2e-05,
+              "seconds": 2.28,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "ac49fb0d-5bb7-4e79-b08d-90872f38d1f7"
+            ]
+          },
+          "wall_seconds": 2.2803359999961685,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "ac49fb0d-5bb7-4e79-b08d-90872f38d1f7",
+              "cache_hit": false,
+              "prompt_tokens": 642,
+              "completion_tokens": 134,
+              "cached_tokens": 429,
+              "cost_usd": 7.172e-05,
+              "latency_ms": 2275.3
+            }
+          ]
+        },
+        {
+          "id": "q-coupang",
+          "document": {
+            "name": "Coupang mechanical keyboard (₩129,000, off-list)",
+            "text": "쿠팡 주문 견적 / 결제 예정 내역\n\n판매: 쿠팡(주) | 사업자등록번호 120-88-00767 | 서울특별시 송파구 송파대로 570\n주문 예정번호: CP-20261005-88213094\n작성일: 2026-10-05\n\n상품명: 로지텍 MX Mechanical 무선 기계식 키보드 (적축)\n수량: 1개\n판매가: 129,000원\n배송비: 0원 (로켓배송)\n\n공급가액    117,273원\n부가세       11,727원\n결제금액    129,000원 (부가세 포함)\n"
+          },
+          "sha256": "906988cc1a48840e57ee388ebd4f63906a33d9089f9119a22cd4130b9b73ee03",
+          "expected": "BLOCK",
+          "observed": {
+            "result": "BLOCK",
+            "reason": "vendor",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": false,
+                "detail": "쿠팡",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "일반 쇼핑",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "129,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "coupang",
+              "category": "general",
+              "item": "로지텍 MX Mechanical 무선 기계식 키보드",
+              "amount": 117273,
+              "fee": 11727,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "쿠팡(주)",
+              "invoice_no": "CP-20261005-88213094",
+              "date": "2026-10-05",
+              "item": "로지텍 MX Mechanical 무선 기계식 키보드",
+              "amount_text": "117,273원",
+              "fee_text": "11,727원",
+              "total_text": "129,000원",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 785,
+              "cost_usd": 7.3e-05,
+              "recorded_cost_usd": 7.3e-05,
+              "seconds": 2.46,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "28cebc8c-d64e-49bd-8f26-c2b3c5729eec"
+            ]
+          },
+          "wall_seconds": 2.466053165990161,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "28cebc8c-d64e-49bd-8f26-c2b3c5729eec",
+              "cache_hit": false,
+              "prompt_tokens": 648,
+              "completion_tokens": 137,
+              "cached_tokens": 428,
+              "cost_usd": 7.308e-05,
+              "latency_ms": 2459.6
+            }
+          ]
+        },
+        {
+          "id": "r-gabia",
+          "document": {
+            "name": "Gabia receipt (₩24,200)",
+            "text": "영 수 증\n\n영수증번호: GB-R-20261003-88213\n결제일시: 2026년 10월 3일 14:22\n공급자: (주)가비아 | 사업자등록번호 214-86-12345\n구매자: 한결웹스튜디오 (프로젝트: 카페 온담 홈페이지 리뉴얼)\n\n품목                              기간    수량   공급가액\n도메인 신규 등록 (ondam-cafe.co.kr)   1년     1     22,000\n\n공급가액    22,000원\n부가세      2,200원\n합계        24,200원\n결제수단: 법인카드 (끝자리 1187) 승인번호 30711542\n"
+          },
+          "sha256": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "가비아",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "도메인",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "24,200원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "gabia",
+              "category": "domain",
+              "item": "도메인 신규 등록 (ondam-cafe.co.kr)",
+              "amount": 22000,
+              "fee": 2200,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "(주)가비아",
+              "invoice_no": "GB-R-20261003-88213",
+              "date": "2026년 10월 3일 14:22",
+              "item": "도메인 신규 등록 (ondam-cafe.co.kr)",
+              "amount_text": "22,000",
+              "fee_text": "2,200",
+              "total_text": "24,200",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 801,
+              "cost_usd": 7.4e-05,
+              "recorded_cost_usd": 7.4e-05,
+              "seconds": 2.38,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "583c3d4d-1764-4d19-b9c8-6309592a93e4"
+            ]
+          },
+          "wall_seconds": 2.3875022910069674,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "583c3d4d-1764-4d19-b9c8-6309592a93e4",
+              "cache_hit": false,
+              "prompt_tokens": 665,
+              "completion_tokens": 136,
+              "cached_tokens": 428,
+              "cost_usd": 7.416000000000001e-05,
+              "latency_ms": 2381.9
+            }
+          ]
+        },
+        {
+          "id": "r-blurry",
+          "document": {
+            "name": "Blurry scanned receipt (unreadable)",
+            "text": "영 수 증  (스캔 사본 — 일부 판독 불가)\n\n...비아 | 사업자등록번호 214-86-1....\n결제일시: 2026년 10월 ..일\n\n품목: 도메인 ... (ondam-...)\n금액: ##,### 원\n합계: (인쇄 흐림)\n"
+          },
+          "sha256": "bbe4030f0a40d536fee00793694d47106c9ec4415a591b635d9cb0003c61ff85",
+          "expected": "HOLD",
+          "observed": {
+            "result": "HOLD",
+            "reason": "amount_text \"##,###\" is not an amount",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": false,
+                "detail": "판독 결과를 신뢰할 수 없음",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": false,
+            "proposal": null,
+            "fields": {
+              "vendor_text": "가비아",
+              "invoice_no": "...",
+              "date": "2026년 10월 ..일",
+              "item": "도메인",
+              "amount_text": "##,###",
+              "fee_text": "0",
+              "total_text": "...",
+              "units": 1
+            },
+            "problems": [
+              "amount_text \"##,###\" is not an amount"
+            ],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 609,
+              "cost_usd": 4.9e-05,
+              "recorded_cost_usd": 4.9e-05,
+              "seconds": 1.61,
+              "cached": false,
+              "calls": 1
+            },
+            "generation_ids": [
+              "14389323-63a4-4ee4-990e-e52e64e3c4b2"
+            ]
+          },
+          "wall_seconds": 1.609926415985683,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "14389323-63a4-4ee4-990e-e52e64e3c4b2",
+              "cache_hit": false,
+              "prompt_tokens": 523,
+              "completion_tokens": 86,
+              "cached_tokens": 432,
+              "cost_usd": 4.8639999999999995e-05,
+              "latency_ms": 1605.1
+            }
+          ]
+        }
+      ]
+    },
+    "warm": {
+      "summary": {
+        "cases": 8,
+        "correct": 8,
+        "false_approvals": 0,
+        "api_calls": 0,
+        "cache_hits": 8,
+        "sent_prompt_tokens": 0,
+        "sent_completion_tokens": 0,
+        "cost_usd": 0,
+        "wall_seconds": 0.011020956968422979,
+        "median_wall_seconds": 0.0013569789880421013,
+        "assumed_accelerator_bound_wh": 0,
+        "assumed_accelerator_estimate_wh": [
+          0,
+          0
+        ]
+      },
+      "cases": [
+        {
+          "id": "q-gabia",
+          "document": {
+            "name": "Gabia domain quote (₩24,200)",
+            "text": "견 적 서\n\n견적번호: GB-Q-20261002-0417\n견적일자: 2026년 10월 2일\n공급자: (주)가비아 | 사업자등록번호 214-86-12345 | 경기도 성남시 분당구 대왕판교로 660\n수신: 한결웹스튜디오 귀하 (프로젝트: 카페 온담 홈페이지 리뉴얼)\n\n품목                              기간    수량   단가      공급가액\n도메인 신규 등록 (ondam-cafe.co.kr)   1년     1     22,000    22,000\n\n공급가액    22,000원\n부가세      2,200원\n합계        24,200원\n\n유효기간: 견적일로부터 7일\n결제: 가비아 결제 페이지(카드/계좌이체)\n문의: 1544-4370\n"
+          },
+          "sha256": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "가비아",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "도메인",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "24,200원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "gabia",
+              "category": "domain",
+              "item": "도메인 신규 등록",
+              "amount": 22000,
+              "fee": 2200,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "(주)가비아",
+              "invoice_no": "GB-Q-20261002-0417",
+              "date": "2026년 10월 2일",
+              "item": "도메인 신규 등록",
+              "amount_text": "22,000",
+              "fee_text": "2,200",
+              "total_text": "24,200",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 823,
+              "cost_usd": 0,
+              "recorded_cost_usd": 6.2e-05,
+              "seconds": 2.18,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "6e84b296-b87f-4f41-9cb1-d259dc1e6570"
+            ]
+          },
+          "wall_seconds": 0.0014155829849187285,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "6e84b296-b87f-4f41-9cb1-d259dc1e6570",
+              "cache_hit": true,
+              "prompt_tokens": 701,
+              "completion_tokens": 122,
+              "cached_tokens": 700,
+              "cost_usd": 6.224e-05,
+              "latency_ms": 2179.8
+            }
+          ]
+        },
+        {
+          "id": "q-figma",
+          "document": {
+            "name": "Figma 2 seats quote (₩99,000)",
+            "text": "QUOTE / 견적서\n\nFigma, Inc. (피그마)\n760 Market Street, San Francisco, CA 94102\nQuote No.: FIG-Q-2026-100381\nDate: 2026-10-03\nBill to: 한결웹스튜디오 (카페 온담 홈페이지 리뉴얼)\n\nItem                                   Seats   Unit price   Amount\nFigma Professional - 1 month (monthly)   2       45,000     90,000\n\n공급가액 (Subtotal)   90,000 KRW\n부가세 (VAT 10%)      9,000 KRW\n합계 (Total)          99,000 KRW\n\nBilling: charged to the card on file on acceptance.\n"
+          },
+          "sha256": "f1b264dfb388bb9dfadfc83722fe3998e27a8b90766b5ea91fc6ac9928724630",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Figma",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "소프트웨어",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "99,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "figma",
+              "category": "software",
+              "item": "Figma Professional - 1 month (monthly)",
+              "amount": 90000,
+              "fee": 9000,
+              "units": 2
+            },
+            "fields": {
+              "vendor_text": "Figma, Inc. (피그마)",
+              "invoice_no": "FIG-Q-2026-100381",
+              "date": "2026-10-03",
+              "item": "Figma Professional - 1 month (monthly)",
+              "amount_text": "90,000",
+              "fee_text": "9,000",
+              "total_text": "99,000",
+              "units": 2
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 754,
+              "cost_usd": 0,
+              "recorded_cost_usd": 6.8e-05,
+              "seconds": 2.16,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "05635650-cf73-4adf-89cb-b826d4fde122"
+            ]
+          },
+          "wall_seconds": 0.0015070830122567713,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "05635650-cf73-4adf-89cb-b826d4fde122",
+              "cache_hit": true,
+              "prompt_tokens": 630,
+              "completion_tokens": 124,
+              "cached_tokens": 428,
+              "cost_usd": 6.8e-05,
+              "latency_ms": 2161.5
+            }
+          ]
+        },
+        {
+          "id": "q-vercel",
+          "document": {
+            "name": "Vercel Pro 1 month (₩33,000)",
+            "text": "Vercel Inc. (버셀)\n440 N Barranca Ave #4133, Covina, CA 91723\nInvoice No.: VCL-2026-11-020447\nInvoice date: 2026-11-02\nBill to: 한결웹스튜디오 (카페 온담 홈페이지 리뉴얼)\n\nDescription                          Qty   Amount\nVercel Pro plan - 1 month (1 seat)    1    30,000\n\n공급가액 (Subtotal)   30,000원\n부가세 (VAT 10%)      3,000원\n합계 (Total due)      33,000원\n"
+          },
+          "sha256": "5699c3e9e0d4d49b766f9eb24e99f5207363a91bbd0a0f4eec7a06bd7a681ab6",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Vercel",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "호스팅",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "33,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "vercel",
+              "category": "hosting",
+              "item": "Vercel Pro plan - 1 month (1 seat)",
+              "amount": 30000,
+              "fee": 3000,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Vercel Inc. (버셀)",
+              "invoice_no": "VCL-2026-11-020447",
+              "date": "2026-11-02",
+              "item": "Vercel Pro plan - 1 month (1 seat)",
+              "amount_text": "30,000원",
+              "fee_text": "3,000원",
+              "total_text": "33,000원",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 744,
+              "cost_usd": 0,
+              "recorded_cost_usd": 6.9e-05,
+              "seconds": 2.31,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "582c3ee2-f96c-4496-80cd-58c90ebcd436"
+            ]
+          },
+          "wall_seconds": 0.0012493329995777458,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "582c3ee2-f96c-4496-80cd-58c90ebcd436",
+              "cache_hit": true,
+              "prompt_tokens": 612,
+              "completion_tokens": 132,
+              "cached_tokens": 428,
+              "cost_usd": 6.88e-05,
+              "latency_ms": 2313.1
+            }
+          ]
+        },
+        {
+          "id": "q-adobe",
+          "document": {
+            "name": "Adobe Stock 40-image pack (₩203,500, over cap with VAT)",
+            "text": "견적서 (QUOTATION)\n\nAdobe Stock (어도비 스톡) - Adobe Systems Korea\n견적번호: AS-KR-Q-26100614\n견적일자: 2026-10-06\n고객: 한결웹스튜디오 / 프로젝트: 카페 온담 홈페이지 리뉴얼\n\n품목                                        수량   금액\nAdobe Stock 이미지 팩 (표준 라이선스 이미지 40장)   1     185,000\n\n공급가액    185,000원\n부가세       18,500원\n합계        203,500원\n\n라이선스: 표준 라이선스, 웹사이트 사용 가능\n유효기간: 2026-10-13까지\n"
+          },
+          "sha256": "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124",
+          "expected": "BLOCK",
+          "observed": {
+            "result": "BLOCK",
+            "reason": "per_purchase",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Adobe Stock",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "디자인 소스",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": false,
+                "detail": "203,500원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "adobe-stock",
+              "category": "assets",
+              "item": "Adobe Stock 이미지 팩",
+              "amount": 185000,
+              "fee": 18500,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Adobe Stock (어도비 스톡) - Adobe Systems Korea",
+              "invoice_no": "AS-KR-Q-26100614",
+              "date": "2026-10-06",
+              "item": "Adobe Stock 이미지 팩",
+              "amount_text": "185,000",
+              "fee_text": "18,500",
+              "total_text": "203,500",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 761,
+              "cost_usd": 0,
+              "recorded_cost_usd": 5.8e-05,
+              "seconds": 2.11,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "f17f0398-10dd-41bf-963a-bb1d8a703675"
+            ]
+          },
+          "wall_seconds": 0.0015218330081552267,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "f17f0398-10dd-41bf-963a-bb1d8a703675",
+              "cache_hit": true,
+              "prompt_tokens": 646,
+              "completion_tokens": 115,
+              "cached_tokens": 645,
+              "cost_usd": 5.808e-05,
+              "latency_ms": 2107.8
+            }
+          ]
+        },
+        {
+          "id": "q-adobe-10",
+          "document": {
+            "name": "Adobe Stock 10-image pack (₩55,000)",
+            "text": "견적서 (QUOTATION)\n\nAdobe Stock (어도비 스톡) - Adobe Systems Korea\n견적번호: AS-KR-Q-26100615\n견적일자: 2026-10-06\n고객: 한결웹스튜디오 / 프로젝트: 카페 온담 홈페이지 리뉴얼\n\n품목                                        수량   금액\nAdobe Stock 이미지 팩 (표준 라이선스 이미지 10장)   1     50,000\n\n공급가액     50,000원\n부가세        5,000원\n합계         55,000원\n\n라이선스: 표준 라이선스, 웹사이트 사용 가능\n유효기간: 2026-10-13까지\n"
+          },
+          "sha256": "95c0098539109054968c5b6b6e51ee3395037d7544827d0cf829b35725fe971b",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "Adobe Stock",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "디자인 소스",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "55,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "adobe-stock",
+              "category": "assets",
+              "item": "Adobe Stock 이미지 팩 (표준 라이선스)",
+              "amount": 50000,
+              "fee": 5000,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "Adobe Stock (어도비 스톡) - Adobe Systems Korea",
+              "invoice_no": "AS-KR-Q-26100615",
+              "date": "2026-10-06",
+              "item": "Adobe Stock 이미지 팩 (표준 라이선스)",
+              "amount_text": "50,000",
+              "fee_text": "5,000",
+              "total_text": "55,000",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 776,
+              "cost_usd": 0,
+              "recorded_cost_usd": 7.2e-05,
+              "seconds": 2.28,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "ac49fb0d-5bb7-4e79-b08d-90872f38d1f7"
+            ]
+          },
+          "wall_seconds": 0.0015116249851416796,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "ac49fb0d-5bb7-4e79-b08d-90872f38d1f7",
+              "cache_hit": true,
+              "prompt_tokens": 642,
+              "completion_tokens": 134,
+              "cached_tokens": 429,
+              "cost_usd": 7.172e-05,
+              "latency_ms": 2275.3
+            }
+          ]
+        },
+        {
+          "id": "q-coupang",
+          "document": {
+            "name": "Coupang mechanical keyboard (₩129,000, off-list)",
+            "text": "쿠팡 주문 견적 / 결제 예정 내역\n\n판매: 쿠팡(주) | 사업자등록번호 120-88-00767 | 서울특별시 송파구 송파대로 570\n주문 예정번호: CP-20261005-88213094\n작성일: 2026-10-05\n\n상품명: 로지텍 MX Mechanical 무선 기계식 키보드 (적축)\n수량: 1개\n판매가: 129,000원\n배송비: 0원 (로켓배송)\n\n공급가액    117,273원\n부가세       11,727원\n결제금액    129,000원 (부가세 포함)\n"
+          },
+          "sha256": "906988cc1a48840e57ee388ebd4f63906a33d9089f9119a22cd4130b9b73ee03",
+          "expected": "BLOCK",
+          "observed": {
+            "result": "BLOCK",
+            "reason": "vendor",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": false,
+                "detail": "쿠팡",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "일반 쇼핑",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "129,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "coupang",
+              "category": "general",
+              "item": "로지텍 MX Mechanical 무선 기계식 키보드",
+              "amount": 117273,
+              "fee": 11727,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "쿠팡(주)",
+              "invoice_no": "CP-20261005-88213094",
+              "date": "2026-10-05",
+              "item": "로지텍 MX Mechanical 무선 기계식 키보드",
+              "amount_text": "117,273원",
+              "fee_text": "11,727원",
+              "total_text": "129,000원",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 785,
+              "cost_usd": 0,
+              "recorded_cost_usd": 7.3e-05,
+              "seconds": 2.46,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "28cebc8c-d64e-49bd-8f26-c2b3c5729eec"
+            ]
+          },
+          "wall_seconds": 0.0012846660101786256,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "28cebc8c-d64e-49bd-8f26-c2b3c5729eec",
+              "cache_hit": true,
+              "prompt_tokens": 648,
+              "completion_tokens": 137,
+              "cached_tokens": 428,
+              "cost_usd": 7.308e-05,
+              "latency_ms": 2459.6
+            }
+          ]
+        },
+        {
+          "id": "r-gabia",
+          "document": {
+            "name": "Gabia receipt (₩24,200)",
+            "text": "영 수 증\n\n영수증번호: GB-R-20261003-88213\n결제일시: 2026년 10월 3일 14:22\n공급자: (주)가비아 | 사업자등록번호 214-86-12345\n구매자: 한결웹스튜디오 (프로젝트: 카페 온담 홈페이지 리뉴얼)\n\n품목                              기간    수량   공급가액\n도메인 신규 등록 (ondam-cafe.co.kr)   1년     1     22,000\n\n공급가액    22,000원\n부가세      2,200원\n합계        24,200원\n결제수단: 법인카드 (끝자리 1187) 승인번호 30711542\n"
+          },
+          "sha256": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "expected": "APPROVE",
+          "observed": {
+            "result": "APPROVE",
+            "reason": "all rules passed",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": true,
+                "detail": "가비아",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": true,
+                "detail": "도메인",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": true,
+                "detail": "작업자 0x7de24839…",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": true,
+                "detail": "24,200원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": true,
+                "detail": "잔여 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": true,
+                "detail": "카테고리 예산 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": true,
+                "detail": "가용 500,000원",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": true,
+                "detail": "E1 업로드 문서, 판독 일치",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": true,
+            "proposal": {
+              "merchant": "gabia",
+              "category": "domain",
+              "item": "도메인 신규 등록 (ondam-cafe.co.kr)",
+              "amount": 22000,
+              "fee": 2200,
+              "units": 1
+            },
+            "fields": {
+              "vendor_text": "(주)가비아",
+              "invoice_no": "GB-R-20261003-88213",
+              "date": "2026년 10월 3일 14:22",
+              "item": "도메인 신규 등록 (ondam-cafe.co.kr)",
+              "amount_text": "22,000",
+              "fee_text": "2,200",
+              "total_text": "24,200",
+              "units": 1
+            },
+            "problems": [],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 801,
+              "cost_usd": 0,
+              "recorded_cost_usd": 7.4e-05,
+              "seconds": 2.38,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "583c3d4d-1764-4d19-b9c8-6309592a93e4"
+            ]
+          },
+          "wall_seconds": 0.0012324589770287275,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "583c3d4d-1764-4d19-b9c8-6309592a93e4",
+              "cache_hit": true,
+              "prompt_tokens": 665,
+              "completion_tokens": 136,
+              "cached_tokens": 428,
+              "cost_usd": 7.416000000000001e-05,
+              "latency_ms": 2381.9
+            }
+          ]
+        },
+        {
+          "id": "r-blurry",
+          "document": {
+            "name": "Blurry scanned receipt (unreadable)",
+            "text": "영 수 증  (스캔 사본 — 일부 판독 불가)\n\n...비아 | 사업자등록번호 214-86-1....\n결제일시: 2026년 10월 ..일\n\n품목: 도메인 ... (ondam-...)\n금액: ##,### 원\n합계: (인쇄 흐림)\n"
+          },
+          "sha256": "bbe4030f0a40d536fee00793694d47106c9ec4415a591b635d9cb0003c61ff85",
+          "expected": "HOLD",
+          "observed": {
+            "result": "HOLD",
+            "reason": "amount_text \"##,###\" is not an amount",
+            "rules": [
+              {
+                "rule": "allocation",
+                "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "state",
+                "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "window",
+                "label": "정책 기간",
+                "ok": true,
+                "detail": "",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payment_mode",
+                "label": "결제 방식 (환급)",
+                "ok": true,
+                "detail": "환급 (작업자에게 지급)",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "vendor",
+                "label": "허용 공급자",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category",
+                "label": "허용 카테고리",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "payee",
+                "label": "수취인 (정책에 등록된 작업자 지갑)",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "per_purchase",
+                "label": "건별 한도 (부가세·수수료 포함)",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "expense_budget",
+                "label": "경비 예산 잔여",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "category_budget",
+                "label": "카테고리 예산 잔여",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "funds",
+                "label": "예치금 가용 잔액",
+                "ok": null,
+                "detail": "공급자·금액을 알 수 없음",
+                "kind": "mandatory"
+              },
+              {
+                "rule": "evidence",
+                "label": "문서 판독과 증빙 수준",
+                "ok": false,
+                "detail": "판독 결과를 신뢰할 수 없음",
+                "kind": "evidence"
+              },
+              {
+                "rule": "probable_duplicate",
+                "label": "중복 가능성 (같은 공급자·같은 금액)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "split_pattern",
+                "label": "분할 청구 (건별 한도 회피)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              },
+              {
+                "rule": "price_anomaly",
+                "label": "가격 이상 (카테고리 대표값 대비)",
+                "ok": true,
+                "detail": "",
+                "kind": "risk"
+              }
+            ]
+          },
+          "correct": true,
+          "reading": {
+            "ok": false,
+            "proposal": null,
+            "fields": {
+              "vendor_text": "가비아",
+              "invoice_no": "...",
+              "date": "2026년 10월 ..일",
+              "item": "도메인",
+              "amount_text": "##,###",
+              "fee_text": "0",
+              "total_text": "...",
+              "units": 1
+            },
+            "problems": [
+              "amount_text \"##,###\" is not an amount"
+            ],
+            "source": "ai",
+            "model": "qwen3-32b",
+            "usage": {
+              "tokens": 609,
+              "cost_usd": 0,
+              "recorded_cost_usd": 4.9e-05,
+              "seconds": 1.61,
+              "cached": true,
+              "calls": 1
+            },
+            "generation_ids": [
+              "14389323-63a4-4ee4-990e-e52e64e3c4b2"
+            ]
+          },
+          "wall_seconds": 0.001298374991165474,
+          "calls": [
+            {
+              "flow": "quote",
+              "model": "qwen3-32b",
+              "generation_id": "14389323-63a4-4ee4-990e-e52e64e3c4b2",
+              "cache_hit": true,
+              "prompt_tokens": 523,
+              "completion_tokens": 86,
+              "cached_tokens": 432,
+              "cost_usd": 4.8639999999999995e-05,
+              "latency_ms": 1605.1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -2,6 +2,7 @@
 // src/dev/fixture.ts instead, so the UI can be checked without the server.
 
 import { language, tr } from "./i18n"
+import { signIntent, type WalletIntent } from "./wallet"
 import type {
   ActionOk,
   AgentRun,
@@ -83,6 +84,23 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 
 const q = (role: Role) => `as=${encodeURIComponent(role)}&lang=${language()}`
 
+async function approval(id: string, as: Role, action: string, params: ActionParams) {
+  const intent = await call<WalletIntent>("POST", `/api/projects/${encodeURIComponent(id)}/wallet-intent`, { as, action, params })
+  return signIntent(intent, id, as, action)
+}
+
+export async function downloadEvidence(id: string): Promise<void> {
+  if (FIXTURE) throw new Error("Evidence export is available for recorded projects, not UI fixtures.")
+  const res = await fetch(`/api/projects/${encodeURIComponent(id)}/evidence`)
+  if (!res.ok) throw new Error(tr("api.server", { status: res.status }))
+  const url = URL.createObjectURL(await res.blob())
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `ploby-${id}-evidence.zip`
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 const http: Backend = {
   meta: () => call("GET", "/api/meta?lang=" + language()),
   clock: () => call("GET", "/api/clock"),
@@ -94,10 +112,10 @@ const http: Backend = {
   projects: (as) => call("GET", `/api/projects?${q(as)}`),
   createProject: (project) => call("POST", "/api/projects?lang=" + language(), { as: "client", ...project }),
   project: (id, as) => call("GET", `/api/projects/${encodeURIComponent(id)}?${q(as)}`),
-  act: (id, as, action, params) =>
-    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action, lang: language() }),
+  act: async (id, as, action, params) =>
+    call("POST", `/api/projects/${encodeURIComponent(id)}/actions`, { ...params, as, action, lang: language(), wallet: await approval(id, as, action, params) }),
   onchain: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/chain`),
-  agentRun: (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers, lang: language() }),
+  agentRun: async (id, as, task, offers) => call("POST", `/api/projects/${encodeURIComponent(id)}/agent`, { as, task, offers, lang: language(), wallet: await approval(id, as, "agent_run", { task, offers }) }),
   audit: (id) => call("GET", `/api/projects/${encodeURIComponent(id)}/audit`),
 }
 

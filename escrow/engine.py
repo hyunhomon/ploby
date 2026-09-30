@@ -71,7 +71,7 @@ class Project(Core, Milestones, Expenses, Changes):
             raise Refused('에이전트 계획이 없습니다', 'invalid')
         tid = f"A{len(self.agent_tasks) + 1}"
         self.agent_tasks.append({'id': tid, 'task': str(p.get('task') or '')[:500], 'offers': offers, 'plan': plan,
-                                 'ai': i.get('ai'), 'at': line['at'], 'line': len(self.log)})
+                                 'ai': i.get('ai'), 'wallet': i.get('wallet'), 'at': line['at'], 'line': len(self.log)})
         name = {o.get('id'): o.get('name') for o in offers}
         needs = '; '.join(f"{n['need']}: {' → '.join(name.get(x, x[:8]) for x in n['offers']) or '맞는 견적 없음'}"
                           for n in plan['needs'])
@@ -79,7 +79,9 @@ class Project(Core, Milestones, Expenses, Changes):
 
     def agent_view(self, t):
         mine = [e for e in self.expenses.values() if (e.get('via') or {}).get('task') == t['id']]
-        return {**t, 'requests': [{'expense': e['id'], 'need': e['via'].get('need'), 'try': e['via'].get('try'),
+        stopped = any(r['rule'] == 'state' and r['ok'] is False for e in mine
+                      for r in (e['decision'] or {}).get('rules') or [])
+        return {**t, 'stopped': stopped, 'requests': [{'expense': e['id'], 'need': e['via'].get('need'), 'try': e['via'].get('try'),
                                    'document': (e['quote'] or {}).get('document'), 'status': e['status'],
                                    'result': (e['decision'] or {}).get('result'),
                                    'rule': next((r['rule'] for r in (e['decision'] or {}).get('rules') or []
@@ -248,7 +250,11 @@ class Project(Core, Milestones, Expenses, Changes):
 
     def view(self, role, now):
         ps = pol.parties()
+        for party in ps:
+            if self.doc:
+                ps[party]['address'] = self.doc[party + 'Address']
         return {'id': self.id, 'name': self.name, 'status': self.status, 'paused': self.paused, 'now': now,
+                'authorization': (self.doc or {}).get('authorization'),
                 'created_at': self.created_at, 'viewer': ps[role], 'parties': ps,
                 'policy': self.policy_view(self.active) if self.active else None,
                 'proposals': [self.policy_view(v) for v in self.versions if v['status'] == 'PROPOSED'],

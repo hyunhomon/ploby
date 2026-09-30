@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import agent, ai, chain, policy as pol
+from . import agent, ai, chain, wallet, policy as pol
 from .core import Refused, raw
 from .engine import Project
 
@@ -273,10 +273,23 @@ class Store:
                 doc = pol.initial(pid, str(spec.get('name') or '').strip() or '새 프로젝트', r, ms, spec.get('periods'),
                                   spec.get('ends_at'), now, (rules.get('form') or {}).get('category_budgets')
                                   if rules.get('mode') != 'words' else spec.get('category_budgets'))
+                wallet.configure(doc, spec.get('wallets'), chain.deployment())
             except pol.PolicyError as e:
                 raise Refused(str(e), 'invalid') from None
             P, _ = self.commit(Project(pid), self.line('client', 'create', {'doc': doc}, {}, now))
             return P.view(role, now)
+
+    def wallet_intent(self, pid, role, action, params):
+        if role not in pol.ROLES or action not in ACTIONS | {'agent_run'}:
+            raise Refused('Unknown wallet action.', 'invalid')
+        with self.lock:
+            self.keeper(pid)
+            P = self.get(pid)
+            if not wallet.required(P, role) or action == 'run_timeouts':
+                return {'required': False}
+            expires = (max(self.now(), P.at) // 1000) + 300
+            return {'required': True, 'signer': P.doc[role + 'Address'], 'head': P.head, 'expires': expires,
+                    'typed_data': wallet.typed_data(P, role, action, params, expires)}
 
     def act(self, pid, role, action, params):
         if role not in pol.ROLES:
@@ -288,6 +301,8 @@ class Store:
             P = self.get(pid)
             if action == 'run_timeouts':
                 return '경과한 기한을 모두 처리했습니다', P.view(role, self.now())
+            if not (action == 'request_commitment' and params.get('via')):
+                wallet.verify(P, role, action, clean(params), params.get('wallet'), max(self.now(), P.at))
             context = {'name': P.name, 'milestones': [m['title'] for m in P.milestones.values()]}
         inputs = self.prepare(pid, role, action, params, context)  # may call the model: outside the lock
         with self.lock:
@@ -299,12 +314,14 @@ class Store:
                 inputs['chain'] = {'skipped': 'the project changed while the contract was read'}  # stale: engine only
             if action == 'sign_policy':
                 inputs['signature'] = pol.sign(role, P.version(params.get('version'))['hash'])
+            if params.get('wallet'):
+                inputs['wallet'] = params['wallet']
             if 'manifest_docs' in inputs:
                 inputs['manifest'] = self.manifest(pid, action, inputs.pop('manifest_docs'), role, now, params.get('note', ''))
             P, text = self.commit(P, self.line(role, action, clean(params), inputs, now))
             return text, {**P.view(role, now), 'chain': self.chain_status(pid)}
 
-    def agent_run(self, pid, role, task, offer_ids):
+    def agent_run(self, pid, role, task, offer_ids, proof=None):
         """The contractor's purchase agent (escrow/agent.py): plan once, then file the plan's first choices as
         requests; on a BLOCK try the need's next offer, on a HOLD wait, on a stopped project stop."""
         if role != 'contractor':
@@ -312,6 +329,8 @@ class Store:
         task = str(task or '').strip()
         if not task:
             raise Refused('에이전트에게 맡길 일을 적어 주세요', 'invalid')
+        if len(task) > 500:
+            raise Refused('Keep the task within 500 characters.', 'invalid')
         ids = list(dict.fromkeys(offer_ids or []))
         if not ids or len(ids) > agent.MAX_OFFERS:
             raise Refused(f'견적(공급자 문서)을 1~{agent.MAX_OFFERS}개 고르세요', 'invalid')
@@ -320,6 +339,7 @@ class Store:
             self.keeper(pid)
             P = self.get(pid)
             P.state_is('ACTIVE', 'CLOSING')
+            wallet.verify(P, role, 'agent_run', {'task': task, 'offers': ids}, proof, max(self.now(), P.at))
             context = {'name': P.name, 'contractor': pol.NAMES['contractor']}
         found, meta = self.planner(task, [{'id': d['id'], 'name': d['name'], 'text': d['text']} for d in docs], context)
         if not found:
@@ -330,7 +350,7 @@ class Store:
             P = self.get(pid)
             offers = [{'id': d['id'], 'name': d['name']} for d in docs]
             P, _ = self.commit(P, self.line('contractor', 'agent_task', {'task': task, 'offers': offers},
-                                            {'plan': found, 'ai': meta}, max(self.now(), P.at)))
+                                            {'plan': found, 'ai': meta, **({'wallet': proof} if proof else {})}, max(self.now(), P.at)))
             tid = P.agent_tasks[-1]['id']
         tried, stopped = [], None
         for need in found['needs']:
@@ -346,7 +366,9 @@ class Store:
                 rule = d.get('reason') if d.get('result') == 'BLOCK' else None
                 tried.append({'need': need['need'], 'document': doc_id, 'expense': e['id'], 'result': d.get('result'),
                               'rule': rule, 'status': e['status']})
-                if rule == 'state':
+                # The first failing rule can be allocation for a previously used quote. A paused or closed
+                # project still stops the entire task, regardless of which rule supplied the primary reason.
+                if any(r['rule'] == 'state' and r['ok'] is False for r in d.get('rules') or []):
                     stopped = '프로젝트가 멈춰 있어 에이전트가 중단했습니다'
                 if d.get('result') != 'BLOCK' or stopped:
                     break
@@ -385,4 +407,4 @@ class Store:
 
 def clean(params):
     """What of the request goes into the line: the params, never the acting role or bulky inputs."""
-    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action', 'lang')}
+    return {k: v for k, v in (params or {}).items() if k not in ('as', 'action', 'lang', 'wallet')}

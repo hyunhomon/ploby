@@ -1,0 +1,197 @@
+{
+  "project": "p7ccf1ec48ac6",
+  "name": "Cafe Ondam website renewal",
+  "log": "data/projects/p7ccf1ec48ac6/log.jsonl",
+  "lines": 14,
+  "head": "f16bef4e2586aa73cc442fe4fdadbd9b1f5d1e97b2b83231e4e0be897b2987e2",
+  "replay": {
+    "ok": true,
+    "refused": null,
+    "status": "ACTIVE",
+    "ledger": {
+      "budget": 4500000,
+      "expense_budget": 500000,
+      "milestone_budget": 4000000,
+      "funded": 4500000,
+      "expense_reserved": 0,
+      "milestone_reserved": 4000000,
+      "expense_released": 0,
+      "milestone_released": 0,
+      "released": 0,
+      "refunded": 0,
+      "migrated_out": 0,
+      "available": 500000,
+      "expense_capacity": 500000,
+      "milestone_capacity": 0,
+      "deposit_room": 0,
+      "funding_needed": 0
+    }
+  },
+  "policies": [
+    {
+      "version": 1,
+      "hash": "0x0558dd46c404e3e1680e94895b502e40cc19728bd10bba6771d7eab677871f85",
+      "status": "ACTIVE",
+      "signed": {
+        "client": 1790992855187,
+        "contractor": 1790992855189
+      },
+      "readback": [
+        "총 한도: 50만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+        "공급자: AWS, Vercel, 가비아, Figma, Adobe Stock만",
+        "기간: 지금부터 2026-10-31(토) 23:59까지",
+        "한 번에: 20만 원까지 (부가세·수수료 포함)",
+        "횟수: 제한 없음"
+      ]
+    }
+  ],
+  "evidence": {
+    "status": "verified",
+    "checked": 2,
+    "total": 2,
+    "missing": [],
+    "failed": [],
+    "documents": [
+      {
+        "id": "906988cc1a48840e57ee388ebd4f63906a33d9089f9119a22cd4130b9b73ee03",
+        "name": "Coupang mechanical keyboard (₩129,000, off-list)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      },
+      {
+        "id": "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124",
+        "name": "Adobe Stock 40-image pack (₩203,500, over cap with VAT)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      }
+    ]
+  },
+  "authorization": {
+    "status": "demo",
+    "wallet_actions": 0,
+    "contract_verifies_signatures": false
+  },
+  "payments": [],
+  "refunds": [],
+  "stops": [
+    {
+      "ref": "E1",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "vendor",
+      "label": "허용 공급자",
+      "line": 9,
+      "via": {
+        "need": "mechanical keyboard for project office",
+        "task": "A1",
+        "try": 1,
+        "why": "The offer provides a mechanical keyboard matching the request."
+      },
+      "amount": 129000
+    },
+    {
+      "ref": "E2",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "per_purchase",
+      "label": "건별 한도 (부가세·수수료 포함)",
+      "line": 12,
+      "via": {
+        "need": "40-image stock-photo pack for the websit",
+        "task": "A2",
+        "try": 1,
+        "why": "The offer provides a pack of 40 standard license images suitable for website use, exactly as requested."
+      },
+      "amount": 203500
+    }
+  ],
+  "chain": {
+    "contract": "0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "contract_url": "https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "calls": [
+      {
+        "line": 2,
+        "n": 0,
+        "call": "open",
+        "tx": "0x08cb8c29e9f37be90d7cf6c13cf4646c53bf5fc03a0e42faaa2e6333bedf0131",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x08cb8c29e9f37be90d7cf6c13cf4646c53bf5fc03a0e42faaa2e6333bedf0131"
+      },
+      {
+        "line": 2,
+        "n": 1,
+        "call": "fund",
+        "tx": "0x907478ab3e782faeaaa3841dcce9db21fabb42eaa4e25d2a9ba5742130868af1",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x907478ab3e782faeaaa3841dcce9db21fabb42eaa4e25d2a9ba5742130868af1"
+      },
+      {
+        "line": 3,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x0531d9544513fb98d2fb41bef8edd12977423ebdacb141f78502389b97c0299c",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x0531d9544513fb98d2fb41bef8edd12977423ebdacb141f78502389b97c0299c"
+      },
+      {
+        "line": 3,
+        "n": 1,
+        "call": "decide",
+        "tx": "0x1c0940a0c3b3ab1337017eceada67ccec86f5d101b52ca3d5e15766b94335c78",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x1c0940a0c3b3ab1337017eceada67ccec86f5d101b52ca3d5e15766b94335c78"
+      },
+      {
+        "line": 9,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x87f2d29aecb42a7501058382d7fa7e71e1d5c3d431bc255659ceb8d86c3705d4",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x87f2d29aecb42a7501058382d7fa7e71e1d5c3d431bc255659ceb8d86c3705d4"
+      },
+      {
+        "line": 12,
+        "n": 0,
+        "call": "decide",
+        "tx": "0xfed139854ff621adce522456a9a94f04c8e826787fd8b4995aa92197dfe56f1a",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xfed139854ff621adce522456a9a94f04c8e826787fd8b4995aa92197dfe56f1a"
+      }
+    ],
+    "onchain": {
+      "client": "0xd51bb0f75bebcb03ee5b40f1f0a04a5ba060f845",
+      "contractor": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
+      "policy_hash": "0x0558dd46c404e3e1680e94895b502e40cc19728bd10bba6771d7eab677871f85",
+      "budget": 4500000,
+      "funded": 4500000,
+      "reserved": 4000000,
+      "paid": 0,
+      "refunded": 0,
+      "paused": false,
+      "log_head": "0xde80036585484af432054b346a28a3654cae9ea05b92738f811e2dd524ad6b1d",
+      "available": 500000
+    },
+    "engine": {
+      "funded": 4500000,
+      "reserved": 4000000,
+      "paid": 0,
+      "refunded": 0
+    },
+    "balances_match": true,
+    "problems": []
+  },
+  "verdict": {
+    "records_consistent": true,
+    "status": "incomplete",
+    "reasons": [
+      "no_completed_payment",
+      "demo_authorization"
+    ],
+    "chain": "checked",
+    "payments": 0,
+    "inside": 0,
+    "stops": 2
+  }
+}

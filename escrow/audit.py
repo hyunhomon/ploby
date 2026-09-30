@@ -58,13 +58,46 @@ def doc_check(docs, doc, total=None):
     """The evidence file against the hash the log names: found, hash ok, and whether the total appears in it."""
     if not doc:
         return {'found': False}
-    f = Path(docs) / f"{doc['id']}.json"
+    ident = str(doc.get('id', ''))
+    if not re.fullmatch(r'[0-9a-f]{64}', ident):
+        return {'found': True, 'id': ident, 'hash_ok': False, 'error': 'invalid document id'}
+    f = Path(docs) / f"{ident}.json"
     if not f.exists():
         return {'found': False, 'id': doc['id']}
-    text = json.loads(f.read_text(encoding='utf-8')).get('text', '')
+    try:
+        text = json.loads(f.read_text(encoding='utf-8'))['text']
+        if not isinstance(text, str):
+            raise ValueError('document text is not a string')
+    except (OSError, ValueError, KeyError, TypeError):
+        return {'found': True, 'id': ident, 'hash_ok': False, 'error': 'unreadable document'}
     ok = hashlib.sha256(text.encode('utf-8')).hexdigest() == doc['id']
     amounts = {int(n.replace(',', '')) for n in re.findall(r'(\d[\d,]*)\s*원', text)}
     return {'found': True, 'id': doc['id'], 'hash_ok': ok, 'total_in_text': None if total is None else total in amounts}
+
+
+def document_refs(lines):
+    """All source documents named by the records, including delivery and replacement receipt evidence."""
+    found = {}
+    def visit(value):
+        if isinstance(value, dict):
+            if isinstance(value.get('id'), str) and re.fullmatch(r'[0-9a-f]{64}', value['id']) and 'name' in value:
+                found[value['id']] = {'id': value['id'], 'name': str(value['name'])}
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+    visit(lines)
+    return list(found.values())
+
+
+def check_evidence(lines, docs):
+    checks = [{**d, **doc_check(docs, d)} for d in document_refs(lines)]
+    missing = [d['id'] for d in checks if not d['found']]
+    failed = [d['id'] for d in checks if d['found'] and not d.get('hash_ok')]
+    return {'status': 'failed' if failed else 'incomplete' if missing else 'verified',
+            'checked': len(checks) - len(missing), 'total': len(checks),
+            'missing': missing, 'failed': failed, 'documents': checks}
 
 
 def replay(pid, lines):
@@ -251,6 +284,14 @@ def audit(target, data=str(ROOT / 'var'), offline=False, rail=None):
                             'readback': v['doc']['expenseRules']['readback']} for v in P.versions]}
     if refused:
         return report
+    report['evidence'] = check_evidence(lines, docs)
+    signed_policies = [v for v in P.versions if v['status'] != 'PROPOSED']
+    wallet_mode = (P.doc or {}).get('authorization', {}).get('scheme') == 'ploby.wallet/1'
+    proved = bool(signed_policies) and all(
+        s and s.get('scheme') == 'eip712' for v in signed_policies for s in v['signatures'].values())
+    report['authorization'] = {'status': 'verified' if wallet_mode and proved else 'incomplete' if wallet_mode else 'demo',
+                               'wallet_actions': sum(bool((x.get('inputs') or {}).get('wallet')) for x in lines),
+                               'contract_verifies_signatures': False}
     report['payments'] = [expense_story(P, e, events, docs) for e in P.expenses.values() if e['paid']] + \
                          [milestone_story(P, m, events) for m in P.milestones.values() if m['paid']]
     report['refunds'] = [{'line': x['line'], 'amount': x['amount'], 'by': x['by'], 'to': 'client'}
@@ -269,10 +310,27 @@ def audit(target, data=str(ROOT / 'var'), offline=False, rail=None):
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             report['chain'] = {'error': f'chain unreachable ({type(e).__name__})'}
             state = 'unreachable'
-    report['verdict'] = {'records_consistent': refused is None and state != 'unreachable'
-                                               and not (report.get('chain') or {}).get('problems'),
+    consistent = not (report.get('chain') or {}).get('problems') and not report['evidence']['failed']
+    reasons = []
+    if report['evidence']['missing']:
+        reasons.append('missing_documents')
+    if report['evidence']['failed']:
+        reasons.append('invalid_documents')
+    if state != 'checked':
+        reasons.append('chain_unchecked')
+    if not report['payments']:
+        reasons.append('no_completed_payment')
+    if report['authorization']['status'] != 'verified':
+        reasons.append('demo_authorization' if not wallet_mode else 'unsigned_policy')
+    inside = sum(1 for p in report['payments'] if p['inside'])
+    if inside != len(report['payments']):
+        reasons.append('payment_outside_policy')
+    failed = not consistent or inside != len(report['payments'])
+    report['verdict'] = {'records_consistent': consistent and state != 'unreachable',
+                         'status': 'failed' if failed else 'incomplete' if reasons else 'verified',
+                         'reasons': reasons,
                          'chain': state, 'payments': len(report['payments']),
-                         'inside': sum(1 for p in report['payments'] if p['inside']), 'stops': len(report['stops'])}
+                         'inside': inside, 'stops': len(report['stops'])}
     return report
 
 
@@ -289,7 +347,12 @@ def render(r):
                    f"apply: {rp['refused']['error']} — the record was edited or is corrupt")
         return '\n'.join(out)
     L = rp['ledger']
-    out.append(f"{mark(True)} every signature verifies (demo HMAC keys) and the hash chain recomputes to the head")
+    out.append(f"{mark(True)} log envelopes verify and the hash chain recomputes to the head")
+    auth = r['authorization']
+    out.append(f"authorization: {auth['status']} ({auth['wallet_actions']} EIP-712 action approvals)")
+    if auth['status'] == 'demo':
+        out.append('  [--] Public demo HMAC keys do not establish independent human approval.')
+    out.append('  Wallet proofs are verified by this auditor and the engine. The contract still trusts the operator for policy decisions.')
     out.append(f"{mark(True)} replaying the log alone rebuilds the state: {rp['status']}, funded {won(L['funded'])}, "
                f"reserved {won(L['expense_reserved'] + L['milestone_reserved'])}, paid {won(L['released'])}, "
                f"refunded {won(L['refunded'])}")
@@ -297,6 +360,12 @@ def render(r):
         s = v['signed']
         out.append(f"policy v{v['version']} {v['hash'][:18]}… {v['status']}: signed by client {'✓' if s.get('client') else '✗'}, "
                    f"contractor {'✓' if s.get('contractor') else '✗'}")
+    evidence = r['evidence']
+    out.append(f"evidence: {evidence['status']} ({evidence['checked']}/{evidence['total']} originals checked)")
+    for ident in evidence['missing']:
+        out.append(f"  [--] missing original {ident}")
+    for ident in evidence['failed']:
+        out.append(f"  [!!] invalid original {ident}")
     out.append('\npayments')
     for p in r['payments']:
         out.append(f"  {p['ref']} {won(p['paid'] if 'paid' in p else sum(x['amount'] for x in p['payments']))} → contractor "
@@ -340,8 +409,10 @@ def render(r):
     v = r['verdict']
     state = ('consistent' if v['records_consistent'] else
              'NOT verified: the chain could not be read' if v.get('chain') == 'unreachable' else 'NOT consistent')
-    out.append(f"\nverdict: {v['inside']} of {v['payments']} payments shown inside what the client allowed; "
+    out.append(f"\nverdict: {v['status'].upper()}: {v['inside']} of {v['payments']} payments shown inside what the client allowed; "
                f"{v['stops']} stops recorded; records {state}" + (' (chain not checked: offline)' if v.get('chain') == 'offline' else ''))
+    if v['reasons']:
+        out.append('not fully verified: ' + ', '.join(v['reasons']))
     return '\n'.join(out)
 
 
@@ -356,8 +427,9 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
     r = audit(a.target, a.data, a.offline)
     print(json.dumps(r, ensure_ascii=False, indent=2, default=str) if a.json else render(r))
-    ok = r['replay']['ok'] and r.get('verdict', {}).get('records_consistent')
-    return 0 if ok else 1
+    if not r['replay']['ok'] or r.get('verdict', {}).get('status') == 'failed':
+        return 1
+    return 0 if r['verdict']['status'] == 'verified' else 2
 
 
 if __name__ == '__main__':

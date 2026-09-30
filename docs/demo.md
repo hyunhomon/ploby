@@ -1,31 +1,34 @@
-# Three-minute demo script
+# Submission demo: 2 minutes 49 seconds
 
-Setup: `python3 -m escrow.server`, `cd frontend && npm run dev`, then `python3 harness/demo_setup.py` (prints a signed, funded project and one link per role). Open the client and contractor links in two windows side by side; `&as=` pins each window's role. Switch the UI to English with the language selector at the top right. Views refresh every ten seconds. The recorded runs are in [`evidence.md`](evidence.md).
+The [final MP4](../output/submission/Ploby-Track-B-Demo.mp4) contains English captions and demonstrates Track B through two separate out-of-scope agent runs, each with a visible stop and an on-chain record. [YouTube upload copy](../output/submission/YouTube-upload.txt) includes chapters and the trust disclosures. Upload it as Unlisted, then submit its public watch link.
 
-Rehearse once with the default task and the seven offers. Kiln answers are cached per exact request (`harness/runs/cache`), so on stage the same plan and readings replay at no cost, even if the venue network or Kiln is unstable (the usage line then says cached). Chain calls retry in order when the network drops. The default task text follows the UI language; rehearse in the language you will present in, since a different task text is a new (live) Kiln call and the agent may plan differently.
+| Time | Demonstration |
+| --- | --- |
+| 00:00 | Shared project scope, budget and demo signatures |
+| 00:10 | Kiln plan; over-cap stock images blocked; next planned offer approved |
+| 00:40 | Purchase report, receipt submission, client review and settlement |
+| 01:12 | Confirmed 24,200 TestKRW transaction |
+| 01:21 | Boundary run A1: unlisted keyboard vendor |
+| 01:42 | Boundary run A2: 203,500 KRW total over the 200,000 KRW cap |
+| 01:58 | Both recorded stops, their log lines and public-chain events |
+| 02:08 | Client pause and stopped agent task |
+| 02:24 | Independent verification and portable evidence |
+| 02:41 | Matched inference benchmark and honest energy assumptions |
 
-| Time | Screen | What to say |
-| --- | --- | --- |
-| 0:00–0:20 | Home | "The trouble starts after you hand money to an AI. Payment rails record who paid whom, not who allowed it or on what terms. Ploby lets an AI purchasing agent only *request* purchases; a policy both parties signed decides, and a contract moves the money." |
-| 0:20–0:45 | Client · Overview · **On-chain escrow** card | "The client signed the policy and funded it. That deposit is a Monad testnet transaction, and the on-chain balances match the engine's ledger exactly. The contract pays only the contractor wallet written in the policy." |
-| 0:45–1:35 | Contractor · Expenses · **Purchase agent** | Keep the default task and all seven offers, then "Hand it to the agent". "One Kiln call makes the plan. The rules answer each request. The domain is **APPROVE**. The 40-image pack is within the cap before VAT, but over 200,000 won with VAT: **BLOCK**. The agent then files its plan's next offer, the 10-image pack, and gets **APPROVE**: the engine's answer drives the agent's next step. Coupang is not on the list: **BLOCK**. The AWS invoice carries an injected order to change the payee. The agent was fooled, but the price anomaly made it a **HOLD**, and the payee can't change anyway." Click a tx link under a request to show the `Decided` event on the explorer. |
-| 1:35–2:05 | Client · Manage · **Pause new commitments** → Contractor · run the agent again | "The client stops it. That is a transaction from the client's own wallet. The agent's next request doesn't vanish: it is a **BLOCK (project state)** in the log and on chain, and the agent stops the task." |
-| 2:05–2:40 | **Verify** tab → Verify now (or `python3 -m escrow.audit …` in a terminal) | "This doesn't trust our server. It recomputes everything from the log file and the public chain: every signature and the hash chain, a replay of the log, which policy and rules allowed each payment and who approved it, each transaction's event against its log line, and the contract's balances against the ledger." |
-| (if time) | Terminal `python3 harness/tamper.py` | "Change one amount in the log and the auditor names that line. Re-sign it with our public demo key and it still fails: the log heads and the amount anchored on chain don't match. That is what the chain guarantees." |
-| 2:40–3:00 | [`efficiency.md`](efficiency.md) table | "Zero model calls decide money. Rules are compiled once per project, each document is read once and cached. Tokens and energy per flow are in this table. The AI only interprets; rules and a contract move the money." |
+## Rehearsal
 
-## Before presenting
+Start the API (`python3 -m escrow.server`) and Vite, then run `python3 harness/demo_setup.py` to create a signed and funded test project. Install `requirements.txt` first if demonstrating optional wallet approvals. Pick English in the UI. The demo role selector is not authentication.
 
-1. `git pull`, and `.env` with `KILN_API_KEY`, `DEPLOYER_KEY` and `RELAYER_KEY` (chain keys from the web3 teammate).
-2. The `python3 -m escrow.server` start line shows `Kiln on` and `chain Monad testnet 0x0c54…`.
-3. `cd frontend && npm run dev`, then open the two links `python3 harness/demo_setup.py` prints, and pick English.
-4. Rehearse once with the default task and seven offers to fill the cache. Check the operator's gas with `python3 -c "from escrow import chain; print(chain.Rail(write=False).gas('operator'))"` (the worker tops it up below 0.3 MON).
-5. Keep an explorer tab open on the PlobyEscrow address.
-6. No network? Present from [`evidence.md`](evidence.md) (its table and tx links), the README screenshots and `python3 harness/tamper.py --offline`. The results are the same.
+For the normal task, select only the Gabia domain, Adobe 40-image pack, Adobe 10-image pack and Coupang keyboard offers. Ask: “Set up a one-year domain, get 40 stock photos (use the 10-image plan as a fallback), and buy an office keyboard.” Show the plan and the rule behind each decision. Report the domain purchase, submit the Gabia receipt, switch to the client and approve its settlement. Wait for the chain receipt.
 
-## Expected questions
+Prepare a **fresh project with the same policy** for the two boundary runs. Previously requested documents are already allocated, even if blocked; reusing the old project can make `allocation` the primary rule rather than the boundary being demonstrated.
 
-- **What if your operator key is stolen?** It could record an out-of-policy decision, but it cannot pay anyone but the contractor or move more than was funded, and the client can pause on chain at any time. Enforcing the decisions themselves on chain (EIP-712, a per-project ProjectEscrow) is the target design.
-- **Shouldn't the agent know the rules?** It may, but nobody needs to trust it. Whatever the agent believes, code reads the vendor's document itself and decides. In our run the agent picked the injected invoice and the policy caught it.
-- **Why not gpt-oss-120b?** The organizers changed the challenge model and Kiln returns 404 for gpt-oss-120b. Every stage runs `qwen3-32b`, routed per stage in `pipeline.json`.
-- **What if the model fails?** A failed reading is a HOLD, a failed plan files nothing. Nothing is ever approved automatically.
+1. Select only the Coupang keyboard and ask “Request this mechanical keyboard for our project office.” Show the live plan and `BLOCK · Vendor`.
+2. Select only the Adobe 40-image pack and ask “Request the 40-image stock-photo pack for the website.” Show the second plan and `BLOCK · Per-purchase limit`.
+3. Open Verify and expand the details. Both stops must appear, each with its own log line and chain link. This boundary-only project has no completed payment; its report must say so.
+
+In the workflow project, the client can pause new commitments and the contractor can rerun the task. Even if a duplicate allocation is the first failed rule, the failed state rule must stop remaining purchases. Existing accepted commitments can still be settled.
+
+Export the workflow ZIP and run `python3 verify.py` outside the application. With demo signatures, the expected result is `incomplete`, not fully verified. Present the public transaction, document hashes and reconstructed payment separately from human-approval authenticity. See [submission.md](submission.md) for exact final logs, transactions and limitations.
+
+A cache replay is labeled as such and makes no new inference call. A failed plan files nothing; an unreadable document cannot silently become an approval. With no chain network, show the archived report and disclose that current chain verification is unavailable.

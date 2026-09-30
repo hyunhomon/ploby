@@ -20,7 +20,7 @@ Three fixed demo identities stand in for wallets. Every request names the acting
 | `contractor` | 작업자 | 한결웹스튜디오 |
 | `resolver` | 분쟁 해결자 | Ploby 분쟁 해결자 |
 
-Signatures are HMAC-SHA256 with per-role demo keys held by the server; they stand in for wallet (EIP-712) signatures.
+Default projects use public HMAC-SHA256 demo keys. They support deterministic replay, not proof that a person approved. Optional `NewProject.wallets` configures three distinct, nonzero Ethereum addresses (`client`, `contractor`, `resolver`). Those projects require EIP-712 proofs for party actions; both the engine and offline replay verify them. The contract still trusts its operator for policy decisions; funding and chain writes use testnet server keys.
 
 ## Endpoints
 
@@ -41,7 +41,15 @@ Signatures are HMAC-SHA256 with per-role demo keys held by the server; they stan
 | GET | `/api/projects/{id}/chain` | | `{chain: ChainStatus, onchain: {client, contractor, policy_hash, budget, funded, reserved, paid, refunded, paused, log_head, available} \| null, engine: {funded, reserved, paid, refunded, available}, match}` — read live from PlobyEscrow ([chain.md](chain.md)) |
 | GET | `/api/projects/{id}/audit` | | the auditor's report (`python3 -m escrow.audit --json`): replay, policies, payments with what authorized them, stops, chain checks, verdict |
 
-Every GET and POST first runs the keeper: every deadline that has passed on the demo clock applies its pre-agreed fallback, logged with `by: 'keeper'`.
+Project view/action requests run the keeper where applicable. Audit and evidence export read a stable recorded prefix and do not advance deadlines.
+
+### Wallet intent and portable evidence
+
+- `POST /api/projects/{id}/wallet-intent` with `{as, action, params}` returns `{required: false}` for demo mode, or `{required, signer, head, expires, typed_data}`. Sign `typed_data` with `eth_signTypedData_v4`, then pass `wallet: {signature, head, expires}` to the original action or agent endpoint. The intent expires after five minutes on the demo clock; a changed log head requires a new explicit signature.
+- An agent signature binds the exact task and selected offer IDs. Delegated requests may use only those documents, and still pass every business rule.
+- `GET /api/projects/{id}/evidence` returns a ZIP containing this project's log, referenced originals, a SHA-256 manifest, public verifier code and `verify.py`. It excludes credentials, caches and other projects. The manifest itself is not an independent signature.
+- The audit includes `evidence`, `authorization` and `verdict.status` (`verified`, `incomplete`, `failed`). Missing originals, an unchecked chain, no completed payment or demo authorization keep the report incomplete. Invalid originals or inconsistent records fail it. CLI exits are 0, 2 and 1 respectively.
+- `agent_tasks[].stopped` is reconstructed from recorded failed state checks, so the paused-task result survives reload. A duplicate-document rule does not mask a simultaneously failed pause rule when deciding whether to stop the whole task.
 
 ### NewProject
 

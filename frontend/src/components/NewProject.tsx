@@ -5,7 +5,9 @@ import { useEffect, useMemo, useState } from "react"
 import { api, errorText } from "../api"
 import { num, parseAmount, shortHash, sum, usd, won } from "../format"
 import { RULES_SOURCE, label } from "../labels"
-import type { NewMilestone, NewProject as NewProjectT, Periods, RulesCandidate, RulesSource, Vendor } from "../types"
+import { L } from "../i18n"
+import { connectWallet } from "../wallet"
+import type { NewMilestone, NewProject as NewProjectT, Periods, Role, RulesCandidate, RulesSource, Vendor } from "../types"
 import { Banner, Card, Chip, Field, Money, MoneyInput, Segmented, useApp } from "./ui"
 
 interface UnitDraft {
@@ -101,6 +103,8 @@ export function NewProject() {
   const [periods, setPeriods] = useState<Periods>(meta?.defaults ?? DEFAULT_PERIODS)
   const [periodsTouched, setPeriodsTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [walletMode, setWalletMode] = useState(false)
+  const [wallets, setWallets] = useState<Record<Role, string>>({ client: "", contractor: "", resolver: "" })
 
   useEffect(() => {
     if (meta?.defaults && !periodsTouched) setPeriods(meta.defaults)
@@ -141,6 +145,12 @@ export function NewProject() {
   const problems: string[] = []
   if (!name.trim()) problems.push("프로젝트 이름을 입력하세요")
   if (!endsAt) problems.push("프로젝트 종료일을 정하세요")
+  if (walletMode) {
+    if (Object.values(wallets).some((a) => !/^0x[0-9a-fA-F]{40}$/.test(a.trim())))
+      problems.push(L("세 당사자의 지갑 주소를 입력하세요", "Enter all three party wallet addresses"))
+    else if (new Set(Object.values(wallets).map((a) => a.trim().toLowerCase())).size !== 3)
+      problems.push(L("당사자마다 다른 지갑을 사용하세요", "Use a different wallet for each party"))
+  }
   const basicProblemCount = problems.length
   if (mode === "form") {
     if (vendors.length === 0) problems.push("허용 공급자를 하나 이상 고르세요")
@@ -214,6 +224,7 @@ export function NewProject() {
       milestones: milestones.map(toMilestone),
       periods,
       ends_at: endsAt,
+      ...(walletMode ? { wallets: Object.fromEntries(Object.entries(wallets).map(([r, a]) => [r, a.trim()])) as Record<Role, string> } : {}),
     }
     setSubmitting(true)
     try {
@@ -282,6 +293,26 @@ export function NewProject() {
                   <input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
                 </Field>
               </div>
+              <details className="mini-fold">
+                <summary>{L("승인 방식", "Approval method")} · {walletMode ? "Wallet" : "Demo"}</summary>
+                <label className="check">
+                  <input type="checkbox" checked={walletMode} disabled={!meta?.wallet?.available} onChange={(e) => setWalletMode(e.target.checked)} />
+                  {L("각 당사자의 지갑으로 승인", "Require each party’s wallet approval")}
+                </label>
+                <p className="muted small">{L("지갑 승인에서는 정책 서명과 예치·중지 등 각 행동을 지갑에서 확인합니다. 테스트 자금은 릴레이어가 예치하며, 정책 판정은 서버가 담당합니다.", "Wallet approval asks each party to sign policies and actions such as funding and pausing. A relayer funds the test escrow. Policy decisions still run on the server.")}</p>
+                {!meta?.wallet?.available && <p className="muted small">{L("지갑 검증을 사용할 수 없는 서버입니다. 데모 서명으로 진행합니다.", "This server does not have wallet verification enabled. Demo signatures remain available.")}</p>}
+                {walletMode && <div className="stack">
+                  {([['client', L('클라이언트', 'Client')], ['contractor', L('작업자', 'Contractor')], ['resolver', L('분쟁 해결자', 'Resolver')]] as [Role, string][]).map(([r, title]) => (
+                    <Field key={r} label={title + ' wallet'}>
+                      <input value={wallets[r]} placeholder="0x…" onChange={(e) => setWallets((w) => ({ ...w, [r]: e.target.value }))} />
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={async () => {
+                        try { const address = await connectWallet(); setWallets((w) => ({ ...w, [r]: address })) }
+                        catch (e) { notify('error', errorText(e)) }
+                      }}>{L('연결된 지갑 주소 사용', 'Use connected wallet')}</button>
+                    </Field>
+                  ))}
+                </div>}
+              </details>
             </Card>
           </div>
           <div hidden={step !== 1}>

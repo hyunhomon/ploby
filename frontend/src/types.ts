@@ -57,6 +57,7 @@ export interface ChainMeta {
 }
 
 export interface Meta {
+  wallet?: { available: boolean }
   roles: Party[]
   vendors: Vendor[]
   categories: Category[]
@@ -151,6 +152,7 @@ export type NewRules =
   | { mode: "words"; words: string; candidate: string; pick: RulesSource }
 
 export interface NewProject {
+  wallets?: Record<Role, string>
   name: string
   rules: NewRules
   milestones: NewMilestone[]
@@ -189,6 +191,8 @@ export type PolicyStatus = "PROPOSED" | "ACTIVE" | "SUPERSEDED" | "WITHDRAWN"
 export interface Signature {
   sig: string
   at: Ms
+  scheme?: "eip712"
+  address?: string
 }
 
 export interface PolicySummary {
@@ -595,6 +599,7 @@ export interface AgentRun {
 export interface AgentTask {
   id: string
   task: string
+  stopped?: boolean
   offers: DocRef[]
   plan: AgentPlan
   ai: { ok: boolean; problems: string[]; usage?: Usage | null; model?: string | null } | null
@@ -605,6 +610,8 @@ export interface AgentTask {
 
 /** python3 -m escrow.audit (GET /api/projects/:id/audit): loose on purpose, rendered as found. */
 export interface AuditReport {
+  evidence?: { status: "verified" | "incomplete" | "failed"; checked: number; total: number; missing: string[]; failed: string[] }
+  authorization?: { status: "verified" | "demo" | "incomplete"; wallet_actions: number; contract_verifies_signatures: boolean }
   project: string
   name: string
   lines: number
@@ -641,7 +648,7 @@ export interface AuditReport {
     balances_match?: boolean | null
     problems?: string[]
   }
-  verdict?: { records_consistent: boolean; chain?: "checked" | "offline" | "unreachable"; payments: number; inside: number; stops: number }
+  verdict?: { records_consistent: boolean; status?: "verified" | "incomplete" | "failed"; reasons?: string[]; chain?: "checked" | "offline" | "unreachable"; payments: number; inside: number; stops: number }
 }
 
 export interface LogEntry {
@@ -655,6 +662,7 @@ export interface LogEntry {
 }
 
 export interface ProjectView {
+  authorization?: { scheme: string; chainId: number; escrow: string } | null
   id: string
   name: string
   status: ProjectStatus

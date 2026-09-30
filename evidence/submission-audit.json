@@ -1,0 +1,471 @@
+{
+  "project": "pd4466e964c56",
+  "name": "Cafe Ondam website renewal",
+  "log": "data/projects/pd4466e964c56/log.jsonl",
+  "lines": 31,
+  "head": "33cbe71dc30768aaba27f01e8c67a24c9aaa35fe90be900c34098fc799f37c8b",
+  "replay": {
+    "ok": true,
+    "refused": null,
+    "status": "ACTIVE",
+    "ledger": {
+      "budget": 4500000,
+      "expense_budget": 500000,
+      "milestone_budget": 4000000,
+      "funded": 4500000,
+      "expense_reserved": 55000,
+      "milestone_reserved": 4000000,
+      "expense_released": 24200,
+      "milestone_released": 0,
+      "released": 24200,
+      "refunded": 0,
+      "migrated_out": 0,
+      "available": 420800,
+      "expense_capacity": 420800,
+      "milestone_capacity": 0,
+      "deposit_room": 0,
+      "funding_needed": 0
+    }
+  },
+  "policies": [
+    {
+      "version": 1,
+      "hash": "0x8deb96288e5c6a00eb2337c4396c7c2ec2fe9f5bbaf35ffcd7d907ad2d48782e",
+      "status": "ACTIVE",
+      "signed": {
+        "client": 1790991875137,
+        "contractor": 1790991875140
+      },
+      "readback": [
+        "총 한도: 50만 원 (부가세·수수료 포함) — 모두 합쳐 이보다 많이 결제되지 않습니다.",
+        "공급자: AWS, Vercel, 가비아, Figma, Adobe Stock만",
+        "기간: 지금부터 2026-10-31(토) 23:59까지",
+        "한 번에: 20만 원까지 (부가세·수수료 포함)",
+        "횟수: 제한 없음"
+      ]
+    }
+  ],
+  "evidence": {
+    "status": "verified",
+    "checked": 5,
+    "total": 5,
+    "missing": [],
+    "failed": [],
+    "documents": [
+      {
+        "id": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+        "name": "Gabia domain quote (₩24,200)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      },
+      {
+        "id": "906988cc1a48840e57ee388ebd4f63906a33d9089f9119a22cd4130b9b73ee03",
+        "name": "Coupang mechanical keyboard (₩129,000, off-list)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      },
+      {
+        "id": "98413395f255a252e902c010a35e0614e0282e56386b3fd1ec004a8a3fcef124",
+        "name": "Adobe Stock 40-image pack (₩203,500, over cap with VAT)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      },
+      {
+        "id": "95c0098539109054968c5b6b6e51ee3395037d7544827d0cf829b35725fe971b",
+        "name": "Adobe Stock 10-image pack (₩55,000)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      },
+      {
+        "id": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+        "name": "Gabia receipt (₩24,200)",
+        "found": true,
+        "hash_ok": true,
+        "total_in_text": null
+      }
+    ]
+  },
+  "authorization": {
+    "status": "demo",
+    "wallet_actions": 0,
+    "contract_verifies_signatures": false
+  },
+  "payments": [
+    {
+      "ref": "E1",
+      "kind": "COMMITMENT",
+      "status": "SETTLED",
+      "paid": 24200,
+      "payee": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
+      "policy": {
+        "version": 1,
+        "hash": "0x8deb96288e5c6a00eb2337c4396c7c2ec2fe9f5bbaf35ffcd7d907ad2d48782e"
+      },
+      "request": {
+        "line": 9,
+        "op": "request_commitment",
+        "by": "contractor",
+        "via": {
+          "need": "Set up a one-year domain",
+          "task": "A1",
+          "try": 1,
+          "why": "The offer provides a one-year domain registration for ondam-cafe.co.kr, which directly fulfills the task."
+        },
+        "document": {
+          "id": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "name": "Gabia domain quote (₩24,200)"
+        },
+        "evidence": {
+          "found": true,
+          "id": "e30e1a5e479c2a2e6b02647e13002c5d2a3a760b7686b2bf8fafcad4c43aebdf",
+          "hash_ok": true,
+          "total_in_text": true
+        },
+        "reading": {
+          "vendor": "gabia",
+          "category": "domain",
+          "amount": 22000,
+          "fee": 2200,
+          "total": 24200
+        },
+        "onchain_before": {
+          "available": 500000,
+          "contract": "0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+          "head": "496a94a30491d89631951d3616ab4943ccbfc847e6ea7c956cca9c3d75b565f5",
+          "paused": false
+        }
+      },
+      "decision": {
+        "result": "APPROVE",
+        "reason": "all rules passed",
+        "rules": [
+          {
+            "rule": "allocation",
+            "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "state",
+            "label": "프로젝트 상태 (진행 중, 새 약정 일시정지 아님)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "window",
+            "label": "정책 기간",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "payment_mode",
+            "label": "결제 방식 (환급)",
+            "ok": true,
+            "detail": "환급 (작업자에게 지급)"
+          },
+          {
+            "rule": "vendor",
+            "label": "허용 공급자",
+            "ok": true,
+            "detail": "가비아"
+          },
+          {
+            "rule": "category",
+            "label": "허용 카테고리",
+            "ok": true,
+            "detail": "도메인"
+          },
+          {
+            "rule": "payee",
+            "label": "수취인 (정책에 등록된 작업자 지갑)",
+            "ok": true,
+            "detail": "작업자 0x7de24839…"
+          },
+          {
+            "rule": "per_purchase",
+            "label": "건별 한도 (부가세·수수료 포함)",
+            "ok": true,
+            "detail": "24,200원"
+          },
+          {
+            "rule": "expense_budget",
+            "label": "경비 예산 잔여",
+            "ok": true,
+            "detail": "잔여 500,000원"
+          },
+          {
+            "rule": "category_budget",
+            "label": "카테고리 예산 잔여",
+            "ok": true,
+            "detail": "카테고리 예산 없음"
+          },
+          {
+            "rule": "funds",
+            "label": "예치금 가용 잔액",
+            "ok": true,
+            "detail": "가용 500,000원"
+          },
+          {
+            "rule": "evidence",
+            "label": "문서 판독과 증빙 수준",
+            "ok": true,
+            "detail": "E1 업로드 문서, 판독 일치"
+          },
+          {
+            "rule": "probable_duplicate",
+            "label": "중복 가능성 (같은 공급자·같은 금액)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "split_pattern",
+            "label": "분할 청구 (건별 한도 회피)",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "rule": "price_anomaly",
+            "label": "가격 이상 (카테고리 대표값 대비)",
+            "ok": true,
+            "detail": ""
+          }
+        ]
+      },
+      "client_approval": [],
+      "payments": [
+        {
+          "line": 19,
+          "op": "review_settlement",
+          "by": "client",
+          "amount": 24200,
+          "how": "the client approved the receipt",
+          "text": "클라이언트가 E1 정산을 승인해 24,200원이 작업자에게 지급됐습니다"
+        }
+      ],
+      "receipt": {
+        "document": {
+          "id": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "name": "Gabia receipt (₩24,200)"
+        },
+        "claimed": 24200,
+        "evidence": {
+          "found": true,
+          "id": "9c13bf7f7ebaee74c544e2765c501d6c59bc5bb564cebe8ea9be35826da8220d",
+          "hash_ok": true,
+          "total_in_text": true
+        }
+      },
+      "cap": 24200,
+      "inside": true
+    }
+  ],
+  "refunds": [],
+  "stops": [
+    {
+      "ref": "E2",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "per_purchase",
+      "label": "건별 한도 (부가세·수수료 포함)",
+      "line": 10,
+      "via": {
+        "need": "Get 40 stock photos",
+        "task": "A1",
+        "try": 1,
+        "why": "The 40-image plan (o3) directly meets the requirement, while the 10-image plan (o4) serves as a suitable fallback."
+      },
+      "amount": 203500
+    },
+    {
+      "ref": "E4",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "vendor",
+      "label": "허용 공급자",
+      "line": 12,
+      "via": {
+        "need": "Buy an office keyboard",
+        "task": "A1",
+        "try": 1,
+        "why": "The offer provides a mechanical keyboard that is appropriate for office use and matches the task requirement."
+      },
+      "amount": 129000
+    },
+    {
+      "ref": "E5",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "allocation",
+      "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+      "line": 24,
+      "via": {
+        "need": "Set up a one-year domain",
+        "task": "A2",
+        "try": 1,
+        "why": "The offer provides a one-year domain registration for ondam-cafe.co.kr, which directly fulfills the task."
+      },
+      "amount": 24200
+    },
+    {
+      "ref": "E6",
+      "result": "BLOCK",
+      "status": "BLOCKED",
+      "rule": "allocation",
+      "label": "인보이스 배분 100% 이내 (같은 문서 재사용 금지)",
+      "line": 29,
+      "via": {
+        "need": "Buy this office keyboard for the project",
+        "task": "A3",
+        "try": 1,
+        "why": "The offer provides a suitable office keyboard with all necessary pricing details."
+      },
+      "amount": 129000
+    }
+  ],
+  "chain": {
+    "contract": "0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "contract_url": "https://testnet.monadvision.com/address/0x0c54143Ba8480c9C041E27C5FDed6e13B2541762",
+    "calls": [
+      {
+        "line": 2,
+        "n": 0,
+        "call": "open",
+        "tx": "0x0ecf9e0e8e7530dc3128c5f69f4700832582a46079ff0ef5981d7d4d42df7110",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x0ecf9e0e8e7530dc3128c5f69f4700832582a46079ff0ef5981d7d4d42df7110"
+      },
+      {
+        "line": 2,
+        "n": 1,
+        "call": "fund",
+        "tx": "0x5295f4878eed483cd909d7ddf2c1ce7c637cd1a1ade4d293ae592cbd40b0b411",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x5295f4878eed483cd909d7ddf2c1ce7c637cd1a1ade4d293ae592cbd40b0b411"
+      },
+      {
+        "line": 3,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x80cca13723d859f51dd49f914a808496183e5d8e21b906d9c78544f81a4682b9",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x80cca13723d859f51dd49f914a808496183e5d8e21b906d9c78544f81a4682b9"
+      },
+      {
+        "line": 3,
+        "n": 1,
+        "call": "decide",
+        "tx": "0x2c4714ea2a9a3fca4d8a55f0b2feaf958267817d0b21e9dfcad5c20c0b7c6c72",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x2c4714ea2a9a3fca4d8a55f0b2feaf958267817d0b21e9dfcad5c20c0b7c6c72"
+      },
+      {
+        "line": 9,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x211ae36532464c91995a4ccb371b15d81d05dc21e4b9302332ae71116c3e0a30",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x211ae36532464c91995a4ccb371b15d81d05dc21e4b9302332ae71116c3e0a30"
+      },
+      {
+        "line": 10,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x1c3ca224c5e4ff354f5a60ac02ba23bd356cbee85b80714e2a248e239914f3ef",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x1c3ca224c5e4ff354f5a60ac02ba23bd356cbee85b80714e2a248e239914f3ef"
+      },
+      {
+        "line": 11,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x546f4ddd499a85d5925a4fcba29ce3f6c651d95e3269d44c9ce34cab04c98ec8",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x546f4ddd499a85d5925a4fcba29ce3f6c651d95e3269d44c9ce34cab04c98ec8"
+      },
+      {
+        "line": 12,
+        "n": 0,
+        "call": "decide",
+        "tx": "0xb50fe9299e44ccc1e2033699cd01c59b2e54faff1f02cf5879cf97f7222463e5",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xb50fe9299e44ccc1e2033699cd01c59b2e54faff1f02cf5879cf97f7222463e5"
+      },
+      {
+        "line": 19,
+        "n": 0,
+        "call": "settle",
+        "tx": "0x25209465868c777c2d9a74d99ed9e5b17158a2f8959480d58b85c44484bf3e9d",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x25209465868c777c2d9a74d99ed9e5b17158a2f8959480d58b85c44484bf3e9d"
+      },
+      {
+        "line": 21,
+        "n": 0,
+        "call": "pause",
+        "tx": "0xdded1844b9d3b1298ed126d22db623ff2f82a2a77ca458f6b4955abb8c05b135",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xdded1844b9d3b1298ed126d22db623ff2f82a2a77ca458f6b4955abb8c05b135"
+      },
+      {
+        "line": 24,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x777860319189a9482c01fef373ac4fc6370daf8e5e2f2a7178637c71cb5d446d",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x777860319189a9482c01fef373ac4fc6370daf8e5e2f2a7178637c71cb5d446d"
+      },
+      {
+        "line": 26,
+        "n": 0,
+        "call": "pause",
+        "tx": "0xadb2c4ad902150edb4a8ae59b641cfe4f6caaa37754fc40a24533b579476bd93",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0xadb2c4ad902150edb4a8ae59b641cfe4f6caaa37754fc40a24533b579476bd93"
+      },
+      {
+        "line": 29,
+        "n": 0,
+        "call": "decide",
+        "tx": "0x9b995a36f72755c55ad39e0f94eb65a89ae853d63a8324167c0245b44eb7aeb7",
+        "ok": true,
+        "url": "https://testnet.monadvision.com/tx/0x9b995a36f72755c55ad39e0f94eb65a89ae853d63a8324167c0245b44eb7aeb7"
+      }
+    ],
+    "onchain": {
+      "client": "0xd51bb0f75bebcb03ee5b40f1f0a04a5ba060f845",
+      "contractor": "0x7de248393741dd1668b6c5e5c66258457f8d6ffd",
+      "policy_hash": "0x8deb96288e5c6a00eb2337c4396c7c2ec2fe9f5bbaf35ffcd7d907ad2d48782e",
+      "budget": 4500000,
+      "funded": 4500000,
+      "reserved": 4055000,
+      "paid": 24200,
+      "refunded": 0,
+      "paused": false,
+      "log_head": "0xc93b2a45c0e20691c924232ed9198de532ea4cc3c1e7a080e40031557c81bf4b",
+      "available": 420800
+    },
+    "engine": {
+      "funded": 4500000,
+      "reserved": 4055000,
+      "paid": 24200,
+      "refunded": 0
+    },
+    "balances_match": true,
+    "problems": []
+  },
+  "verdict": {
+    "records_consistent": true,
+    "status": "incomplete",
+    "reasons": [
+      "demo_authorization"
+    ],
+    "chain": "checked",
+    "payments": 1,
+    "inside": 1,
+    "stops": 4
+  }
+}

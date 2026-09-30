@@ -46,7 +46,7 @@ function SignatureLine({ who, sig, now }: { who: string; sig: Signature | null; 
         {sig ? "✓" : "…"}
       </span>
       <span className="sig-who">{who}</span>
-      <span className="sig-state">{sig ? kst(sig.at, now) : L("서명 대기", "Awaiting signature")}</span>
+      <span className="sig-state">{sig ? <>{sig.scheme === "eip712" ? L("지갑 승인", "Wallet approval") : L("데모 서명", "Demo signature")} · {kst(sig.at, now)}</> : L("서명 대기", "Awaiting signature")}</span>
     </div>
   )
 }

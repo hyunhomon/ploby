@@ -8,6 +8,7 @@ NAMES = {'카페 온담': 'Cafe Ondam', '한결웹스튜디오': 'Hangyeol Web S
          'Ploby 체인 릴레이어': 'Ploby chain relayer'}
 ROLES = {'클라이언트': 'the client', '작업자': 'the contractor', '분쟁 해결자': 'the resolver'}
 WORDS = [  # whole phrases first, then pieces; applied in order
+    (r'^자동 정산$', 'automatic settlement'),
     (r'([\d,]+)원', r'₩\1'),
     (r'온체인 기록 \(#(\d+)\): ', r'On chain (#\1): '),
     (r'온체인 거절 \(#(\d+)\): ', r'Refused on chain (#\1): '),

@@ -1,6 +1,6 @@
 # Ploby on chain
 
-Current implementation: Ploby's engine decides every request off chain; **PlobyEscrow** on Monad testnet holds the client's money and enforces what the engine's operator key must never be able to do. The target design (an immutable per-project `ProjectEscrow` that enforces the decisions themselves, with EIP-712 signatures) is in [`docs/adr`](adr/README.md) and is not implemented.
+Current implementation: Ploby's engine decides every request off chain; **PlobyEscrow** on Monad testnet holds the client's money and enforces what the engine's operator key must never be able to do. The target design (an immutable per-project `ProjectEscrow` that enforces the decisions themselves, with signatures verified by the contract) is in [`docs/adr`](adr/README.md) and is not implemented.
 
 | | Address | Explorer |
 | --- | --- | --- |
@@ -65,6 +65,8 @@ One worker sends the calls in log order. Before sending, it estimates each call:
 `python3 -m escrow.audit <project>` reads each tx the log names from the public RPC (no keys). It checks that the receipt succeeded, that the event is the one the line implies (same log head, ref, amounts, decision, rule, policy hash, payee), and that the contract's `funded/reserved/paid/refunded` equal the replayed ledger. `harness/check.py` runs the same mapping offline over every scenario through a Python model of the contract's rules.
 
 ## Limits
+
+Optional EIP-712 action approvals are already checked by the engine and the standalone verifier. They are **not** checked by the deployed contract and do not replace the server-held testnet funding/operator keys.
 
 - The engine decides; the contract does not recompute the rules. A stolen operator key could record an out-of-policy APPROVE and pay it, but only to the contractor and only within funded money. The target design removes this with bilateral EIP-712 signatures verified on chain.
 - Project ids are first-come: the contract keys a project by Ploby's id, so whoever learns an id before the client opens it could open it first with their own wallet. No money is at risk (such a project holds only its opener's funds), but ours could then not be mirrored. The worker treats an existing project as ours only when it holds the same client, contractor and policy hash, and logs `ProjectTaken` otherwise. The target per-project escrow removes this, since the project is then its own contract.

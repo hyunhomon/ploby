@@ -23,6 +23,7 @@ backend/data/*.db-*
 # PCP escrow: local Kiln cache/usage, Python caches
 harness/runs/
 __pycache__/
+.venv/
 
 # Ploby API data (projects, evidence store, demo clock) and local editor config
 var/
@@ -31,4 +32,8 @@ frontend/dist/
 
 # Local browser QA artifacts
 .playwright-mcp/
+.playwright-cli/
 output/playwright/
+output/submission-build/
+
+.DS_Store

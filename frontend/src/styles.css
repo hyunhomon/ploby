@@ -2876,13 +2876,23 @@ summary:active {
   .topbar-inner {
     height: 72px;
     padding: 0 20px;
-    gap: 24px;
+    gap: 12px;
   }
   .global-nav {
     display: none;
   }
   .account-tools {
-    gap: 12px;
+    gap: 6px;
+    min-width: 0;
+  }
+  .account {
+    min-width: 0;
+  }
+  .demo-toggle {
+    padding-inline: 4px;
+  }
+  .role-select {
+    min-width: 0;
   }
   .mobile-only {
     display: inline;
@@ -3146,9 +3156,10 @@ a.chain-link:hover { border-color: var(--accent-strong); }
 .agent-offers { border: 1px solid var(--accent-border); border-radius: 10px; padding: 8px 12px; display: grid; gap: 6px; }
 .agent-offer { display: flex; gap: 8px; align-items: center; font-size: 14px; }
 .agent-h { font-size: 14px; margin: 16px 0 8px; }
-.agent-needs { margin: 8px 0; padding-left: 20px; display: grid; gap: 8px; }
+.agent-needs { margin: 8px 0; padding-left: 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .agent-tries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; }
-.agent-try { display: inline-flex; align-items: center; gap: 4px; }
+.agent-try { display: inline-flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 4px; }
+.agent-try .chip { white-space: normal; overflow-wrap: anywhere; }
 .audit { display: grid; gap: 8px; }
 .audit-checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
 .audit-payment { border: 1px solid var(--accent-border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; }

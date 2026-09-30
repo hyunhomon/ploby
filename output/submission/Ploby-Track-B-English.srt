@@ -1,0 +1,89 @@
+1
+00:00:00,000 --> 00:00:10,000
+Ploby keeps an AI purchasing agent inside a client-funded project budget.
+Monad testnet demo: role approvals use demo signatures.
+
+2
+00:00:10,000 --> 00:00:22,000
+The contractor gives a task and selects vendor documents.
+Kiln qwen3-32b makes the plan; the agent can only request purchases.
+
+3
+00:00:22,000 --> 00:00:34,000
+The 40-image offer exceeds the KRW 200,000 cap after VAT.
+The agent follows its next planned option: 10 images for KRW 55,000.
+
+4
+00:00:34,000 --> 00:00:40,000
+The domain is approved. The unlisted keyboard vendor is blocked.
+Every request keeps its decision and rule.
+
+5
+00:00:40,000 --> 00:00:50,000
+Approval reserves funds; it does not mean the expense is paid.
+The contractor reports the purchase and submits a receipt.
+
+6
+00:00:50,000 --> 00:01:00,000
+The receipt is read and matched to the commitment.
+The client reviews KRW 24,200 before approving settlement.
+
+7
+00:01:00,000 --> 00:01:12,000
+The client approves payment to the fixed contractor wallet.
+The escrow settles 24,200 TestKRW on Monad testnet.
+
+8
+00:01:12,000 --> 00:01:21,000
+This is the confirmed settlement transaction.
+The transfer and the log refer to the same completed payment.
+
+9
+00:01:21,000 --> 00:01:31,000
+Track B boundary run 1: same policy, fresh project.
+Request an office keyboard from an unlisted vendor.
+
+10
+00:01:31,000 --> 00:01:42,000
+The live plan requests the keyboard. The engine returns BLOCK: Vendor.
+No funds are reserved, and the stopped request is recorded.
+
+11
+00:01:42,000 --> 00:01:52,000
+Track B boundary run 2: request the 40-image pack.
+Its total includes VAT: KRW 203,500.
+
+12
+00:01:52,000 --> 00:01:58,000
+BLOCK: Per-purchase limit. The total exceeds KRW 200,000.
+No alternative was selected, so this run makes no purchase.
+
+13
+00:01:58,000 --> 00:02:08,000
+Both stops appear in the audit with their log lines.
+Each has a matching Decided event on the public chain.
+
+14
+00:02:08,000 --> 00:02:16,000
+The client can also pause new commitments.
+The next task records a block and stops its remaining requests.
+
+15
+00:02:16,000 --> 00:02:24,000
+The paused task ends after its first blocked request.
+Accepted commitments remain eligible for receipt review and settlement.
+
+16
+00:02:24,000 --> 00:02:32,000
+The exported workflow snapshot has 31 entries and 13 matching chain calls.
+Its five original documents match their recorded hashes.
+
+17
+00:02:32,000 --> 00:02:41,000
+The verifier reconstructs the payment from the log, originals and public chain.
+Human approval remains partial in this demo because its signatures are demo keys.
+
+18
+00:02:41,000 --> 00:02:49,000
+Eight matched document reads: 8/8 expected outcomes in each arm.
+Energy is an explicit hardware estimate; no Kiln power telemetry is claimed.

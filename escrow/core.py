@@ -136,6 +136,8 @@ class Core:
         fn = getattr(self, 'op_' + str(line.get('op')), None)
         if fn is None:
             raise Refused(f"알 수 없는 동작 {line.get('op')!r}", 'invalid')
+        from .wallet import check_line
+        check_line(self, line)
         self.at = at
         text = fn(line, line.get('params') or {}, line.get('inputs') or {})
         self.maybe_close()
@@ -183,7 +185,9 @@ class Core:
             raise Refused('이미 서명했습니다')
         if not pol.verify(who, v['hash'], i.get('signature')):
             raise Refused('정책 해시 서명이 맞지 않습니다', 'forbidden')
-        v['signatures'][who] = {'sig': i['signature'], 'at': line['at']}
+        v['signatures'][who] = {'sig': i['signature'], 'at': line['at'],
+                                **({'scheme': 'eip712', 'address': v['doc'][who + 'Address'],
+                                    'wallet': i['wallet']} if i.get('wallet') else {})}
         text = f"{pol.ROLE_KO[who]}가 정책 v{v['version']}에 서명했습니다 ({v['hash'][:12]}…)"
         if all(v['signatures'].values()):
             text += self.activate_version(v)

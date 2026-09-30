@@ -1,0 +1,2 @@
+# Only wallet authorization needs this package. The recorded demo remains standard-library only.
+eth-account==0.13.7
