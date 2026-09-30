@@ -847,3 +847,9 @@ export function tr(key: string, options?: TOptions): string {
 }
 
 export default i18n
+
+/** A string in the viewer's language, for components not yet moved to keys: `L("경비", "Expenses")`.
+ * Call it in a component that uses `useTranslation()` so it re-renders when the language changes. */
+export function L(ko: string, en: string): string {
+  return language() === "en" ? en : ko
+}
