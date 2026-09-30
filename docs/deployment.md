@@ -42,3 +42,11 @@ Copy updated `deploy/ploby.service` or `deploy/ploby.caddy` only when those temp
 For a release rollback, restore the previously deployed Git commit, rebuild the frontend and restart the API; preserve `/var/lib/ploby/data`. Changes to log or storage formats require a separately reviewed migration.
 
 ARM64 Foundry v1.8.3 was installed from the [official release](https://github.com/foundry-rs/foundry/releases/tag/v1.8.3); the release archive SHA-256 was checked against GitHub's release asset digest.
+
+## Deployment verification, 2026-09-30
+
+The [prepared demo project](https://ploby.qucord.com/#/p/p153c7d45cc30?tab=overview&as=client) was created through the running API. Three live Kiln plans resulted in one approved domain purchase and two separate recorded stops: an off-list supplier and a VAT-inclusive amount above the per-purchase cap. The domain purchase was reported, receipted and settled for 24,200 TestKRW.
+
+The final state has 21 log entries, four originals, eight successful matching chain calls, no pending or refused chain calls, one completed payment and two recorded stops. The [public evidence ZIP](https://ploby.qucord.com/api/projects/p153c7d45cc30/evidence) was downloaded and its verifier run independently against public RPC. Records are consistent; the verdict remains incomplete solely because this project uses demo authorization.
+
+On the Pi, 64 business/replay checks and eight submission regressions passed, as did the production frontend build. Browser checks covered the public app and recovery after an interrupted project fetch. Restarting `ploby.service` preserved project data and matching chain balances. Caddy and Cloudflare Tunnel remained active, and an existing hosted site still returned HTTP 200.

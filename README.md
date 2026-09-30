@@ -1,5 +1,7 @@
 # Ploby
 
+**[Live testnet demo](https://ploby.qucord.com)** · [Deployment and operations](docs/deployment.md)
+
 **Declared function (GWDC Challenge B):** Ploby keeps an AI purchasing agent's spending inside the budget a client funded: the agent can only *request* purchases, code decides each request against a policy both parties signed, a contract on Monad testnet holds and moves the money, and every approval and every stop is recorded so that anyone can reconstruct whether a payment was allowed.
 
 **Reviewers, in two minutes:** [submission evidence](docs/submission.md) — a completed payment and two separate out-of-scope agent runs, each with a recorded stop and public transaction · [demo script](docs/demo.md) · [efficiency](docs/efficiency.md) — committed usage metadata and a matched eight-document benchmark. [Submission files](output/submission/) include the 2:49 captioned video and the editable pitch deck. The filmed demo uses HMAC role signatures: its documents and chain match, but the auditor reports **incomplete human-approval verification**.
