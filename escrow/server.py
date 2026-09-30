@@ -122,6 +122,8 @@ def translated(out, lang):
     if isinstance(out, list):
         return [english.view(dict(x)) if isinstance(x, dict) else x for x in out]
     if isinstance(out, dict):
+        if 'roles' in out and 'vendors' in out:
+            return english.meta(out)
         if isinstance(out.get('view'), dict):
             out = {**out, 'view': english.view(out['view'])}
             if isinstance(out.get('result'), str):

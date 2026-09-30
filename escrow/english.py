@@ -108,6 +108,40 @@ WORDS = [  # whole phrases first, then pieces; applied in order
     (r'정책 기간', 'policy window'),
 ]
 COMPILED = [(re.compile(p), r) for p, r in WORDS]
+FALLBACKS = {
+    '작업자가 마일스톤 제출 통지를 보냈는데 클라이언트가 검수 기한까지 응답하지 않음': {'case': 'The contractor sent a milestone submission notice and the client did not answer by the review deadline', 'silence': 'The submitted units are paid to the contractor automatically (RELEASED_BY_TIMEOUT)', 'resolver_silence': '—'},
+    '클라이언트가 사전 합의된 인수 기준으로 이의를 제기함': {'case': 'The client objected on a pre-agreed acceptance criterion', 'silence': 'Goes to the resolver', 'resolver_silence': 'Paid if the submission was complete and no defect was shown'},
+    '작업자가 납기 + 유예기간까지 아무것도 제출하지 않음': {'case': 'The contractor submitted nothing by the due date + grace', 'silence': 'Non-delivery review (resolver)', 'resolver_silence': 'Undelivered units rejected; the reservation returns to available'},
+    '구매 약정 후 제출한 영수증에 객관적 결함이 없음 (CLIENT_REVIEW)': {'case': 'A receipt after a purchase commitment with no objective defect (CLIENT_REVIEW)', 'silence': 'The committed eligible amount settles automatically (within the cap)', 'resolver_silence': 'If there was an objection, it still settles when the resolver is silent'},
+    '판독·정책 엔진·증빙 서비스 장애로 판단 불가 (POLICY_OR_SYSTEM_AMBIGUITY)': {'case': 'Undecidable because the reader, policy engine or evidence service failed (POLICY_OR_SYSTEM_AMBIGUITY)', 'silence': 'Goes to the resolver', 'resolver_silence': 'The smaller of the claim and the cap settles'},
+    '영수증 누락·손상·지연 또는 금액·공급자 확인 실패 (EVIDENCE_DEFECT)': {'case': 'Receipt missing, damaged or late, or amount or vendor not confirmed (EVIDENCE_DEFECT)', 'silence': 'Goes to the resolver (the contractor may supplement evidence)', 'resolver_silence': 'Rejected; the reservation returns to available'},
+    '같은 문서 재사용 의심·서명 문제 등 무결성 신호 (INTEGRITY_RISK)': {'case': 'Integrity signals such as a reused document or a signature problem (INTEGRITY_RISK)', 'silence': 'Goes to the resolver', 'resolver_silence': 'Rejected; the reservation returns to available'},
+    '실제 적격 비용이 약정 상한을 초과 (EXCESS_AMOUNT)': {'case': 'The eligible actual cost exceeds the commitment cap (EXCESS_AMOUNT)', 'silence': 'The committed part settles now; the excess is not paid', 'resolver_silence': 'The excess is never paid without a bilateral change order'},
+    '구매 약정 없이 먼저 지출한 사후 청구 (RETROACTIVE_REQUEST)': {'case': 'A retroactive claim for spending without a commitment (RETROACTIVE_REQUEST)', 'silence': 'Rejected (silence never creates a right to payment)', 'resolver_silence': '—'},
+    '구매 전 요청이 HOLD됨 (아직 약정 없음)': {'case': 'A request before purchase was held (no commitment yet)', 'silence': 'Expires (no commitment is made)', 'resolver_silence': '—'},
+    '예약 유효기간 안에 구매 보고가 없음': {'case': 'No purchase report within the reservation validity', 'silence': 'The reservation expires and returns to available', 'resolver_silence': '—'},
+    '예약된 마일스톤을 착수 기한까지 시작하지 않음': {'case': 'A reserved milestone was not started by its start deadline', 'silence': 'The unused reservation expires (EXPIRED_UNUSED) and returns to available', 'resolver_silence': '—'},
+}
+ITEMS = [('도메인 신규 등록', 'new domain registration'), ('서비스', 'services'), ('이미지 팩', 'image pack'), ('표준 라이선스 이미지', 'standard-license images'), ('장)', ')'), ('기계식 키보드', 'mechanical keyboard')]
+READBACK = [
+    (r'총 한도: (\S+) 원 \(부가세·수수료 포함\) — 모두 합쳐 이보다 많이 결제되지 않습니다\.', r'Total limit: ₩\1 (incl. VAT and fees) — never more than this in all.'),
+    (r'공급자: (.*)만', r'Vendors: only \1'),
+    (r'기간: 지금부터 (\S+)\((.)\) (\S+)까지', r'Window: from now until \1 \3'),
+    (r'한 번에: (\S+) 원까지 \(부가세·수수료 포함\)', r'Per purchase: up to ₩\1 (incl. VAT and fees)'),
+    (r'횟수: 제한 없음', 'Number of purchases: no limit'),
+    (r'(\d+)만', lambda m: f'{int(m.group(1)) * 10000:,}'),
+    (r'가비아', 'Gabia'),
+]
+VENDORS = {'가비아': 'Gabia', '쿠팡': 'Coupang', '빠른결제대행': 'FastPay Agency'}
+CATEGORIES = {'도메인': 'Domain', '호스팅': 'Hosting', '소프트웨어': 'Software', '디자인 소스': 'Design assets',
+              '일반 쇼핑': 'General shopping', '결제 대행': 'Payment service'}
+RULES = {'allocation': 'Invoice allocation within 100% (no reusing a document)',
+         'state': 'Project state (active, new commitments not paused)', 'window': 'Policy window',
+         'payment_mode': 'Payment mode (reimbursement)', 'vendor': 'Allowed vendor', 'category': 'Allowed category',
+         'payee': 'Payee (the contractor wallet in the policy)', 'per_purchase': 'Per-purchase cap (incl. VAT and fees)',
+         'expense_budget': 'Expense budget left', 'category_budget': 'Category budget left', 'funds': 'Funds available',
+         'evidence': 'Document reading and evidence level', 'probable_duplicate': 'Probable duplicate (same vendor, same amount)',
+         'split_pattern': 'Split purchases (avoiding the per-purchase cap)', 'price_anomaly': 'Price anomaly (vs the category’s typical amount)'}
 
 
 def text(s):
@@ -135,11 +169,39 @@ def view(v):
         d = e.get('decision') or {}
         if d:
             e['decision'] = {**d, 'reason': text(d.get('reason')),
-                             'rules': [{**r, 'detail': text(r.get('detail'))} for r in d.get('rules') or []]}
+                             'rules': [{**r, 'detail': text(r.get('detail')), 'label': RULES.get(r.get('rule'), r.get('label'))}
+                                       for r in d.get('rules') or []]}
+        e['vendor_name'] = VENDORS.get(e.get('vendor_name'), e.get('vendor_name'))
+        e['category_ko'] = CATEGORIES.get(e.get('category_ko'), e.get('category_ko'))
     for p in (v.get('parties') or {}).values():
         p['name'] = NAMES.get(p['name'], p['name'])
     if v.get('viewer'):
         v['viewer'] = {**v['viewer'], 'name': NAMES.get(v['viewer']['name'], v['viewer']['name'])}
+    for pv in [v.get('policy')] + list(v.get('versions') or []) + list(v.get('proposals') or []):
+        if not pv:
+            continue
+        pv['fallbacks'] = [FALLBACKS.get(f['case'], f) for f in pv.get('fallbacks') or []]
+        if pv.get('rules'):
+            lines = []
+            for line in pv['rules'].get('readback') or []:
+                for pat, rep in READBACK:
+                    line = re.sub(pat, rep, line)
+                lines.append(line)
+            pv['rules'] = {**pv['rules'], 'readback': lines}
+    for e in v.get('expenses') or []:
+        if isinstance(e.get('item'), str):
+            for ko, en in ITEMS:
+                e['item'] = e['item'].replace(ko, en)
     if isinstance(v.get('name'), str):
         v['name'] = v['name'].replace('카페 온담 홈페이지 리뉴얼', 'Cafe Ondam website renewal')
     return v
+
+
+def meta(m):
+    """/api/meta in English: party names, vendor and category names."""
+    m = dict(m)
+    m['roles'] = [{**r, 'name': NAMES.get(r['name'], r['name'])} for r in m.get('roles') or []]
+    m['vendors'] = [{**v, 'name': VENDORS.get(v['name'], v['name']), 'category_ko': CATEGORIES.get(v['category_ko'], v['category_ko'])}
+                    for v in m.get('vendors') or []]
+    m['categories'] = [{**c, 'name_ko': CATEGORIES.get(c['name_ko'], c['name_ko'])} for c in m.get('categories') or []]
+    return m

@@ -84,7 +84,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 const q = (role: Role) => `as=${encodeURIComponent(role)}&lang=${language()}`
 
 const http: Backend = {
-  meta: () => call("GET", "/api/meta"),
+  meta: () => call("GET", "/api/meta?lang=" + language()),
   clock: () => call("GET", "/api/clock"),
   moveClock: (body) => call("POST", "/api/clock", body),
   samples: () => call("GET", "/api/samples"),

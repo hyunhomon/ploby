@@ -127,7 +127,7 @@ export function App() {
       .clock()
       .then(setClock)
       .catch(() => setClock(null))
-  }, [])
+  }, [i18n.language])
 
   const setRole = (r: Role) => {
     setRoleState(r)
